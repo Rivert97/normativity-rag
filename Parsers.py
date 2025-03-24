@@ -266,16 +266,18 @@ class OcrPdfParser():
 
     :param pdf_path: Path to the PDF file to parse
     :type pdf_path: str
+    :param cache_dir: Path to the directory to be used as cache.
+    :type cache_dir: str
     """
 
-    def __init__(self, pdf_path: str):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
         self.basename = pdf_path.split('/')[-1].split('.')[0]
 
-        self.cache_dir = f'./.cache/{self.basename}'
-        if not os.path.exists(self.cache_dir):
-            os.makedirs(self.cache_dir)     
+        self.cache_subfolder = f'{cache_dir}/{self.basename}'
+        if not os.path.exists(self.cache_subfolder):
+            os.makedirs(self.cache_subfolder)     
             #TODO: Agregar validación del caché
-            _ = convert_from_path(pdf_path, output_folder=self.cache_dir, fmt='jpeg', dpi=1000, output_file='')
+            _ = convert_from_path(pdf_path, output_folder=self.cache_subfolder, fmt='jpeg', dpi=1000, output_file='')
         #TODO: Guardar arreglos numpy de datos en lugar de imagenes (?)
     
     def get_text(self, page_separator: str = '\n') -> str:
@@ -284,7 +286,7 @@ class OcrPdfParser():
         :return: String of text contained in the file
         :rtype: str
         """
-        pages_path = glob.glob(f'{self.cache_dir}/0001-*.jpg')
+        pages_path = glob.glob(f'{self.cache_subfolder}/0001-*.jpg')
         # TODO: Verificar ordenamiento
         text = ""
         for page_path in sorted(pages_path):
@@ -299,10 +301,10 @@ class OcrPdfParser():
         :return: 
         :rtype: Iterator[str] 
         """
-        pages_path = glob.glob(f'{self.cache_dir}/0001-*.jpg')
+        pages_path = glob.glob(f'{self.cache_subfolder}/0001-*.jpg')
         # TODO: Verificar ordenamiento
         for page_path in sorted(pages_path):
             yield OcrPage(Image.open(page_path))
     
     def get_page(self, page_num: int) -> OcrPage:
-        return OcrPage(Image.open(f'{self.cache_dir}/0001-{page_num+1:02d}.jpg'))
+        return OcrPage(Image.open(f'{self.cache_subfolder}/0001-{page_num+1:02d}.jpg'))

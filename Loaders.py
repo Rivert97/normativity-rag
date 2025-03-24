@@ -11,14 +11,13 @@ class PdfMixedLoader():
     
     :param pdf_path: Path to PDF file
     :type pdf_path: str
-    :param pdf_images_path: Path to the dir containing all the images, named by
-        number of page.
-    :type pdf_images_path: str
+    :param cache_dir: Path to the dir to be used as cache.
+    :type cache_dir: str
     """
 
-    def __init__(self, pdf_path: str):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
         self.text_parser = PypdfParser(pdf_path)
-        self.ocr_parser = OcrPdfParser(pdf_path)
+        self.ocr_parser = OcrPdfParser(pdf_path, cache_dir)
     
     def get_text(self):
         text = ""
