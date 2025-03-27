@@ -37,6 +37,7 @@ class CLIController():
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
         parser.add_argument('-f', '--file', default='', type=str, help='File to be processed in single file mode')
         parser.add_argument('-o', '--output-dir', default='./', type=str, help='Directory to store the output text files. Defaults to ./')
+        parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
 
         args = parser.parse_args()
@@ -59,20 +60,32 @@ class CLIController():
         return args
     
     def __process_file(self):
-        pdf_loader = PdfMixedLoader(self.args.file, self.args.cache_dir)
-        text = pdf_loader.get_text()
-
         basename = ''.join(os.path.basename(self.args.file).split('.')[:-1])
-        with open(f"{self.args.output_dir}/{basename}.txt", 'w') as f:
+
+        pdf_loader = PdfMixedLoader(self.args.file, self.args.cache_dir)
+        if self.args.page != None:
+            text = pdf_loader.get_page_text(self.args.page)
+            out_name = f"{self.args.output_dir}/{basename}_{self.args.page}.txt"
+        else:
+            text = pdf_loader.get_text()
+            out_name = f"{self.args.output_dir}/{basename}.txt"
+
+        with open(out_name, 'w') as f:
             f.write(text)
     
     def __process_directory(self):
         for file in glob.glob(f'{self.args.directory}/*.pdf'):
-            pdf_loader = PdfMixedLoader(file)
-            text = pdf_loader.get_text()
-
             basename = ''.join(os.path.basename(file).split('.')[:-1])
-            with open(f"{self.args.output_dir}/{basename}.txt", 'w') as f:
+
+            pdf_loader = PdfMixedLoader(file)
+            if self.args.page != None:
+                text = pdf_loader.get_page_text(self.args.page)
+                out_name = f"{self.args.output_dir}/{basename}_{self.args.page}.txt"
+            else:
+                text = pdf_loader.get_text()
+                out_name = f"{self.args.output_dir}/{basename}.txt"
+
+            with open(out_name, 'w') as f:
                 f.write(text)
 
 if __name__ == "__main__":
