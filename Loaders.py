@@ -81,16 +81,23 @@ class PdfMixedLoader():
             else:
                 continue
 
+            single_removal = False
             if curr_status == 0:
                 if prev_status == 1 or prev_status == 2:
                     merged.extend(self.merge_words(added_words, removed_words))
                     if not added_words:
-                        missing_removals.extend(removed_words)
+                        if len(removed_words) == 1 and i > 1:
+                            single_removal = True
+                        else:
+                            missing_removals.extend(removed_words)
                     elif not removed_words:
                         missing_additions.extend(added_words)
+                if single_removal:
+                    merged.append((ocr_idx, removed_words[0] + ' ' + curr_diff[2:-1]))
+                else:
+                    merged.append((ocr_idx, curr_diff[2:-1]))
                 removed_words = []
                 added_words = []
-                merged.append((ocr_idx, curr_diff[2:-1]))
             elif curr_status == 1:
                 added_words.append((ocr_idx, curr_diff[2:-1]))
             elif curr_status == 2:
@@ -152,7 +159,10 @@ class PdfMixedLoader():
         else:
             merged.extend(self.merge_words(added_words, removed_words))
             if not added_words:
-                missing_removals.extend(removed_words)
+                if len(removed_words) == 1:
+                    merged[-1] = (merged[-1][0], merged[-1][1] + removed_words[0])
+                else:
+                    missing_removals.extend(removed_words)
             elif not removed_words:
                 missing_additions.extend(added_words)
         
