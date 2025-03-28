@@ -10,22 +10,27 @@ def remove_hyphens(text: str) -> str:
     * Names: Lopez-Ferreras, VGG-19, CIFAR-100
     """
     # TODO: Esto lo puede hacer una expresion regular
-    lines = [line.rstrip() for line in text.split("\n")]
+    lines = [line.strip() for line in text.split("\n")]
 
     # Find dashes
-    line_numbers = []
+    line_numbers_end = []
+    line_numbers_start = []
     for line_no, line in enumerate(lines[:-1]):
         if line.endswith("-"):
-            line_numbers.append(line_no)
+            line_numbers_end.append(line_no)
+        if line.startswith("-"):
+            line_numbers_start.append(line_no)
 
     # Replace
-    for line_no in line_numbers:
-        lines = dehyphenate(lines, line_no)
+    for line_no in line_numbers_end:
+        lines = dehyphenate_end(lines, line_no)
+    for line_no in line_numbers_start:
+        lines = dehyphenate_start(lines, line_no)
 
     return "\n".join(lines)
 
 
-def dehyphenate(lines: List[str], line_no: int) -> List[str]:
+def dehyphenate_end(lines: List[str], line_no: int) -> List[str]:
     next_line = lines[line_no + 1]
     word_suffix = next_line.split(" ")[0]
 
@@ -34,6 +39,13 @@ def dehyphenate(lines: List[str], line_no: int) -> List[str]:
     else:
         lines[line_no] = lines[line_no][:-1] + word_suffix
     lines[line_no + 1] = lines[line_no + 1][len(word_suffix) + 1:]
+    return lines
+
+def dehyphenate_start(lines: List[str], line_no: int) -> List[str]:
+    word_suffix = lines[line_no].split(" ")[1]
+
+    lines[line_no] = lines[line_no][len(word_suffix) + 3:]
+    lines[line_no - 1] = lines[line_no - 1] + word_suffix
     return lines
 
 def replace_ligatures(text: str) -> str:
