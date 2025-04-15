@@ -41,8 +41,9 @@ class CLIController():
         parser.add_argument('--cache-dir', default='./.cache/', type=str, help='Directory to be used as cache. Defaults to ./.cache/')
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
         parser.add_argument('-f', '--file', default='', type=str, help='File to be processed in single file mode')
-        parser.add_argument('-o', '--output-dir', default='./', type=str, help='Directory to store the output text files. Defaults to ./')
+        parser.add_argument('-o', '--output-dir', default='', type=str, help='Directory to store the output text files. Defaults to ./ in directory mode')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
+        parser.add_argument('-s', '--stdout', action='store_true', help='Stream the output to the stdout')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
 
         args = parser.parse_args()
@@ -67,7 +68,7 @@ class CLIController():
     def __process_file(self):
         basename = ''.join(os.path.basename(self._args.file).split('.')[:-1])
 
-        pdf_loader = PdfMixedLoader(self._args.file, self._args.cache_dir)
+        pdf_loader = PdfMixedLoader(self._args.file, self._args.cache_dir, verbose=self._args.stdout)
         if self._args.page != None:
             text = pdf_loader.get_page_text(self._args.page)
             out_name = f"{self._args.output_dir}/{basename}_{self._args.page}.txt"

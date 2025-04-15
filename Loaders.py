@@ -15,16 +15,18 @@ class PdfMixedLoader():
     :type cache_dir: str
     """
 
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache', verbose=False):
         self.text_parser = PypdfParser(pdf_path)
         self.ocr_parser = OcrPdfParser(pdf_path, cache_dir)
+        self.verbose = verbose
     
     def get_text(self):
         text = ""
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
             page_text = self.merge_pages(pypdf_page, ocr_page, remove_headers=True)
 
-            print(page_text)
+            if self.verbose:
+                print(page_text)
 
             text += page_text + "\n"
 
@@ -40,6 +42,9 @@ class PdfMixedLoader():
         page_text = self.merge_pages(pypdf_page, ocr_page, remove_headers=True)
         page_text = PostProcessors.replace_ligatures(page_text)
         page_text = PostProcessors.remove_hyphens(page_text)
+
+        if self.verbose:
+            print(page_text)
 
         return page_text
     
