@@ -1,8 +1,12 @@
 import argparse
 import os
 import glob
+import dotenv
 
 from Loaders import PdfMixedLoader
+from AppLogger import AppLogger
+
+dotenv.load_dotenv()
 
 PROGRAM_NAME = 'NormativityRAG'
 VERSION = '1.00.00'
@@ -16,12 +20,13 @@ class CLIController():
     CLI.
     """
     def __init__(self):
-        self.args = self.__process_args()
+        self._logger = AppLogger.get_logger('CLIController')
+        self._args = self.__process_args()
 
     def run(self):
-        if self.args.file != '':
+        if self._args.file != '':
             self.__process_file()
-        elif self.args.directory != '':
+        elif self._args.directory != '':
             self.__process_directory()
         else:
             raise CLIException("Input not specified")
@@ -60,38 +65,51 @@ class CLIController():
         return args
     
     def __process_file(self):
-        basename = ''.join(os.path.basename(self.args.file).split('.')[:-1])
+        basename = ''.join(os.path.basename(self._args.file).split('.')[:-1])
 
-        pdf_loader = PdfMixedLoader(self.args.file, self.args.cache_dir)
-        if self.args.page != None:
-            text = pdf_loader.get_page_text(self.args.page)
-            out_name = f"{self.args.output_dir}/{basename}_{self.args.page}.txt"
+        pdf_loader = PdfMixedLoader(self._args.file, self._args.cache_dir)
+        if self._args.page != None:
+            text = pdf_loader.get_page_text(self._args.page)
+            out_name = f"{self._args.output_dir}/{basename}_{self._args.page}.txt"
         else:
             text = pdf_loader.get_text()
-            out_name = f"{self.args.output_dir}/{basename}.txt"
+            out_name = f"{self._args.output_dir}/{basename}.txt"
 
         with open(out_name, 'w') as f:
             f.write(text)
     
     def __process_directory(self):
-        for file in glob.glob(f'{self.args.directory}/*.pdf'):
+        for file in glob.glob(f'{self._args.directory}/*.pdf'):
             basename = ''.join(os.path.basename(file).split('.')[:-1])
 
             pdf_loader = PdfMixedLoader(file)
-            if self.args.page != None:
-                text = pdf_loader.get_page_text(self.args.page)
-                out_name = f"{self.args.output_dir}/{basename}_{self.args.page}.txt"
+            if self._args.page != None:
+                text = pdf_loader.get_page_text(self._args.page)
+                out_name = f"{self._args.output_dir}/{basename}_{self._args.page}.txt"
             else:
                 text = pdf_loader.get_text()
-                out_name = f"{self.args.output_dir}/{basename}.txt"
+                out_name = f"{self._args.output_dir}/{basename}.txt"
 
             with open(out_name, 'w') as f:
                 f.write(text)
 
 if __name__ == "__main__":
     try:
+        AppLogger.setup_root_logger(
+            int(os.getenv('LOG_LEVEL', '20')),
+            os.getenv('LOG_FILE', f"{PROGRAM_NAME}.log"),
+            int(os.getenv('LOG_CONSOLE', '0'))
+        )
+    except ValueError as e:
+        print(f"Archivo de variables de entorno corrupto: {e}")
+        exit(1)
+
+    _logger = AppLogger.get_logger(PROGRAM_NAME)
+
+    try:
         controller = CLIController()
         controller.run()
     except CLIException as e:
         print(e)
+        _logger.error(e)
         exit(1)
