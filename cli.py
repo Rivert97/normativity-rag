@@ -41,7 +41,7 @@ class CLIController():
         parser.add_argument('--cache-dir', default='./.cache/', type=str, help='Directory to be used as cache. Defaults to ./.cache/')
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
         parser.add_argument('-f', '--file', default='', type=str, help='File to be processed in single file mode')
-        parser.add_argument('-o', '--output-dir', default='', type=str, help='Directory to store the output text files. Defaults to ./ in directory mode')
+        parser.add_argument('-o', '--output-dir', default='./', type=str, help='Directory to store the output text files. Defaults to ./')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         parser.add_argument('-s', '--stdout', action='store_true', help='Stream the output to the stdout')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
