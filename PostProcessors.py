@@ -79,5 +79,5 @@ def merge(text: str, body: str) -> str:
             current_index += 1
         #else:
         #    print(c, end="")
-    
+
     return merged

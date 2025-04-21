@@ -30,7 +30,7 @@ class CLIController():
             self.__process_directory()
         else:
             raise CLIException("Input not specified")
-    
+
     def __process_args(self) -> argparse.Namespace:
         parser = argparse.ArgumentParser(
             prog=PROGRAM_NAME,
@@ -53,18 +53,18 @@ class CLIController():
 
         if args.directory != '' and not os.path.exists(args.directory):
             raise CLIException(f"Input directory '{args.directory}' not found")
-        
+
         if args.file == '' and args.directory == '':
             raise CLIException("Please specify an input file or directory")
 
         if not os.path.exists('/'.join(args.cache_dir.split('/')[:-1])):
             raise CLIException("Parent cache directory must exist")
-        
+
         if args.output_dir != './' and not os.path.exists(args.output_dir):
             raise CLIException("Destination folder does not exist")
-        
+
         return args
-    
+
     def __process_file(self):
         basename = ''.join(os.path.basename(self._args.file).split('.')[:-1])
 
@@ -78,7 +78,7 @@ class CLIController():
 
         with open(out_name, 'w') as f:
             f.write(text)
-    
+
     def __process_directory(self):
         for file in glob.glob(f'{self._args.directory}/*.pdf'):
             basename = ''.join(os.path.basename(file).split('.')[:-1])
