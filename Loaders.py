@@ -8,18 +8,18 @@ import PostProcessors
 
 class PdfMixedLoader():
     """Loads the information of a PDF document applying multiple verifications.
-    
+
     :param pdf_path: Path to PDF file
     :type pdf_path: str
     :param cache_dir: Path to the dir to be used as cache.
     :type cache_dir: str
     """
 
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache', verbose=False):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache', verbose:bool=False):
         self.text_parser = PypdfParser(pdf_path)
         self.ocr_parser = OcrPdfParser(pdf_path, cache_dir)
         self.verbose = verbose
-    
+
     def get_text(self):
         text = ""
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
@@ -32,14 +32,14 @@ class PdfMixedLoader():
 
         text = PostProcessors.replace_ligatures(text)
         text = PostProcessors.remove_hyphens(text)
-        
+
         return text
-    
+
     def get_page_text(self, page_num: int):
         pypdf_page = self.text_parser.get_page(page_num)
         ocr_page = self.ocr_parser.get_page(page_num)
 
-        page_text = self.merge_pages(pypdf_page, ocr_page, remove_headers=True)
+        page_text = self.__merge_pages(pypdf_page, ocr_page, remove_headers=True)
         page_text = PostProcessors.replace_ligatures(page_text)
         page_text = PostProcessors.remove_hyphens(page_text)
 
@@ -47,8 +47,8 @@ class PdfMixedLoader():
             print(page_text)
 
         return page_text
-    
-    def merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, remove_headers: bool = False):
+
+    def __merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, remove_headers: bool = False):
         txt_words = pypdf_page.get_words(suffix='\n')
         ocr_words = ocr_page.get_words(suffix='\n')
 
@@ -170,7 +170,7 @@ class PdfMixedLoader():
                     missing_removals.extend(removed_words)
             elif not removed_words:
                 missing_additions.extend(added_words)
-        
+
         # TODO: Analizar casos en los que hay más adiciones que remociones
         #missing_removals = list(filter(lambda a: a != '-', missing_removals))
         if missing_additions and missing_removals:
@@ -231,9 +231,9 @@ class PdfMixedLoader():
             removed_words = removed_words[1:]
         else:
             merged.append((added_words[num_iter - 1][0], ''.join(removed_words)))
-        
+
         return merged
-    
+
     def compare_words(self, w1, w2):
         if len(w1) != len(w2):
             return 0
@@ -244,5 +244,5 @@ class PdfMixedLoader():
             if l1.lower() == l2.lower():
                 matches += 1
             count += 1
-        
+
         return matches/count
