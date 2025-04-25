@@ -2,7 +2,6 @@ from typing import List, Iterator, Dict
 from pypdf._page import PageObject
 
 import os
-import sys
 import glob
 from pypdf import PdfReader
 from PIL import Image, ImageDraw
@@ -90,13 +89,15 @@ class DataReconstructor():
     def __init__(self, data: pd.DataFrame):
         self.data = data.copy()
 
-        self.writable_min_x, _, self.writable_max_x, _ = self.__get_writable_boundaries()
-        self.writable_width = self.writable_max_x - self.writable_min_x
+        writable_min_x, _, writable_max_x, _ = self.__get_writable_boundaries()
+        self.writable_width = writable_max_x - writable_min_x
+        self.writable_center = writable_min_x + self.writable_width * 0.5
 
     def get_reconstructed(self) -> pd.DataFrame:
         self.__assign_line_number()
-        cols_info = self.__assign_column_number()
-        self.__assign_group_number(cols_info)
+        self.__assign_column_number()
+        self.__assign_column_position()
+        self.__assign_group_number()
 
         return self.data
 
@@ -122,12 +123,11 @@ class DataReconstructor():
 
     def __assign_column_number(self):
         self.data['column'] = pd.Series(dtype='int')
-        cols = {}
-        tolerance = self.writable_width * 0.025
+        tolerance = self.writable_width * 0.05
 
         for line_number, line_words in self.data.groupby('line'):
+            col_number = -1
             current_col = None
-            cols[line_number] = {}
 
             sorted_words = line_words.sort_values(by='left')
             for idx, word in sorted_words.iterrows():
@@ -135,18 +135,56 @@ class DataReconstructor():
                 word_right = word['left'] + word['width']
 
                 if (current_col is not None
-                    and word_left - cols[line_number][current_col]['maxX'] < tolerance):
+                    and word_left - current_col['maxX'] < tolerance):
                     # It is close enough to be in the same column
-                    cols[line_number][current_col]['maxX'] = word_right
+                    current_col['maxX'] = word_right
                 else:
-                    current_col = self.__get_column_index(word_left)
-                    cols[line_number][current_col] = {'maxX': word_right, 'minX': word_left}
+                    col_number += 1
+                    current_col = {'maxX': word_right, 'minX': word_left}
 
-                self.data.loc[idx, 'column'] = current_col
+                self.data.loc[idx, 'column'] = col_number
 
-        return cols
+    def __assign_column_position(self):
+        self.data['col_position'] = pd.Series(dtype='int')
+        self.data['right'] = self.data['left'] + self.data['width']
 
-    def __assign_group_number(self, cols_info):
+        for (line, column), values in self.data.groupby(['line', 'column']).agg({'left': ['min'], 'right': ['max']}).iterrows():
+            position = -1
+            if self.__column_is_aligned_left(values['left', 'min'], values['right', 'max']):
+                position = 0
+            elif self.__column_is_aligned_right(values['left', 'min'], values['right', 'max']):
+                position = 1
+
+            words_indices = self.data[(self.data['line'] == line) & (self.data['column'] == column)]
+            self.data.loc[words_indices.index, 'col_position'] = position
+
+    def __column_is_centered(self, min_x, max_x):
+        if min_x < self.writable_center < max_x:
+            center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
+            if abs(1.0 - center_rate) < 0.1:
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    def __column_is_aligned_left(self, min_x, max_x):
+        col_center = min_x + (max_x - min_x) * 0.5
+
+        if col_center < self.writable_center + self.writable_width * 0.1 and not min_x > self.writable_center:
+            return True
+        else:
+            return False
+
+    def __column_is_aligned_right(self, min_x, max_x):
+        col_center = min_x + (max_x - min_x) * 0.5
+
+        if col_center > self.writable_center:
+            return True
+        else:
+            return False
+
+    def __assign_group_number(self):
         self.data['group'] = pd.Series(dtype='int')
         tolerance = self.writable_width * 0.005
 
@@ -157,10 +195,17 @@ class DataReconstructor():
         group_num = 0
 
         for line_number, line_words in self.data.groupby('line'):
-            line_cols = cols_info[line_number]
-            has_centered = self.__line_has_centered_column(
-                line_cols, self.writable_min_x + self.writable_width * 0.5
-            )
+            line_cols = {}
+            for column, values in line_words.groupby(['column']).agg({'col_position': ['max'], 'left': ['min'], 'right': ['max']}).iterrows():
+                line_cols[column] = {
+                    'position': values['col_position', 'max'],
+                    'minX': values['left', 'min'],
+                    'maxX': values['right', 'max'],
+                }
+            has_centered = False
+            for _, col in line_cols.items():
+                if self.__column_is_centered(col['minX'], col['maxX']):
+                    has_centered = True
 
             new_group = self.__is_new_group(
                 line_cols=line_cols,
@@ -175,7 +220,6 @@ class DataReconstructor():
             if new_group:
                 group_num += 1
 
-
             self.data.loc[line_words.index, 'group'] = group_num
 
             # Update tracking variables
@@ -188,60 +232,38 @@ class DataReconstructor():
             else:
                 self.__expand_group_columns(group_cols, line_cols)
 
-    def __line_has_centered_column(self, line_cols, center_x):
-        has_centered_column = False
-        for _, value in line_cols.items():
-            if not value:
-                continue
-            if value['minX'] < center_x < value['maxX']:
-                has_centered_column = True
-
-        return has_centered_column
-
-    def __get_column_index(self, word_left):
-        #TODO: Make it dynamic for more than 2 columns
-        midpoint = self.writable_min_x + self.writable_width * 0.5
-
-        if word_left < midpoint:
-            return 0
-        else:
-            return 1
-
     def __is_new_group(self, line_cols, group_cols, prev_num_cols, prev_had_centered, has_centered, prev_new_group, tolerance):
         if group_cols is None or prev_num_cols is None or prev_had_centered is None:
             return False
 
-        if prev_num_cols != len(line_cols):
-            if has_centered or prev_had_centered:
-                return True
-            else:
-                return False
-
-        if prev_new_group and group_cols.get(0) is None and line_cols.get(0) is not None:
+        if len(group_cols) != len(line_cols) and (has_centered or prev_had_centered):
             return True
 
-        for col in line_cols:
-            if line_cols.get(col) is None or group_cols.get(col) is None:
-                continue
+        for g_col in group_cols:
+            g_position = group_cols[g_col]['position']
+            for l_col in line_cols:
+                if line_cols[l_col]['position'] != g_position:
+                    continue
 
-            if not self.__columns_overlap(line_cols[col], group_cols[col], tolerance) and not prev_new_group:
-                return True
-
+                if not self.__columns_wrap_each_other(line_cols[l_col], group_cols[g_col], tolerance) and not prev_new_group:
+                    return True
         return False
 
-    def __columns_overlap(self, col1, col2, tolerance):
+    def __columns_wrap_each_other(self, col1, col2, tolerance):
         return (
             (col1['minX'] > col2['minX'] - tolerance and col1['maxX'] < col2['maxX'] + tolerance) or
             (col2['minX'] > col1['minX'] - tolerance and col2['maxX'] < col1['maxX'] + tolerance)
         )
 
     def __expand_group_columns(self, group_cols, line_cols):
-        for col in line_cols:
-            if line_cols.get(col) is None or group_cols.get(col) is None:
-                continue
+        for g_col in group_cols:
+            position = group_cols[g_col]['position']
+            for l_col in line_cols:
+                if line_cols[l_col]['position'] != position:
+                    continue
 
-            group_cols[col]['minX'] = min(group_cols[col]['minX'], line_cols[col]['minX'])
-            group_cols[col]['maxX'] = max(group_cols[col]['maxX'], line_cols[col]['maxX'])
+                group_cols[g_col]['minX'] = min(group_cols[g_col]['minX'], line_cols[l_col]['minX'])
+                group_cols[g_col]['maxX'] = max(group_cols[g_col]['maxX'], line_cols[l_col]['maxX'])
 
     def __get_writable_boundaries(self):
         blocks = self.data[self.data['level'] == 2]
@@ -268,16 +290,16 @@ class OcrPage():
         self.data = reconstructor.get_reconstructed()
 
     def get_text(self) -> str:
-        return '\n'.join(self.data.sort_values(['line', 'left']).groupby(['group', 'column', 'line'])['text'].apply(' '.join).groupby(['group', 'column']).apply('\n'.join).groupby('group').apply('\n'.join))
+        return '\n'.join(self.data.sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
     def get_indices(self) -> List[int]:
-        return list(self.data.sort_values(['line', 'left']).reset_index().groupby(['group', 'column', 'line'])['index'].agg(list).groupby(['group', 'column']).sum().groupby('group').sum().sum())
+        return list(self.data.sort_values(['line', 'left']).reset_index().groupby(['group', 'col_position', 'line'])['index'].agg(list).groupby(['group', 'col_position']).sum().groupby('group').sum().sum())
 
     def get_new_text(self, remove_headers: bool = False) -> str:
         if remove_headers:
-            return '\n'.join(self.data[(self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['left'] + self.data['width'] < self.boundaries['right']) & (self.data['top'] + self.data['height'] < self.boundaries['bottom'])].dropna().sort_values(['line', 'left']).groupby(['group', 'column', 'line'])['new_text'].apply(' '.join).groupby(['group', 'column']).apply('\n'.join).groupby('group').apply('\n'.join))
+            return '\n'.join(self.data[(self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['left'] + self.data['width'] < self.boundaries['right']) & (self.data['top'] + self.data['height'] < self.boundaries['bottom'])].dropna().sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['new_text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
         else:
-            return '\n'.join(self.data.sort_values(['line', 'left']).dropna().groupby(['group', 'column', 'line'])['new_text'].apply(' '.join).groupby(['group', 'column']).apply('\n'.join).groupby('group').apply('\n'.join))
+            return '\n'.join(self.data.sort_values(['line', 'left']).dropna().groupby(['group', 'col_position', 'line'])['new_text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
     def get_raw_text(self) -> str:
         return '\n'.join(self.data.dropna().groupby(['block_num', 'par_num', 'line_num'])['text'].apply(' '.join).groupby(['block_num', 'par_num']).apply('\n'.join).groupby('block_num').apply('\n'.join))

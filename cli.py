@@ -83,7 +83,7 @@ class CLIController():
         for file in glob.glob(f'{self._args.directory}/*.pdf'):
             basename = ''.join(os.path.basename(file).split('.')[:-1])
 
-            pdf_loader = PdfMixedLoader(file)
+            pdf_loader = PdfMixedLoader(file, self._args.cache_dir, verbose=self._args.stdout)
             if self._args.page != None:
                 text = pdf_loader.get_page_text(self._args.page)
                 out_name = f"{self._args.output_dir}/{basename}_{self._args.page}.txt"
