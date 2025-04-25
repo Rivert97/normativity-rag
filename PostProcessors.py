@@ -1,4 +1,5 @@
 from typing import List
+import re
 
 def remove_hyphens(text: str) -> str:
     """
@@ -16,7 +17,8 @@ def remove_hyphens(text: str) -> str:
     line_numbers_end = []
     line_numbers_start = []
     for line_no, line in enumerate(lines[:-1]):
-        if line.endswith("-"):
+        match_end = re.match(r'^.*[a-zA-ZñÑáéíóúÁÉÍÓÚ ]-$', line)
+        if match_end:
             line_numbers_end.append(line_no)
         if line.startswith("-"):
             line_numbers_start.append(line_no)
@@ -42,9 +44,14 @@ def dehyphenate_end(lines: List[str], line_no: int) -> List[str]:
     return lines
 
 def dehyphenate_start(lines: List[str], line_no: int) -> List[str]:
-    word_suffix = lines[line_no].split(" ")[1]
+    if lines[line_no].startswith("- "):
+        word_suffix = lines[line_no].split(" ")[1]
+        suffix_offset = 3
+    else:
+        word_suffix = lines[line_no].split(" ")[0].split("-")[1]
+        suffix_offset = 1
 
-    lines[line_no] = lines[line_no][len(word_suffix) + 3:]
+    lines[line_no] = lines[line_no][len(word_suffix) + suffix_offset:]
     lines[line_no - 1] = lines[line_no - 1] + word_suffix
     return lines
 
@@ -65,19 +72,3 @@ def replace_ligatures(text: str) -> str:
         text = text.replace(search, replace)
 
     return text
-
-def merge(text: str, body: str) -> str:
-    body_characters = body.replace("\n", "").replace("\t", "").replace(" ", "").replace("-", "")
-
-    merged = ""
-    current_index = 0
-    for c in text:
-        if c in ("\n", "\t", " ", "-"):
-            merged += c
-        elif c == body_characters[current_index]:
-            merged += c
-            current_index += 1
-        #else:
-        #    print(c, end="")
-    
-    return merged

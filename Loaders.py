@@ -8,22 +8,22 @@ import PostProcessors
 
 class PdfMixedLoader():
     """Loads the information of a PDF document applying multiple verifications.
-    
+
     :param pdf_path: Path to PDF file
     :type pdf_path: str
     :param cache_dir: Path to the dir to be used as cache.
     :type cache_dir: str
     """
 
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache', verbose=False):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache', verbose:bool=False):
         self.text_parser = PypdfParser(pdf_path)
         self.ocr_parser = OcrPdfParser(pdf_path, cache_dir)
         self.verbose = verbose
-    
+
     def get_text(self):
         text = ""
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
-            page_text = self.merge_pages(pypdf_page, ocr_page, remove_headers=True)
+            page_text = self.__merge_pages(pypdf_page, ocr_page, remove_headers=True)
 
             if self.verbose:
                 print(page_text)
@@ -32,14 +32,14 @@ class PdfMixedLoader():
 
         text = PostProcessors.replace_ligatures(text)
         text = PostProcessors.remove_hyphens(text)
-        
+
         return text
-    
+
     def get_page_text(self, page_num: int):
         pypdf_page = self.text_parser.get_page(page_num)
         ocr_page = self.ocr_parser.get_page(page_num)
 
-        page_text = self.merge_pages(pypdf_page, ocr_page, remove_headers=True)
+        page_text = self.__merge_pages(pypdf_page, ocr_page, remove_headers=True)
         page_text = PostProcessors.replace_ligatures(page_text)
         page_text = PostProcessors.remove_hyphens(page_text)
 
@@ -47,49 +47,53 @@ class PdfMixedLoader():
             print(page_text)
 
         return page_text
-    
-    def merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, remove_headers: bool = False):
+
+    def __merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, remove_headers: bool = False):
         txt_words = pypdf_page.get_words(suffix='\n')
         ocr_words = ocr_page.get_words(suffix='\n')
 
+        differences = list(difflib.Differ().compare(list(txt_words['word']), list(ocr_words['word'])))
+        merged, missing_additions, missing_removals = self.__process_differences(differences, ocr_words)
+
+        if missing_additions and missing_removals:
+            merged.extend(self.__reconcile_missing(missing_additions, missing_removals))
+
+        df_merged = pd.Series(
+            (word for _, word in merged),
+            index=(ocr_words.iloc[idx].name for idx, _ in merged)
+        )
+        ocr_page.set_new_text(df_merged)
+
+        return ocr_page.get_new_text(remove_headers)
+
+    def __process_differences(self, differences, ocr_words):
         merged = [] # List of: (idx, word)
-        d = difflib.Differ()
-        differences = list(d.compare(list(txt_words['word']), list(ocr_words['word'])))
-        curr_status = 0 # 0->Normal, 1->Adding, 2->Removing, 3->Explanation
-        prev_status = 0 # 0->Normal, 1->Adding, 2->Removing, 3->Explanation
-        prev_prev_status = 0
         added_words = []
         removed_words = []
         missing_additions = []
         missing_removals = []
         ocr_idx = -1
-        skip_iter = False
-        for i in range(len(differences)):
-            #print(differences[i])
-            #import pdb; pdb.set_trace()
-            if skip_iter:
-                skip_iter = False
+        skip = False
+        status_tracker = [0, 0, 0] # curr, prev, prev_prev
+
+        for i, diff in enumerate(differences):
+            curr_status = self.__get_difference_type(diff)
+            if skip:
+                if curr_status in (0, 1): # Don't loose count of index
+                    ocr_idx += 1
+                skip = False
                 continue
 
-            curr_diff = differences[i]
-
-            if curr_diff.startswith('  '):
-                curr_status = 0
-                ocr_idx += 1
-            elif curr_diff.startswith('+ '):
-                curr_status = 1
-                ocr_idx += 1
-            elif curr_diff.startswith('- '):
-                curr_status = 2
-            elif re.search('^[?].*([+]+$|[^^])\n', curr_diff):
-                curr_status = 3
-            else:
+            if curr_status == -1:
                 continue
 
-            single_removal = False
+            status_tracker = [curr_status, *status_tracker[:2]]
+
             if curr_status == 0:
-                if prev_status == 1 or prev_status == 2:
-                    merged.extend(self.merge_words(added_words, removed_words))
+                ocr_idx += 1
+                single_removal = False
+                if status_tracker[1] in [1, 2]:
+                    merged.extend(self.__merge_words(added_words, removed_words))
                     if not added_words:
                         if len(removed_words) == 1 and i > 1:
                             single_removal = True
@@ -98,116 +102,154 @@ class PdfMixedLoader():
                     elif not removed_words:
                         missing_additions.extend(added_words)
                 if single_removal:
-                    merged.append((ocr_idx, removed_words[0] + ' ' + curr_diff[2:-1]))
+                    merged.append((ocr_idx, removed_words[0] + ' ' + diff[2:-1]))
                 else:
-                    merged.append((ocr_idx, curr_diff[2:-1]))
+                    merged.append((ocr_idx, diff[2:-1]))
                 removed_words = []
                 added_words = []
-            elif curr_status == 1:
-                added_words.append((ocr_idx, curr_diff[2:-1]))
-            elif curr_status == 2:
-                if prev_status == 1 and prev_prev_status == 2:
-                    merged.extend(self.merge_words(added_words, removed_words))
+
+            elif curr_status == 1: # Addition
+                ocr_idx += 1
+                added_words.append((ocr_idx, diff[2:-1]))
+
+            elif curr_status == 2: # Removal
+                if status_tracker[1] == 1 and status_tracker[2] == 2:
+                    merged.extend(self.__merge_words(added_words, removed_words))
                     if not added_words:
                         missing_removals.extend(removed_words)
                     elif not removed_words:
                         missing_additions.extend(added_words)
                     removed_words = []
                     added_words = []
-                removed_words.append(curr_diff[2:-1])
-            elif curr_status == 3:
-                annotation = curr_diff[2:-1]
-                match = re.search('[+]+$', annotation)
-                if match:
-                    if (i + 1) < len(differences):
-                        # TODO: Mejorar la estrategia para comparar cambios con el ? y los +
-                        next_diff = differences[i + 1]
-                        if i > 2 and differences[i - 3] != '- -\n':
-                            pre_pre_prev_diff = differences[i - 3]
-                        else:
-                            pre_pre_prev_diff = None
-                        #if match.start() == 0 and self.compare_words(pre_pre_prev_diff[2:-1], added_words[-1][1][match.start():match.end()]) > 0.0:
-                        if pre_pre_prev_diff != None and match.start() == 0 and len(pre_pre_prev_diff[2:-1] + removed_words[-1]) == len(added_words[-1][1]):
-                            merged.extend(self.merge_words(added_words[:-1], removed_words[:-2]))
-                            if not added_words[:-1]:
-                                missing_removals.extend(removed_words[:-2])
-                            elif not removed_words[:-2]:
-                                missing_additions.extend(added_words[:-1])
-                            merged.append((ocr_idx, pre_pre_prev_diff[2:-1] + removed_words[-1]))
-                        else:
-                            merged.extend(self.merge_words(added_words[:-1], removed_words[:-1]))
-                            if not added_words[:-1]:
-                                missing_removals.extend(removed_words[:-1])
-                            elif not removed_words[:-1]:
-                                missing_additions.extend(added_words[:-1])
-                            if next_diff[2:-1] == added_words[-1][1][match.start():match.end()]:
-                                merged.append((ocr_idx, added_words[-1][1]))
-                                skip_iter = True
-                            else:
-                                merged.append((ocr_idx, removed_words[-1]))
-                        added_words = []
-                        removed_words = []
-                        curr_status = 0
-                else:
-                    if not added_words:
-                        missing_removals.extend(removed_words)
-                    elif not removed_words[:-1]:
-                        missing_additions.extend(added_words)
-                    else:
-                        merged.extend(self.merge_words(added_words, removed_words))
-                    added_words = []
-                    removed_words = []
-                    curr_status = 0
+                removed_words.append(diff[2:-1])
 
-            prev_prev_status = prev_status
-            prev_status = curr_status
-        else:
-            merged.extend(self.merge_words(added_words, removed_words))
-            if not added_words:
-                if len(removed_words) == 1:
-                    merged[-1] = (merged[-1][0], merged[-1][1] + removed_words[0])
-                else:
-                    missing_removals.extend(removed_words)
-            elif not removed_words:
-                missing_additions.extend(added_words)
-        
-        # TODO: Analizar casos en los que hay más adiciones que remociones
-        #missing_removals = list(filter(lambda a: a != '-', missing_removals))
-        if missing_additions and missing_removals:
-            #TODO: Esto tendia que ser por bloque
-            additions_len = len(missing_additions)
-            removals_len = len(missing_removals)
-            similarities = []
-            multi_removals = list(missing_removals)
-            for i in range(math.ceil(additions_len/removals_len)):
-                multi_removals += missing_removals
-            for i in range(removals_len):
-                removals_sample = [word.lower() for word in multi_removals[i:i+additions_len]]
-                additions_sample = [item[1].lower() for item in missing_additions]
-                similarity = self.jaccard_similarity_V2(removals_sample, additions_sample)
-                similarities.append(similarity)
-            #similarities = []
-            #for i in range(removals_len - additions_len + 1):
-            #    removals_sample = [word.lower() for word in missing_removals[i:i+additions_len]]
-            #    additions_sample = [item[1].lower() for item in missing_additions]
-            #    similarities.append(self.jaccard_similarity(removals_sample, additions_sample))
-            max_similarity = max(similarities)
-            max_similarity_idx = similarities.index(max_similarity)
-            if max_similarity >= 0.0:
-                for i in range(additions_len):
-                    missing_additions[i] = (missing_additions[i][0], multi_removals[max_similarity_idx + i])
-                    #missing_additions[i] = (missing_additions[i][0], missing_removals[max_similarity_idx + i])
+            elif curr_status == 3: # Annotation
+                skip = self.__handle_annotation(
+                    i, differences, added_words, removed_words,
+                    merged, missing_additions, missing_removals, ocr_idx
+                )
+                added_words = []
+                removed_words = []
+                status_tracker[0] = 0
+
+        merged.extend(self.__merge_words(added_words, removed_words))
+        if not added_words:
+            if len(removed_words) == 1:
+                merged[-1] = (merged[-1][0], merged[-1][1] + removed_words[0])
             else:
-                missing_additions = []
+                missing_removals.extend(removed_words)
+        elif not removed_words:
+            missing_additions.extend(added_words)
 
-            merged.extend(missing_additions)
+        return merged, missing_additions, missing_removals
 
-        df_merged = pd.Series(map(lambda x: x[1], merged), index=map(lambda x: ocr_words.iloc[x[0]].name, merged))
-        ocr_page.set_new_text(df_merged)
+    def __reconcile_missing(self, additions, removals):
+        # TODO: Analizar casos en los que hay más adiciones que remociones
+        #TODO: Esto tendia que ser por bloque
+        additions_len = len(additions)
+        removals_len = len(removals)
+        multi_removals = list(removals)
 
-        return ocr_page.get_new_text(remove_headers)
+        for _ in range(math.ceil(additions_len / removals_len)):
+            multi_removals += removals
 
-    def jaccard_similarity_V2(self, a, b):
+        similarities = []
+        for i in range(removals_len):
+            rem_sample = [word.lower() for word in multi_removals[i:i + additions_len]]
+            add_sample = [item[1].lower() for item in additions]
+            similarities.append(self.__calculate_similarity(rem_sample, add_sample))
+
+        max_sim = max(similarities)
+        best_idx = similarities.index(max_sim)
+
+        if max_sim >= 0.0:
+            return [(additions[i][0], multi_removals[best_idx + i]) for i in range(additions_len)]
+        return []
+
+    def __get_difference_type(self, difference: str):
+        status = -1
+        if difference.startswith('  '):
+            status = 0
+        elif difference.startswith('+ '):
+            status = 1
+        elif difference.startswith('- '):
+            status = 2
+        elif re.search('^[?].*[+-]+$', difference):
+            status = 3
+
+        return status
+
+    def __handle_annotation(self, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx):
+        annotation = diffs[i][2:-1]
+        match_add = re.search(r'[+]+$', annotation)
+        match_rem = re.search(r'[-]+$', annotation)
+        if match_add:
+            return self.__handle_annotation_addition(match_add, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx)
+        elif match_rem:
+            return self.__handle_annotation_removal(match_rem, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx)
+        else:
+            return False
+
+    def __handle_annotation_addition(self, match, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx):
+        if (i + 1) >= len(diffs):
+            return False  # No next_diff available
+
+        next_diff = diffs[i + 1]
+
+        pre_pre_prev = diffs[i - 3] if i > 2 and diffs[i - 3] != '- -\n' else None
+
+        if pre_pre_prev is not None and match.start() == 0:
+            combined = pre_pre_prev[2:-1] + removed[-1]
+            if len(combined) == len(added[-1][1]):
+                merged.extend(self.__merge_words(added[:-1], removed[:-2]))
+                if not added[:-1]:
+                    miss_rem.extend(removed[:-2])
+                elif not removed[:-2]:
+                    miss_add.extend(added[:-1])
+                merged.append((ocr_idx, combined))
+                added.clear()
+                removed.clear()
+                return False
+
+        merged.extend(self.__merge_words(added[:-1], removed[:-1]))
+        if not added[:-1]:
+            miss_rem.extend(removed[:-1])
+        elif not removed[:-1]:
+            miss_add.extend(added[:-1])
+
+        if next_diff[2:-1] == added[-1][1][match.start():match.end()]:
+            merged.append((ocr_idx, added[-1][1]))
+            added.clear()
+            removed.clear()
+            return True # Skip next iteration
+        else:
+            merged.append((ocr_idx, removed[-1]))
+            added.clear()
+            removed.clear()
+            return False
+
+    def __handle_annotation_removal(self, match, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx):
+        if (i + 1) >= len(diffs):
+            return False  # No next_diff available
+
+        merged.extend(self.__merge_words(added, removed[:-1]))
+        if not added:
+            miss_rem.extend(removed[:-1])
+        elif not removed[:-1]:
+            miss_add.extend(added)
+
+        next_diff = diffs[i + 1]
+        combined = removed[-1][:match.start()] + removed[-1][match.end():]
+
+        if combined == next_diff[2:-1]:
+            merged.append((ocr_idx + 1, removed[-1]))
+            added.clear()
+            removed.clear()
+            return True
+        else:
+            return False
+
+    def __calculate_similarity(self, a, b):
         total = len(a)
         count = 0
         for w_a, w_b in zip(a, b):
@@ -215,12 +257,7 @@ class PdfMixedLoader():
                 count += 1
         return count / total
 
-    def jaccard_similarity(self, a, b):
-        a = set(a)
-        b = set(b)
-        return len(a.intersection(b)) / len(a.union(b))
-
-    def merge_words(self, added_words, removed_words):
+    def __merge_words(self, added_words, removed_words):
         if not added_words or not removed_words:
             return []
 
@@ -231,18 +268,5 @@ class PdfMixedLoader():
             removed_words = removed_words[1:]
         else:
             merged.append((added_words[num_iter - 1][0], ''.join(removed_words)))
-        
-        return merged
-    
-    def compare_words(self, w1, w2):
-        if len(w1) != len(w2):
-            return 0
 
-        matches = 0
-        count = 0
-        for l1, l2 in zip(w1, w2):
-            if l1.lower() == l2.lower():
-                matches += 1
-            count += 1
-        
-        return matches/count
+        return merged
