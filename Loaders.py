@@ -14,10 +14,13 @@ class PdfDocumentData():
     def __init__(self):
         self.data = pd.DataFrame()
 
-        self.page_meta = pd.DataFrame(columns=['width', 'height'])
-        self.page_meta['width'] = self.page_meta['width'].astype(float)
-        self.page_meta['height'] = self.page_meta['height'].astype(float)
         self.page_counter = 0
+        self.boundaries = {
+            'left': 0.05,
+            'top': 0.1,
+            'right': 0.95,
+            'bottom': 0.95,
+        }
 
     def add_page(self, data: pd.DataFrame, merged_text: pd.DataFrame=None, page_num: int=None):
         new_data = data.copy()
@@ -32,33 +35,26 @@ class PdfDocumentData():
             new_data['text'] = merged_text
 
         self.data = pd.concat([self.data, new_data.dropna()[PdfDocumentData.columns]])
-        self.page_meta = pd.concat([self.page_meta, pd.DataFrame({'width': new_data.loc[0, 'width'], 'height': new_data.loc[0, 'height']}, index=[page])])
 
         self.page_counter += 1
+
+    def get_text(self, remove_headers: bool=False):
+        if remove_headers:
+            return '\n'.join(self.data[(self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['right'] < self.boundaries['right']) & (self.data['bottom'] < self.boundaries['bottom'])].dropna().sort_values(['page', 'line', 'left']).groupby(['page', 'group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['page', 'group', 'col_position']).apply('\n'.join).groupby(['page', 'group']).apply('\n'.join).groupby('page').apply('\n'.join))
+        else:
+            return '\n'.join(self.data.sort_values(['page', 'line', 'left']).dropna().groupby(['page', 'group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['page', 'group', 'col_position']).apply('\n'.join).groupby(['page', 'group']).apply('\n'.join).groupby('page').apply('\n'.join))
 
     def get_last_page_text(self, remove_headers: bool=False):
         return self.get_page_text(self.page_counter - 1, remove_headers)
 
     def get_page_text(self, page_num: int, remove_headers: bool=False) -> str:
         if remove_headers:
-            boundaries = self.__calculate_content_boundaries(page_num)
-            return '\n'.join(self.data[(self.data['page'] == page_num) & (self.data['left'] > boundaries['left']) & (self.data['top'] > boundaries['top']) & (self.data['right'] < boundaries['right']) & (self.data['bottom'] < boundaries['bottom'])].dropna().sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
+            return '\n'.join(self.data[(self.data['page'] == page_num) & (self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['right'] < self.boundaries['right']) & (self.data['bottom'] < self.boundaries['bottom'])].dropna().sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
         else:
             return '\n'.join(self.data[self.data['page'] == page_num].sort_values(['line', 'left']).dropna().groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
     def save_data(self, prefix: str):
         self.data.to_csv(f'{prefix}_data.csv', index=False)
-        self.page_meta.to_csv(f'{prefix}_page_meta.csv')
-
-    def __calculate_content_boundaries(self, page_num: int) -> Dict[str, float]:
-        boundaries = {
-            'left': self.page_meta.loc[page_num, 'width'] * 0.05,
-            'top': self.page_meta.loc[page_num, 'height'] * 0.1,
-            'right': self.page_meta.loc[page_num, 'width'] * 0.95,
-            'bottom': self.page_meta.loc[page_num, 'height'] * 0.95,
-        }
-
-        return boundaries
 
 
 class PdfMixedLoader():
@@ -81,13 +77,11 @@ class PdfMixedLoader():
         text = ""
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
             self.__merge_pages(pypdf_page, ocr_page)
-            page_text = self.documentData.get_last_page_text(remove_headers=True)
 
             if self.verbose:
-                print(page_text)
+                print(self.documentData.get_last_page_text(remove_headers=True))
 
-            text += page_text + "\n"
-
+        text = self.documentData.get_text(remove_headers=True)
         text = PostProcessors.replace_ligatures(text)
         text = PostProcessors.remove_hyphens(text)
 
