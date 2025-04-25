@@ -81,9 +81,12 @@ class PdfMixedLoader():
         text = ""
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
             self.__merge_pages(pypdf_page, ocr_page)
+            page_text = self.documentData.get_last_page_text(remove_headers=True)
 
             if self.verbose:
-                print(self.documentData.get_last_page_text(remove_headers=True))
+                print(page_text)
+
+            text += page_text + "\n"
 
         text = PostProcessors.replace_ligatures(text)
         text = PostProcessors.remove_hyphens(text)
