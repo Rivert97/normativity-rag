@@ -194,7 +194,7 @@ class DataReconstructor():
         group_cols = None
         group_num = 0
 
-        for line_number, line_words in self.data.groupby('line'):
+        for _, line_words in self.data.groupby('line'):
             line_cols = {}
             for column, values in line_words.groupby(['column']).agg({'col_position': ['max'], 'left': ['min'], 'right': ['max']}).iterrows():
                 line_cols[column] = {
@@ -239,7 +239,7 @@ class DataReconstructor():
         if len(group_cols) != len(line_cols):
             if has_centered or prev_had_centered:
                 return True
-        elif has_centered != prev_had_centered:
+        elif has_centered != prev_had_centered and line_cols.get(0).get('position') == 0:
             return True
 
         for g_col in group_cols:
@@ -287,7 +287,9 @@ class OcrPage():
         self.image = image
 
         self.data = self.__get_data_from_image()
-        self.boundaries = self.__get_content_boundaries()
+        self.width = self.data.loc[0, 'width']
+        self.height = self.data.loc[0, 'height']
+        self.__normalize_data()
 
         reconstructor = DataReconstructor(self.data)
         self.data = reconstructor.get_reconstructed()
@@ -297,12 +299,6 @@ class OcrPage():
 
     def get_indices(self) -> List[int]:
         return list(self.data.sort_values(['line', 'left']).reset_index().groupby(['group', 'col_position', 'line'])['index'].agg(list).groupby(['group', 'col_position']).sum().groupby('group').sum().sum())
-
-    def get_new_text(self, remove_headers: bool = False) -> str:
-        if remove_headers:
-            return '\n'.join(self.data[(self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['left'] + self.data['width'] < self.boundaries['right']) & (self.data['top'] + self.data['height'] < self.boundaries['bottom'])].dropna().sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['new_text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
-        else:
-            return '\n'.join(self.data.sort_values(['line', 'left']).dropna().groupby(['group', 'col_position', 'line'])['new_text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
     def get_raw_text(self) -> str:
         return '\n'.join(self.data.dropna().groupby(['block_num', 'par_num', 'line_num'])['text'].apply(' '.join).groupby(['block_num', 'par_num']).apply('\n'.join).groupby('block_num').apply('\n'.join))
@@ -325,14 +321,11 @@ class OcrPage():
         canvas = self.image.copy()
         draw = ImageDraw.Draw(canvas)
 
-        # Draw boundaries
-        draw.rectangle(((self.boundaries['left'], self.boundaries['top']), (self.boundaries['right'], self.boundaries['bottom'])), outline='red')
-
         # Draw regions
         for _, row in self.data.iterrows():
             if row['level'] == level:
-                (x, y, w, h) = (row['left'], row['top'], row['width'], row['height'])
-                draw.rectangle(((x, y), (x + w, y + h)), outline="green")
+                (x, y, w, h) = (int(row['left']*self.width), int(row['top']*self.height), int(row['width']*self.width), int(row['height']*self.height))
+                draw.rectangle(((x, y), (x + w, y + h)), outline="green", width=3)
 
         plt.imshow(canvas)
         plt.show()
@@ -343,14 +336,14 @@ class OcrPage():
 
         # Draw regions
         for group, values in self.data.dropna().groupby(['group']).agg({'left': ['min'], 'top': ['min'], 'bottom': ['max'], 'right': ['max']}).iterrows():
-            (x_1, y_1, x_2, y_2) = (values['left', 'min'], values['top', 'min'], values['right', 'max'], values['bottom', 'max'])
-            draw.rectangle(((x_1, y_1), (x_2, y_2)), outline="green")
+            (x_1, y_1, x_2, y_2) = (int(values['left', 'min']*self.width), int(values['top', 'min']*self.height), int(values['right', 'max']*self.width), int(values['bottom', 'max']*self.height))
+            draw.rectangle(((x_1, y_1), (x_2, y_2)), outline="green", width=3)
 
         plt.imshow(canvas)
         plt.show()
 
-    def set_new_text(self, col_data: pd.DataFrame):
-        self.data['new_text'] = col_data
+    def get_data(self):
+        return self.data
 
     def __get_data_from_image(self):
         data = pytesseract.image_to_data(self.image, lang='spa', output_type=pytesseract.Output.DATAFRAME)
@@ -361,15 +354,11 @@ class OcrPage():
 
         return data
 
-    def __get_content_boundaries(self) -> Dict[str, float]:
-        boundaries = {
-            'left': self.data.loc[0, 'width'] * 0.05,
-            'top': self.data.loc[0, 'height'] * 0.1,
-            'right': self.data.loc[0, 'width'] * 0.95,
-            'bottom': self.data.loc[0, 'height'] * 0.95,
-        }
-
-        return boundaries
+    def __normalize_data(self):
+        self.data['left'] = self.data['left'] / self.data.loc[0, 'width']
+        self.data['width'] = self.data['width'] / self.data.loc[0, 'width']
+        self.data['top'] = self.data['top'] / self.data.loc[0, 'height']
+        self.data['height'] = self.data['height'] / self.data.loc[0, 'height']
 
 class OcrPdfParser():
     """This class uses Google Tesseract to parse the content of PDF

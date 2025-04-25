@@ -1,3 +1,4 @@
+from typing import Dict
 import difflib
 import re
 import pandas as pd
@@ -5,6 +6,60 @@ import math
 
 from Parsers import PypdfParser, OcrPdfParser, PypdfPage, OcrPage
 import PostProcessors
+
+class PdfDocumentData():
+
+    columns = ['page', 'text', 'left', 'top', 'right', 'bottom', 'line', 'column', 'col_position', 'group']
+
+    def __init__(self):
+        self.data = pd.DataFrame()
+
+        self.page_meta = pd.DataFrame(columns=['width', 'height'])
+        self.page_meta['width'] = self.page_meta['width'].astype(float)
+        self.page_meta['height'] = self.page_meta['height'].astype(float)
+        self.page_counter = 0
+
+    def add_page(self, data: pd.DataFrame, merged_text: pd.DataFrame=None, page_num: int=None):
+        new_data = data.copy()
+
+        if page_num is None:
+            page = self.page_counter
+        else:
+            page = page_num
+        new_data['page'] = page
+
+        if merged_text is not None:
+            new_data['text'] = merged_text
+
+        self.data = pd.concat([self.data, new_data.dropna()[PdfDocumentData.columns]])
+        self.page_meta = pd.concat([self.page_meta, pd.DataFrame({'width': new_data.loc[0, 'width'], 'height': new_data.loc[0, 'height']}, index=[page])])
+
+        self.page_counter += 1
+
+    def get_last_page_text(self, remove_headers: bool=False):
+        return self.get_page_text(self.page_counter - 1, remove_headers)
+
+    def get_page_text(self, page_num: int, remove_headers: bool=False) -> str:
+        if remove_headers:
+            boundaries = self.__calculate_content_boundaries(page_num)
+            return '\n'.join(self.data[(self.data['page'] == page_num) & (self.data['left'] > boundaries['left']) & (self.data['top'] > boundaries['top']) & (self.data['right'] < boundaries['right']) & (self.data['bottom'] < boundaries['bottom'])].dropna().sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
+        else:
+            return '\n'.join(self.data[self.data['page'] == page_num].sort_values(['line', 'left']).dropna().groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
+
+    def save_data(self, prefix: str):
+        self.data.to_csv(f'{prefix}_data.csv', index=False)
+        self.page_meta.to_csv(f'{prefix}_page_meta.csv')
+
+    def __calculate_content_boundaries(self, page_num: int) -> Dict[str, float]:
+        boundaries = {
+            'left': self.page_meta.loc[page_num, 'width'] * 0.05,
+            'top': self.page_meta.loc[page_num, 'height'] * 0.1,
+            'right': self.page_meta.loc[page_num, 'width'] * 0.95,
+            'bottom': self.page_meta.loc[page_num, 'height'] * 0.95,
+        }
+
+        return boundaries
+
 
 class PdfMixedLoader():
     """Loads the information of a PDF document applying multiple verifications.
@@ -20,15 +75,15 @@ class PdfMixedLoader():
         self.ocr_parser = OcrPdfParser(pdf_path, cache_dir)
         self.verbose = verbose
 
+        self.documentData = PdfDocumentData()
+
     def get_text(self):
         text = ""
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
-            page_text = self.__merge_pages(pypdf_page, ocr_page, remove_headers=True)
+            self.__merge_pages(pypdf_page, ocr_page)
 
             if self.verbose:
-                print(page_text)
-
-            text += page_text + "\n"
+                print(self.documentData.get_last_page_text(remove_headers=True))
 
         text = PostProcessors.replace_ligatures(text)
         text = PostProcessors.remove_hyphens(text)
@@ -39,7 +94,8 @@ class PdfMixedLoader():
         pypdf_page = self.text_parser.get_page(page_num)
         ocr_page = self.ocr_parser.get_page(page_num)
 
-        page_text = self.__merge_pages(pypdf_page, ocr_page, remove_headers=True)
+        self.__merge_pages(pypdf_page, ocr_page, page_num)
+        page_text = self.documentData.get_page_text(page_num, remove_headers=True)
         page_text = PostProcessors.replace_ligatures(page_text)
         page_text = PostProcessors.remove_hyphens(page_text)
 
@@ -48,7 +104,7 @@ class PdfMixedLoader():
 
         return page_text
 
-    def __merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, remove_headers: bool = False):
+    def __merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, page_num: int = None):
         txt_words = pypdf_page.get_words(suffix='\n')
         ocr_words = ocr_page.get_words(suffix='\n')
 
@@ -58,13 +114,11 @@ class PdfMixedLoader():
         if missing_additions and missing_removals:
             merged.extend(self.__reconcile_missing(missing_additions, missing_removals))
 
-        df_merged = pd.Series(
+        df_merged_text = pd.Series(
             (word for _, word in merged),
             index=(ocr_words.iloc[idx].name for idx, _ in merged)
         )
-        ocr_page.set_new_text(df_merged)
-
-        return ocr_page.get_new_text(remove_headers)
+        self.documentData.add_page(ocr_page.get_data(), df_merged_text, page_num)
 
     def __process_differences(self, differences, ocr_words):
         merged = [] # List of: (idx, word)
