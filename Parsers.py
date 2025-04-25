@@ -89,6 +89,9 @@ class DataReconstructor():
     def __init__(self, data: pd.DataFrame):
         self.data = data.copy()
 
+        self.data['right'] = self.data['left'] + self.data['width']
+        self.data['bottom'] = self.data['top'] + self.data['height']
+
         writable_min_x, _, writable_max_x, _ = self.__get_writable_boundaries()
         self.writable_width = writable_max_x - writable_min_x
         self.writable_center = writable_min_x + self.writable_width * 0.5
@@ -146,7 +149,6 @@ class DataReconstructor():
 
     def __assign_column_position(self):
         self.data['col_position'] = pd.Series(dtype='int')
-        self.data['right'] = self.data['left'] + self.data['width']
 
         for (line, column), values in self.data.groupby(['line', 'column']).agg({'left': ['min'], 'right': ['max']}).iterrows():
             position = -1
@@ -159,12 +161,10 @@ class DataReconstructor():
             self.data.loc[words_indices.index, 'col_position'] = position
 
     def __column_is_centered(self, min_x, max_x):
-        if min_x < self.writable_center < max_x:
-            center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
-            if abs(1.0 - center_rate) < 0.1:
-                return True
-            else:
-                return False
+        center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
+        column_percentage = (max_x - min_x) / self.writable_width
+        if min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1 and column_percentage < 0.9:
+            return True
         else:
             return False
 
@@ -236,7 +236,10 @@ class DataReconstructor():
         if group_cols is None or prev_num_cols is None or prev_had_centered is None:
             return False
 
-        if len(group_cols) != len(line_cols) and (has_centered or prev_had_centered):
+        if len(group_cols) != len(line_cols):
+            if has_centered or prev_had_centered:
+                return True
+        elif has_centered != prev_had_centered:
             return True
 
         for g_col in group_cols:
@@ -330,6 +333,18 @@ class OcrPage():
             if row['level'] == level:
                 (x, y, w, h) = (row['left'], row['top'], row['width'], row['height'])
                 draw.rectangle(((x, y), (x + w, y + h)), outline="green")
+
+        plt.imshow(canvas)
+        plt.show()
+
+    def show_relevant_detection(self):
+        canvas = self.image.copy()
+        draw = ImageDraw.Draw(canvas)
+
+        # Draw regions
+        for group, values in self.data.dropna().groupby(['group']).agg({'left': ['min'], 'top': ['min'], 'bottom': ['max'], 'right': ['max']}).iterrows():
+            (x_1, y_1, x_2, y_2) = (values['left', 'min'], values['top', 'min'], values['right', 'max'], values['bottom', 'max'])
+            draw.rectangle(((x_1, y_1), (x_2, y_2)), outline="green")
 
         plt.imshow(canvas)
         plt.show()
