@@ -41,9 +41,8 @@ class CLIController():
         parser.add_argument('--cache-dir', default='./.cache/', type=str, help='Directory to be used as cache. Defaults to ./.cache/')
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
         parser.add_argument('-f', '--file', default='', type=str, help='File to be processed in single file mode')
-        parser.add_argument('-o', '--output-dir', default='./', type=str, help='Directory to store the output text files. Defaults to ./')
+        parser.add_argument('-o', '--output', default='./', type=str, help='File or directory to store the output text file(s). When -d is used, this defaults to ./')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
-        parser.add_argument('-s', '--stdout', action='store_true', help='Stream the output to the stdout')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
 
         args = parser.parse_args()
@@ -60,39 +59,50 @@ class CLIController():
         if not os.path.exists('/'.join(args.cache_dir.split('/')[:-1])):
             raise CLIException("Parent cache directory must exist")
 
-        if args.output_dir != './' and not os.path.exists(args.output_dir):
-            raise CLIException("Destination folder does not exist")
+        if args.directory != '':
+            if not os.path.exists(args.output):
+                raise CLIException("Destination directory does not exist")
+
+        if args.file != '':
+            dirname = os.path.dirname(args.output)
+            if dirname != '' and not os.path.exists(dirname):
+                raise CLIException("Output path does not exist")
 
         return args
 
     def __process_file(self):
-        basename = ''.join(os.path.basename(self._args.file).split('.')[:-1])
-
-        pdf_loader = PdfMixedLoader(self._args.file, self._args.cache_dir, verbose=self._args.stdout)
+        pdf_loader = PdfMixedLoader(self._args.file, self._args.cache_dir)
         if self._args.page != None:
             text = pdf_loader.get_page_text(self._args.page)
-            out_name = f"{self._args.output_dir}/{basename}_{self._args.page}.txt"
         else:
             text = pdf_loader.get_text()
-            out_name = f"{self._args.output_dir}/{basename}.txt"
 
-        with open(out_name, 'w') as f:
-            f.write(text)
+        if self._args.output == './':
+            print(text)
+        else:
+            self.__save_text(text, self._args.output)
 
     def __process_directory(self):
         for file in glob.glob(f'{self._args.directory}/*.pdf'):
             basename = ''.join(os.path.basename(file).split('.')[:-1])
 
-            pdf_loader = PdfMixedLoader(file, self._args.cache_dir, verbose=self._args.stdout)
+            pdf_loader = PdfMixedLoader(file, self._args.cache_dir)
             if self._args.page != None:
                 text = pdf_loader.get_page_text(self._args.page)
-                out_name = f"{self._args.output_dir}/{basename}_{self._args.page}.txt"
+                out_name = f"{self._args.output}/{basename}_{self._args.page}.txt"
             else:
                 text = pdf_loader.get_text()
-                out_name = f"{self._args.output_dir}/{basename}.txt"
+                out_name = f"{self._args.output}/{basename}.txt"
 
-            with open(out_name, 'w') as f:
+            self.__save_text(text, out_name)
+
+    def __save_text(self, text:str, filename: str):
+        try:
+            with open(filename, 'w') as f:
                 f.write(text)
+        except FileNotFoundError as e:
+            self._logger.error(e)
+            print("Output directory not found")
 
 if __name__ == "__main__":
     try:
@@ -102,7 +112,7 @@ if __name__ == "__main__":
             int(os.getenv('LOG_CONSOLE', '0'))
         )
     except ValueError as e:
-        print(f"Archivo de variables de entorno corrupto: {e}")
+        print(f"Environment variables file is corrupted: {e}")
         exit(1)
 
     _logger = AppLogger.get_logger(PROGRAM_NAME)
