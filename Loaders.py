@@ -34,7 +34,7 @@ class PdfDocumentData():
         if merged_text is not None:
             new_data['text'] = merged_text
 
-        self.data = pd.concat([self.data, new_data.dropna()[PdfDocumentData.columns]])
+        self.data = pd.concat([self.data, new_data.dropna()[PdfDocumentData.columns]], ignore_index=True)
 
         self.page_counter += 1
 
@@ -53,8 +53,23 @@ class PdfDocumentData():
         else:
             return '\n'.join(self.data[self.data['page'] == page_num].sort_values(['line', 'left']).dropna().groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
-    def save_data(self, prefix: str):
-        self.data.to_csv(f'{prefix}_data.csv', index=False)
+    def get_data(self):
+        return self.data
+
+    def get_page_data(self, page_num: int):
+        return self.data[self.data['page'] == page_num]
+
+    def save_data(self, filename: str):
+        self.data.to_csv(filename, index=False)
+
+    def save_page_data(self, page_num: int, filename: str):
+        self.data[self.data['page'] == page_num].to_csv(filename, index=False)
+
+    def is_empty(self):
+        if self.page_counter == 0:
+            return True
+        else:
+            return False
 
 
 class PdfMixedLoader():
@@ -66,20 +81,25 @@ class PdfMixedLoader():
     :type cache_dir: str
     """
 
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache', verbose:bool=False):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
         self.text_parser = PypdfParser(pdf_path)
         self.ocr_parser = OcrPdfParser(pdf_path, cache_dir)
-        self.verbose = verbose
 
         self.documentData = PdfDocumentData()
 
-    def get_text(self):
-        text = ""
+    def process_document(self):
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
             self.__merge_pages(pypdf_page, ocr_page)
 
-            if self.verbose:
-                print(self.documentData.get_last_page_text(remove_headers=True))
+    def process_page(self, page_num: int):
+        pypdf_page = self.text_parser.get_page(page_num)
+        ocr_page = self.ocr_parser.get_page(page_num)
+
+        self.__merge_pages(pypdf_page, ocr_page, page_num)
+
+    def get_text(self):
+        if self.documentData.is_empty():
+            return ''
 
         text = self.documentData.get_text(remove_headers=True)
         text = PostProcessors.replace_ligatures(text)
@@ -88,18 +108,26 @@ class PdfMixedLoader():
         return text
 
     def get_page_text(self, page_num: int):
-        pypdf_page = self.text_parser.get_page(page_num)
-        ocr_page = self.ocr_parser.get_page(page_num)
+        if self.documentData.is_empty():
+            return ''
 
-        self.__merge_pages(pypdf_page, ocr_page, page_num)
         page_text = self.documentData.get_page_text(page_num, remove_headers=True)
         page_text = PostProcessors.replace_ligatures(page_text)
         page_text = PostProcessors.remove_hyphens(page_text)
 
-        if self.verbose:
-            print(page_text)
-
         return page_text
+
+    def get_data(self):
+        return self.documentData.get_data()
+
+    def get_page_data(self, page_num: int):
+        return self.documentData.get_page_data(page_num)
+
+    def save_data(self, filename: str):
+        self.documentData.save_data(filename)
+
+    def save_page_data(self, page_num: int, filename: str):
+        self.documentData.save_page_data(page_num, filename)
 
     def __merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, page_num: int = None):
         txt_words = pypdf_page.get_words(suffix='\n')
