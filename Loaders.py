@@ -65,6 +65,9 @@ class PdfDocumentData():
     def save_page_data(self, page_num: int, filename: str):
         self.data[self.data['page'] == page_num].to_csv(filename, index=False)
 
+    def load_data(self, filename: str):
+        self.data = pd.read_csv(filename, sep=',')
+
     def is_empty(self):
         if self.page_counter == 0:
             return True
@@ -75,23 +78,29 @@ class PdfDocumentData():
 class PdfMixedLoader():
     """Loads the information of a PDF document applying multiple verifications.
 
-    :param pdf_path: Path to PDF file
-    :type pdf_path: str
     :param cache_dir: Path to the dir to be used as cache.
     :type cache_dir: str
     """
 
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
-        self.text_parser = PypdfParser(pdf_path)
-        self.ocr_parser = OcrPdfParser(pdf_path, cache_dir)
+    def __init__(self, cache_dir: str = './.cache'):
+        self.cache_dir = cache_dir
 
         self.documentData = PdfDocumentData()
 
-    def process_document(self):
+    def process_from_data(self, data_file: str):
+        self.documentData.load_data(data_file)
+
+    def process_document(self, pdf_path: str):
+        self.text_parser = PypdfParser(pdf_path)
+        self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir)
+
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
             self.__merge_pages(pypdf_page, ocr_page)
 
-    def process_page(self, page_num: int):
+    def process_page(self, pdf_path:str, page_num: int):
+        self.text_parser = PypdfParser(pdf_path)
+        self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir)
+
         pypdf_page = self.text_parser.get_page(page_num)
         ocr_page = self.ocr_parser.get_page(page_num)
 
