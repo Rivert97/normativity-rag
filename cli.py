@@ -72,10 +72,13 @@ class CLIController():
         if args.directory != '':
             if args.output == '':
                 args.output = './'
-            if not os.path.exists(args.output):
+            if not os.path.isdir(args.output):
                 raise CLIException("Destination directory does not exist")
 
         if args.file != '':
+            if not os.path.isfile(args.output):
+                raise CLIException("Output is not a file")
+
             dirname = os.path.dirname(args.output)
             if dirname != '' and not os.path.exists(dirname):
                 raise CLIException("Output path does not exist")
@@ -87,14 +90,14 @@ class CLIController():
 
     def __process_csv_file(self, filename: str):
         pdf_loader = PdfMixedLoader()
-        pdf_loader.process_from_data(filename)
+        pdf_loader.load_from_data(filename)
 
     def __process_file(self, filename: str, output: str = None):
         pdf_loader = PdfMixedLoader(self._args.cache_dir)
         if self._args.page != None:
-            pdf_loader.process_page(filename, self._args.page)
+            pdf_loader.load_page(filename, self._args.page)
         else:
-            pdf_loader.process_document(filename)
+            pdf_loader.load(filename)
 
         self.__make_output(pdf_loader, output)
 
@@ -120,16 +123,18 @@ class CLIController():
             else:
                 self.__save_text(text, filename)
         elif self._args.type == 'csv':
+            data = pdf_loader.get_document_data()
+
             if self.print_to_console:
                 if self._args.page is not None:
-                    print(pdf_loader.get_page_data(self._args.page).to_csv(index=False))
+                    print(data.get_page_data(self._args.page).to_csv(index=False))
                 else:
-                    print(pdf_loader.get_data().to_csv(index=False))
+                    print(data.get_data().to_csv(index=False))
             else:
                 if self._args.page is not None:
-                    pdf_loader.save_page_data(self._args.page, filename)
+                    data.save_page_data(self._args.page, filename)
                 else:
-                    pdf_loader.save_data(filename)
+                    data.save_data(filename)
 
     def __save_text(self, text:str, filename: str):
         try:
