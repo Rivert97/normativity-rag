@@ -8,6 +8,8 @@ class PdfDocumentData():
         self.data = pd.DataFrame()
 
         self.page_counter = 0
+        self.line_counter = 0
+        self.group_counter = 0
         self.boundaries = {
             'left': 0.05,
             'top': 0.1,
@@ -16,18 +18,28 @@ class PdfDocumentData():
         }
 
     def add_page(self, data: pd.DataFrame, merged_text: pd.DataFrame=None, page_num: int=None):
-        new_data = data.copy()
+        new_data = data.dropna().copy()
+
+        if new_data.empty:
+            self.page_counter += 1
+            return
 
         if page_num is None:
             page = self.page_counter
         else:
             page = page_num
-        new_data['page'] = page
+        new_data.loc[:, 'page'] = page
 
         if merged_text is not None:
-            new_data['text'] = merged_text
+            new_data.loc[:, 'text'] = merged_text
 
-        self.data = pd.concat([self.data, new_data.dropna()[PdfDocumentData.columns]], ignore_index=True)
+        new_data.loc[:, 'line'] += self.line_counter
+        self.line_counter = new_data.loc[:, 'line'].max() + 1
+
+        new_data.loc[:, 'group'] += self.group_counter
+        self.group_counter = new_data.loc[:, 'group'].max() + 1
+
+        self.data = pd.concat([self.data, new_data[PdfDocumentData.columns]], ignore_index=True)
 
         self.page_counter += 1
 
