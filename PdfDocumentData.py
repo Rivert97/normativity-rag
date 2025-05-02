@@ -58,11 +58,17 @@ class PdfDocumentData():
         else:
             return '\n'.join(self.data[self.data['page'] == page_num].sort_values(['line', 'left']).dropna().groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
-    def get_data(self):
-        return self.data
+    def get_data(self, remove_headers: bool=False):
+        if remove_headers:
+            return self.data[(self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['right'] < self.boundaries['right']) & (self.data['bottom'] < self.boundaries['bottom'])]
+        else:
+            return self.data
 
-    def get_page_data(self, page_num: int):
-        return self.data[self.data['page'] == page_num]
+    def get_page_data(self, page_num: int, remove_headers: bool=False):
+        if remove_headers:
+            return self.data[(self.data['page'] == page_num) & (self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['right'] < self.boundaries['right']) & (self.data['bottom'] < self.boundaries['bottom'])]
+        else:
+            return self.data[self.data['page'] == page_num]
 
     def save_data(self, filename: str):
         self.data.to_csv(filename, index=False)

@@ -5,6 +5,8 @@ import dotenv
 
 from Loaders import PdfMixedLoader
 from AppLogger import AppLogger
+from PdfDocumentData import PdfDocumentData
+from Splitters import NormativitySplitter
 
 dotenv.load_dotenv()
 
@@ -76,9 +78,6 @@ class CLIController():
                 raise CLIException("Destination directory does not exist")
 
         if args.file != '':
-            if not os.path.isfile(args.output):
-                raise CLIException("Output is not a file")
-
             dirname = os.path.dirname(args.output)
             if dirname != '' and not os.path.exists(dirname):
                 raise CLIException("Output path does not exist")
@@ -89,8 +88,14 @@ class CLIController():
         return args
 
     def __process_csv_file(self, filename: str):
-        pdf_loader = PdfMixedLoader()
-        pdf_loader.load_from_data(filename)
+        document_data = PdfDocumentData()
+        document_data.load_data(filename)
+        if self._args.page != None:
+            splitter = NormativitySplitter(document_data.get_page_data(self._args.page, remove_headers=True))
+        else:
+            splitter = NormativitySplitter(document_data.get_data(remove_headers=True))
+
+        chunks = splitter.create_chunks()
 
     def __process_file(self, filename: str, output: str = None):
         pdf_loader = PdfMixedLoader(self._args.cache_dir)

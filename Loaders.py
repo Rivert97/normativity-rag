@@ -19,9 +19,6 @@ class PdfMixedLoader():
 
         self.documentData = PdfDocumentData()
 
-    def load_from_data(self, data_file: str):
-        self.documentData.load_data(data_file)
-
     def load(self, pdf_path: str):
         self.text_parser = PypdfParser(pdf_path)
         self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir)
