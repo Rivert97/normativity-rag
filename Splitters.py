@@ -14,8 +14,6 @@ class Chunk(NodeMixin):
 
         self.title = ''
         self.content = ''
-        self.splits = []
-        self.current_split = -1
 
     def set_title(self, title:str):
         self.title = title
