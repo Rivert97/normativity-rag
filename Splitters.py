@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 from anytree import RenderTree, NodeMixin, Node
+from anytree.node.node import _repr
 
 class Chunk(NodeMixin):
 
@@ -29,7 +30,8 @@ class Chunk(NodeMixin):
         return text
 
     def __repr__(self):
-        return f"Chunk(name={self.name!r}, title={self.title!r}, content={self.content!r})"
+        args = ["{!r}".format(self.separator.join([""] + [str(node.name) for node in self.path]))]
+        return _repr(self, args=args, nameblacklist=["name"])
 
 class NormativitySplitter:
 
@@ -44,7 +46,7 @@ class NormativitySplitter:
                 3: r'^cap[iíÍ]tulo .*',
             },
             'contents': {
-                0: r'(^art[iíÍ]culo [0-9]+.? )(.*)',
+                0: r'^art[iíÍ]culo ([0-9]+|[a-z]+(ro|do|ro|to|mo|vo|no))(bis|ter|qu[aá]ter|quinquies)?\.',
             }
         }
 
@@ -117,10 +119,8 @@ class NormativitySplitter:
         prev_was_title = False
         prev_y = 0
         for line, line_words in self.data.sort_values(['page', 'line', 'left']).groupby(['page', 'group', 'col_position', 'line']):
-            #print(line_words)
             title_type = line_words.iloc[0]['title_type']
             title_level = line_words.iloc[0]['title_level']
-            #import pdb; pdb.set_trace()
             line_str = ' '.join(line_words['text'])
             if title_type == 1:
                 if self.__element_is_vertically_separated(line_words['top'].min(), prev_y):
@@ -137,11 +137,12 @@ class NormativitySplitter:
                     last_chunk.title = line_str
             else:
                 for lvl in self.metadata['contents']:
-                    matches = re.findall(self.metadata['contents'][lvl], line_str.lower())
+                    matches = re.search(self.metadata['contents'][lvl], line_str.lower())
                     if matches:
-                       last_chunk = Chunk(matches[0][0], '', matches[0][1], parent=current_chunks[n_titles - 1])
-                       current_chunks[n_titles + lvl]
-                       break
+                        l_match = len(matches.group(0))
+                        last_chunk = Chunk(line_str[:l_match].rstrip('.'), '', line_str[l_match:].strip(), parent=current_chunks[n_titles - 1])
+                        current_chunks[n_titles + lvl]
+                        break
                 else:
                     last_chunk.content += line_str + '\n'
                 prev_was_title = False
@@ -150,5 +151,6 @@ class NormativitySplitter:
 
         for pre, fill, node in RenderTree(root):
             print("%s%s" % (pre, node))
+        #print(RenderTree(root))
 
         return None

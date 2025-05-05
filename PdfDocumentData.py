@@ -77,7 +77,7 @@ class PdfDocumentData():
         self.data[self.data['page'] == page_num].to_csv(filename, index=False)
 
     def load_data(self, filename: str):
-        self.data = pd.read_csv(filename, sep=',')
+        self.data = pd.read_csv(filename, sep=',').dropna()
 
     def is_empty(self):
         if self.page_counter == 0:
