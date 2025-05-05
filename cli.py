@@ -95,7 +95,7 @@ class CLIController():
         else:
             splitter = NormativitySplitter(document_data.get_data(remove_headers=True))
 
-        chunks = splitter.create_chunks()
+        splitter.calculate_chunks()
 
     def __process_file(self, filename: str, output: str = None):
         pdf_loader = PdfMixedLoader(self._args.cache_dir)

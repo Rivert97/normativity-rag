@@ -1,26 +1,34 @@
 import pandas as pd
 import re
-from anytree import RenderTree, NodeMixin, Node
+from anytree import RenderTree, NodeMixin
 from anytree.node.node import _repr
 
 class Chunk(NodeMixin):
 
-    def __init__(self, name:str, title:str='', content:str='', parent=None, children=None):
+    def __init__(self, name:str, parent=None, children=None):
         super().__init__()
         self.name = name
-        self.title = title
-        self.content = content
         self.parent = parent
         if children:
             self.children = children
 
+        self.title = ''
+        self.content = ''
+        self.splits = []
+        self.current_split = -1
+
     def set_title(self, title:str):
         self.title = title
 
+    def add_content(self, content:str):
+        self.content += content + "\n"
+
     def __str__(self):
         text = self.name
+
         if self.title != '':
             text += f' ({self.title})'
+
         if self.content != '':
             if len(self.content) > 15:
                 text += f': {self.content[:15]}...'
@@ -50,10 +58,12 @@ class NormativitySplitter:
             }
         }
 
-    def create_chunks(self):
+        self.root = None
+
+    def calculate_chunks(self):
         self.__assign_title_type()
         self.__assign_title_level()
-        return self.__build_chunks()
+        self.__build_chunks()
 
     def __assign_title_type(self):
         self.data['title_type'] = pd.Series(dtype=int)
@@ -112,9 +122,9 @@ class NormativitySplitter:
         n_titles = len(self.metadata['titles']) + 2
         n_contents = len(self.metadata['contents'])
 
-        root = Chunk("root", title='')
+        self.root = Chunk("root", title='')
         current_chunks = [None for i in range(n_titles + n_contents)]
-        current_chunks[0] = root
+        current_chunks[0] = self.root
         last_chunk = None
         prev_was_title = False
         prev_y = 0
@@ -126,15 +136,15 @@ class NormativitySplitter:
                 if self.__element_is_vertically_separated(line_words['top'].min(), prev_y):
                     for lvl in self.metadata['titles']:
                         if title_level == lvl:
-                            last_chunk = Chunk(line_str, parent=current_chunks[lvl - 1], title='')
+                            last_chunk = Chunk(line_str, parent=current_chunks[lvl - 1])
                             current_chunks[lvl] = last_chunk
                             break
                     else:
-                        last_chunk = Chunk(line_str, parent=current_chunks[0], title='')
+                        last_chunk = Chunk(line_str, parent=current_chunks[0])
                         current_chunks[1] = last_chunk
                     prev_was_title = True
                 elif prev_was_title:
-                    last_chunk.title = line_str
+                    last_chunk.set_title(line_str)
             else:
                 for lvl in self.metadata['contents']:
                     matches = re.search(self.metadata['contents'][lvl], line_str.lower())
@@ -148,9 +158,3 @@ class NormativitySplitter:
                 prev_was_title = False
 
             prev_y = line_words['bottom'].max()
-
-        for pre, fill, node in RenderTree(root):
-            print("%s%s" % (pre, node))
-        #print(RenderTree(root))
-
-        return None
