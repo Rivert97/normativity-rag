@@ -1,9 +1,25 @@
+from typing import Dict
 import pandas as pd
 import re
-from anytree import RenderTree, NodeMixin
+from anytree import RenderTree, NodeMixin, PreOrderIter
 from anytree.node.node import _repr
 
-class Chunk(NodeMixin):
+class Document:
+
+    def __init__(self, content:str, metadata:Dict={}):
+        self.content = content
+        self.metadata = metadata
+
+    def get_content(self):
+        return self.content
+
+    def get_metadata(self):
+        return self.metadata
+
+    def __str__(self):
+        return f"Document(content='{self.content}', metadata={{{', '.join([f"{key}:{value}" for key, value in self.metadata.items()])}}})"
+
+class SplitNode(NodeMixin):
 
     def __init__(self, name:str, parent=None, children=None):
         super().__init__()
@@ -18,20 +34,42 @@ class Chunk(NodeMixin):
     def set_title(self, title:str):
         self.title = title
 
-    def add_content(self, content:str):
-        self.content += content + "\n"
-
-    def __str__(self):
+    def get_full_title(self):
         text = self.name
 
         if self.title != '':
             text += f' ({self.title})'
 
-        if self.content != '':
-            if len(self.content) > 15:
-                text += f': {self.content[:15]}...'
+        return text
+
+    def add_content(self, content:str):
+        self.content += content + "\n"
+
+    def get_content(self, remove_hypens:bool=True):
+        if remove_hypens:
+            return re.sub(r' ?- ?\n', '', self.content)
+        else:
+            return self.content
+
+    def split_content(self, remove_hypens:bool=True):
+        content = self.get_content(remove_hypens)
+
+        content = re.sub(r'([^.:;\n])(\n)', r'\1 ', content)
+
+        return content.split('\n')
+
+    def get_path(self):
+        return "{!r}".format(self.separator.join([""] + [str(node.name) for node in self.path]))
+
+    def __str__(self):
+        text = self.get_full_title()
+
+        content = self.get_content()
+        if content != '':
+            if len(content) > 15:
+                text += f': {content[:15]}...'
             else:
-                text += f': {self.content}'
+                text += f': {content}'
 
         return text
 
@@ -58,10 +96,26 @@ class NormativitySplitter:
 
         self.root = None
 
-    def calculate_chunks(self):
+    def analyze(self):
         self.__assign_title_type()
         self.__assign_title_level()
-        self.__build_chunks()
+        self.__create_tree_structure()
+
+    def extract_documents(self):
+        documents = []
+        for node in PreOrderIter(self.root):
+            splits = node.split_content(remove_hypens=True)
+            for split in splits:
+                doc = Document(
+                    content=split,
+                    metadata={
+                        'title': node.get_full_title(),
+                        'path': node.get_path(),
+                    }
+                )
+                documents.append(doc)
+
+        return documents
 
     def __assign_title_type(self):
         self.data['title_type'] = pd.Series(dtype=int)
@@ -116,11 +170,11 @@ class NormativitySplitter:
         else:
             return False
 
-    def __build_chunks(self):
+    def __create_tree_structure(self):
         n_titles = len(self.metadata['titles']) + 2
         n_contents = len(self.metadata['contents'])
 
-        self.root = Chunk("root", title='')
+        self.root = SplitNode("root")
         current_chunks = [None for i in range(n_titles + n_contents)]
         current_chunks[0] = self.root
         last_chunk = None
@@ -134,11 +188,11 @@ class NormativitySplitter:
                 if self.__element_is_vertically_separated(line_words['top'].min(), prev_y):
                     for lvl in self.metadata['titles']:
                         if title_level == lvl:
-                            last_chunk = Chunk(line_str, parent=current_chunks[lvl - 1])
+                            last_chunk = SplitNode(line_str, parent=current_chunks[lvl - 1])
                             current_chunks[lvl] = last_chunk
                             break
                     else:
-                        last_chunk = Chunk(line_str, parent=current_chunks[0])
+                        last_chunk = SplitNode(line_str, parent=current_chunks[0])
                         current_chunks[1] = last_chunk
                     prev_was_title = True
                 elif prev_was_title:
@@ -148,7 +202,8 @@ class NormativitySplitter:
                     matches = re.search(self.metadata['contents'][lvl], line_str.lower())
                     if matches:
                         l_match = len(matches.group(0))
-                        last_chunk = Chunk(line_str[:l_match].rstrip('.'), '', line_str[l_match:].strip(), parent=current_chunks[n_titles - 1])
+                        last_chunk = SplitNode(line_str[:l_match].rstrip('.'), parent=current_chunks[n_titles - 1])
+                        last_chunk.add_content(line_str[l_match:].strip())
                         current_chunks[n_titles + lvl]
                         break
                 else:
