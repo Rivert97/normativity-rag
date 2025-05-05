@@ -5,9 +5,6 @@ import dotenv
 
 from Loaders import PdfMixedLoader
 from AppLogger import AppLogger
-from PdfDocumentData import PdfDocumentData
-from Splitters import NormativitySplitter
-from Storage import Storage
 
 dotenv.load_dotenv()
 

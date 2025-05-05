@@ -26,7 +26,12 @@ class CLIController():
         self._args = self.__process_args()
 
     def run(self):
-        self.__process_csv_file(self._args.csv_file)
+        if self._args.type == 'csv':
+            self.__process_csv_file(self._args.file)
+        elif self._args.type == 'txt':
+            self.__process_txt_file(self._args.file)
+        else:
+            raise CLIException("Tipo de archivo no valido")
 
     def __process_args(self) -> argparse.Namespace:
         parser = argparse.ArgumentParser(
@@ -35,17 +40,20 @@ class CLIController():
             epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>'
         )
 
-        parser.add_argument('-c', '--csv-file', default='', type=str, help='Load data directly from a .csv file')
+        parser.add_argument('-a', '--action', default='structure', choices=['structure', 'tree', 'save'], type=str, help='Action to perform')
+        parser.add_argument('-c', '--collection-name', default='', help='When action is "create", set the name of the collection')
+        parser.add_argument('-f', '--file', default='', type=str, help='Path to file containing the data or text of the document')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
+        parser.add_argument('-t', '--type', default='txt', choices=['txt', 'csv'], type=str, help='Type of input')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
 
         args = parser.parse_args()
 
-        if args.csv_file != '' and not os.path.exists(args.csv_file):
-            raise CLIException(f"CSV file '{args.csv_file}' not found")
+        if args.file != '' and not os.path.exists(args.file):
+            raise CLIException(f"File '{args.file} not found")
 
-        if args.csv_file == '':
-            raise CLIException("Please specify an input file")
+        if args.action == 'save' and args.collection_name == '':
+            raise CLIException(f"Please specify the name of the colleciton")
 
         return args
 
@@ -59,11 +67,19 @@ class CLIController():
 
         splitter.analyze()
 
-        splits = splitter.extract_documents()
+        if self._args.action == 'structure':
+            splitter.show_file_structure()
+        elif self._args.action == 'tree':
+            splitter.show_tree()
+        elif self._args.action == 'save':
+            splits = splitter.extract_documents()
 
-        document_name = os.path.basename(filename)
-        storage = Storage()
-        storage.save_documents(document_name, splits)
+            storage = Storage()
+            storage.save_documents(self._args.collection_name, splits)
+
+    def __process_txt_file(self, filename: str):
+        pass
+
 
 if __name__ == "__main__":
     try:

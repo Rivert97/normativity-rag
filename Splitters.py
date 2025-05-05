@@ -3,6 +3,7 @@ import pandas as pd
 import re
 from anytree import RenderTree, NodeMixin, PreOrderIter
 from anytree.node.node import _repr
+from anytree.exporter import UniqueDotExporter
 
 class Document:
 
@@ -116,6 +117,13 @@ class NormativitySplitter:
                 documents.append(doc)
 
         return documents
+
+    def show_file_structure(self):
+        for pre, fill, node in RenderTree(self.root):
+            print(f'{pre} {node}')
+
+    def show_tree(self):
+        UniqueDotExporter(self.root).to_picture('outs/tree.png')
 
     def __assign_title_type(self):
         self.data['title_type'] = pd.Series(dtype=int)
