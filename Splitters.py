@@ -91,7 +91,7 @@ class NormativitySplitter:
                 3: r'^cap[iíÍ]tulo .*',
             },
             'contents': {
-                0: r'^art[iíÍ]culo ([0-9]+|[a-z]+(ro|do|ro|to|mo|vo|no))(bis|ter|qu[aá]ter|quinquies)?\.',
+                0: r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|ro|to|mo|vo|no)|[Úú]nico)(bis|ter|qu[aá]ter|quinquies)?\.',
             }
         }
 
@@ -180,12 +180,12 @@ class NormativitySplitter:
 
     def __create_tree_structure(self):
         n_titles = len(self.metadata['titles']) + 2
-        n_contents = len(self.metadata['contents'])
 
         self.root = SplitNode("root")
-        current_chunks = [None for i in range(n_titles + n_contents)]
-        current_chunks[0] = self.root
-        last_chunk = None
+        current_nodes = [None for _ in range(n_titles)]
+        current_nodes[0] = self.root
+        last_node = None
+        last_title_node = None
         prev_was_title = False
         prev_y = 0
         for line, line_words in self.data.sort_values(['page', 'line', 'left']).groupby(['page', 'group', 'col_position', 'line']):
@@ -196,26 +196,27 @@ class NormativitySplitter:
                 if self.__element_is_vertically_separated(line_words['top'].min(), prev_y):
                     for lvl in self.metadata['titles']:
                         if title_level == lvl:
-                            last_chunk = SplitNode(line_str, parent=current_chunks[lvl - 1])
-                            current_chunks[lvl] = last_chunk
+                            last_node = SplitNode(line_str, parent=current_nodes[lvl - 1])
+                            current_nodes[lvl] = last_node
+                            last_title_node = last_node
                             break
                     else:
-                        last_chunk = SplitNode(line_str, parent=current_chunks[0])
-                        current_chunks[1] = last_chunk
+                        last_node = SplitNode(line_str, parent=current_nodes[0])
+                        current_nodes[1] = last_node
+                        last_title_node = last_node
                     prev_was_title = True
                 elif prev_was_title:
-                    last_chunk.set_title(line_str)
+                    last_node.set_title(line_str)
             else:
                 for lvl in self.metadata['contents']:
                     matches = re.search(self.metadata['contents'][lvl], line_str.lower())
                     if matches:
                         l_match = len(matches.group(0))
-                        last_chunk = SplitNode(line_str[:l_match].rstrip('.'), parent=current_chunks[n_titles - 1])
-                        last_chunk.add_content(line_str[l_match:].strip())
-                        current_chunks[n_titles + lvl]
+                        last_node = SplitNode(line_str[:l_match].rstrip('.'), parent=last_title_node)
+                        last_node.add_content(line_str[l_match:].strip())
                         break
                 else:
-                    last_chunk.content += line_str + '\n'
+                    last_node.add_content(line_str)
                 prev_was_title = False
 
             prev_y = line_words['bottom'].max()
