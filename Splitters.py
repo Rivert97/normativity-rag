@@ -118,12 +118,18 @@ class NormativitySplitter:
 
         return documents
 
-    def show_file_structure(self):
+    def get_file_structure(self):
+        text = ''
         for pre, fill, node in RenderTree(self.root):
-            print(f'{pre} {node}')
+            text += (f'{pre} {node}\n')
 
-    def show_tree(self):
-        UniqueDotExporter(self.root).to_picture('outs/tree.png')
+        return text
+
+    def show_file_structure(self):
+        print(self.get_file_structure())
+
+    def show_tree(self, filename:str):
+        UniqueDotExporter(self.root).to_picture(filename)
 
     def __assign_title_type(self):
         self.data['title_type'] = pd.Series(dtype=int)
