@@ -1,4 +1,3 @@
-from typing import List
 import argparse
 import os
 import dotenv
@@ -50,6 +49,7 @@ class CLIController():
         )
 
         parser.add_argument('-a', '--action', default='embeddings', choices=['embeddings', 'structure', 'tree'], type=str, help='Action to perform: "embeddings" to split the file and get the embeddings, "structure" to show file structure in console. "tree" to show an image of the tree of titles of the file.')
+        parser.add_argument('-c', '--splitter-config', default='titulo-capitulo', choices=['titulo-capitulo', 'titulo-seccion'], type=str, help='Estructura de documento a emplear para separador de secciones')
         parser.add_argument('-e', '--embedder', default='AllMiniLM', choices=['AllMiniLM'], type=str, help='Embeddings function to be used')
         parser.add_argument('-f', '--file', default='', type=str, help='Path to file containing the data or text of the document')
         parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
@@ -133,18 +133,13 @@ class CLIController():
         document_data = PdfDocumentData()
         document_data.load_data(filename)
         if self._args.page != None:
-            splitter = NormativitySplitter(document_data.get_page_data(self._args.page, remove_headers=True))
+            splitter = NormativitySplitter(document_data.get_page_data(self._args.page, remove_headers=True), self._args.splitter_config)
         else:
-            splitter = NormativitySplitter(document_data.get_data(remove_headers=True))
+            splitter = NormativitySplitter(document_data.get_data(remove_headers=True), self._args.splitter_config)
 
         splitter.analyze()
 
         return splitter
-
-    def __calculate_embeddings(self, sentences:List[str]):
-        embed = self.embedder()
-
-        return embed.get_embeddings(sentences)
 
     def __save_txt_file(self, filename:str, content:str):
         with open(filename, 'w') as f:

@@ -5,6 +5,28 @@ from anytree import RenderTree, NodeMixin, PreOrderIter
 from anytree.node.node import _repr
 from anytree.exporter import UniqueDotExporter
 
+METADATA_REGEX = {
+    'titulo-capitulo': {
+        'titles': {
+            2: r'^(t[iíÍ]tulo|[xiv]+\.) .*',
+            3: r'^cap[iíÍ]tulo .*',
+        },
+        'contents': {
+            0: r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|ro|to|mo|vo|no)|[Úú]nico)(bis|ter|qu[aá]ter|quinquies)?\.',
+        }
+    },
+    'titulo-seccion': {
+        'titles': {
+            2: r'^(t[iíÍ]tulo|[xiv]+\.) .*',
+            3: r'^secci[oóÓ]n .*',
+            4: r'^cap[iíÍ]tulo .*',
+        },
+        'contents': {
+            0: r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|ro|to|mo|vo|no)|[Úú]nico)(bis|ter|qu[aá]ter|quinquies)?\.',
+        }
+    }
+}
+
 class Document:
 
     def __init__(self, content:str, metadata:Dict={}):
@@ -80,20 +102,12 @@ class SplitNode(NodeMixin):
 
 class NormativitySplitter:
 
-    def __init__(self, data: pd.DataFrame):
+    def __init__(self, data: pd.DataFrame, metadata_tab:str):
         self.data = data.copy()
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
         self.line_height = (self.data['bottom'] - self.data['top']).mean()
-        self.metadata = {
-            'titles': {
-                2: r'^(t[iíÍ]tulo|[xiv]+\.) .*',
-                3: r'^cap[iíÍ]tulo .*',
-            },
-            'contents': {
-                0: r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|ro|to|mo|vo|no)|[Úú]nico)(bis|ter|qu[aá]ter|quinquies)?\.',
-            }
-        }
+        self.metadata = METADATA_REGEX[metadata_tab]
 
         self.root = None
 
@@ -139,10 +153,11 @@ class NormativitySplitter:
 
             for group, group_words in page_words.groupby('group'):
                 num_cols = group_words['column'].max() + 1
-                for column, column_words in group_words.groupby('column'):
+                for column, column_words in group_words.groupby('col_position'):
                     values_col = column_words.agg({'left': ['min'], 'right': ['max']})
                     column_width = values_col['right']['max'] - values_col['left']['min']
                     column_center = values_col['left']['min'] + column_width * 0.5
+                    prev_y = 0
                     for line, line_words in column_words.groupby('line'):
                         values = line_words.agg({'left': ['min'], 'right': ['max'], 'top': ['min'], 'bottom': ['max']})
                         if num_cols == 1:
@@ -151,10 +166,12 @@ class NormativitySplitter:
                             else:
                                 self.data.loc[line_words.index, 'title_type'] = 0
                         else:
-                            if self.__element_is_centered(values['left']['min'], values['right']['max'], column_center, column_width):
+                            if (self.__element_is_centered(values['left']['min'], values['right']['max'], column_center, column_width)
+                                and self.__element_is_vertically_separated(values['top']['min'], prev_y)):
                                 self.data.loc[line_words.index, 'title_type'] = 2
                             else:
                                 self.data.loc[line_words.index, 'title_type'] = 0
+                        prev_y = values['bottom']['max']
 
     def __assign_title_level(self):
         self.data['title_level'] = pd.Series(dtype=int)
@@ -202,17 +219,26 @@ class NormativitySplitter:
                 if self.__element_is_vertically_separated(line_words['top'].min(), prev_y):
                     for lvl in self.metadata['titles']:
                         if title_level == lvl:
-                            last_node = SplitNode(line_str, parent=current_nodes[lvl - 1])
+                            if current_nodes[lvl - 1] is None:
+                                parent = current_nodes[lvl - 2]
+                            else:
+                                parent = current_nodes[lvl - 1]
+                            last_node = SplitNode(line_str, parent=parent)
                             current_nodes[lvl] = last_node
+                            current_nodes[lvl+1:n_titles] = [None for _ in range(lvl+1, n_titles)]
                             last_title_node = last_node
                             break
                     else:
                         last_node = SplitNode(line_str, parent=current_nodes[0])
                         current_nodes[1] = last_node
+                        current_nodes[2:n_titles] = [None for _ in range(2, n_titles)]
                         last_title_node = last_node
                     prev_was_title = True
                 elif prev_was_title:
                     last_node.set_title(line_str)
+            elif title_type == 2:
+                #TODO: implement inner titles
+                pass
             else:
                 for lvl in self.metadata['contents']:
                     matches = re.search(self.metadata['contents'][lvl], line_str.lower())
