@@ -198,7 +198,7 @@ class DataReconstructor():
             line_cols = {}
             for column, values in line_words.groupby(['column']).agg({'col_position': ['max'], 'left': ['min'], 'right': ['max']}).iterrows():
                 line_cols[column] = {
-                    'position': values['col_position', 'max'],
+                    'position_max': values['col_position', 'max'],
                     'minX': values['left', 'min'],
                     'maxX': values['right', 'max'],
                 }
@@ -239,13 +239,13 @@ class DataReconstructor():
         if len(group_cols) != len(line_cols):
             if has_centered or prev_had_centered:
                 return True
-        elif has_centered != prev_had_centered and line_cols.get(0).get('position') == 0:
+        elif has_centered != prev_had_centered and line_cols.get(0).get('position_max') == 0:
             return True
 
         for g_col in group_cols:
-            g_position = group_cols[g_col]['position']
+            g_position_max = group_cols[g_col]['position_max']
             for l_col in line_cols:
-                if line_cols[l_col]['position'] != g_position:
+                if line_cols[l_col]['position_max'] != g_position_max:
                     continue
 
                 if not self.__columns_wrap_each_other(line_cols[l_col], group_cols[g_col], tolerance) and not prev_new_group:
@@ -260,9 +260,9 @@ class DataReconstructor():
 
     def __expand_group_columns(self, group_cols, line_cols):
         for g_col in group_cols:
-            position = group_cols[g_col]['position']
+            position_max = group_cols[g_col]['position_max']
             for l_col in line_cols:
-                if line_cols[l_col]['position'] != position:
+                if line_cols[l_col]['position_max'] != position_max:
                     continue
 
                 group_cols[g_col]['minX'] = min(group_cols[g_col]['minX'], line_cols[l_col]['minX'])
