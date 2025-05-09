@@ -12,7 +12,7 @@ import pandas as pd
 import hashlib
 import shutil
 
-from Visitors import PageTextVisitor
+from .visitors import PageTextVisitor
 
 class PypdfPage():
     """This class stores the text extracted by PyPDF and provides

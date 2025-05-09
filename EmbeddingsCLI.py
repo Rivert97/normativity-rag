@@ -3,7 +3,7 @@ import os
 import dotenv
 
 from AppLogger import AppLogger
-from PdfDocumentData import PdfDocumentData
+from document_loaders.representations import PdfDocumentData
 from Splitters import NormativitySplitter
 from Embedders import AllMiniLM
 from Storage import CSVStorage

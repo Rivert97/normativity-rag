@@ -3,9 +3,9 @@ import re
 import pandas as pd
 import math
 
-from Parsers import PypdfParser, OcrPdfParser, PypdfPage, OcrPage
-from PdfDocumentData import PdfDocumentData
-import PostProcessors
+from .parsers import PypdfParser, OcrPdfParser, PypdfPage, OcrPage
+from .representations import PdfDocumentData
+from .processors import remove_hyphens, replace_ligatures
 
 class PyPDFMixedLoader():
     """Loads the information of a PDF document applying multiple verifications.
@@ -40,8 +40,8 @@ class PyPDFMixedLoader():
             return ''
 
         text = self.documentData.get_text(remove_headers=True)
-        text = PostProcessors.replace_ligatures(text)
-        text = PostProcessors.remove_hyphens(text)
+        text = replace_ligatures(text)
+        text = remove_hyphens(text)
 
         return text
 
@@ -50,8 +50,8 @@ class PyPDFMixedLoader():
             return ''
 
         page_text = self.documentData.get_page_text(page_num, remove_headers=True)
-        page_text = PostProcessors.replace_ligatures(page_text)
-        page_text = PostProcessors.remove_hyphens(page_text)
+        page_text = replace_ligatures(page_text)
+        page_text = remove_hyphens(page_text)
 
         return page_text
 

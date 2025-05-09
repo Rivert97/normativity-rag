@@ -3,7 +3,7 @@ import os
 import glob
 import dotenv
 
-from Loaders import PyPDFMixedLoader
+from document_loaders.pdf import PyPDFMixedLoader
 from AppLogger import AppLogger
 
 dotenv.load_dotenv()
