@@ -7,7 +7,7 @@ from Parsers import PypdfParser, OcrPdfParser, PypdfPage, OcrPage
 from PdfDocumentData import PdfDocumentData
 import PostProcessors
 
-class PdfMixedLoader():
+class PyPDFMixedLoader():
     """Loads the information of a PDF document applying multiple verifications.
 
     :param cache_dir: Path to the dir to be used as cache.

@@ -3,7 +3,7 @@ import os
 import glob
 import dotenv
 
-from Loaders import PdfMixedLoader
+from Loaders import PyPDFMixedLoader
 from AppLogger import AppLogger
 
 dotenv.load_dotenv()
@@ -80,7 +80,7 @@ class CLIController():
         return args
 
     def __process_file(self, filename: str, output: str = None):
-        pdf_loader = PdfMixedLoader(self._args.cache_dir)
+        pdf_loader = PyPDFMixedLoader(self._args.cache_dir)
         if self._args.page != None:
             pdf_loader.load_page(filename, self._args.page)
         else:
@@ -98,7 +98,7 @@ class CLIController():
 
             self.__process_file(file, out_name)
 
-    def __make_output(self, pdf_loader: PdfMixedLoader, filename: str = None):
+    def __make_output(self, pdf_loader: PyPDFMixedLoader, filename: str = None):
         if self._args.type == 'txt':
             if self._args.page is not None:
                 text = pdf_loader.get_page_text(self._args.page)
