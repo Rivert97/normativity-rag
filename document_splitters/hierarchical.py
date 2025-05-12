@@ -22,6 +22,12 @@ class DocNode(NodeMixin):
     def set_title(self, title:str):
         self.title = title
 
+    def append_title(self, title:str):
+        if self.title == '':
+            self.title = title
+        else:
+            self.title += ' ' + title
+
     def get_full_title(self):
         text = self.name
 
@@ -31,7 +37,10 @@ class DocNode(NodeMixin):
         return text
 
     def append_content(self, content:str):
-        self.content += content + "\n"
+        if self.content == '':
+            self.content = content
+        else:
+            self.content += "\n" + content
 
     def get_content(self, remove_hypens:bool=True):
         if remove_hypens:
@@ -189,9 +198,10 @@ class TreeSplitter:
                     current_nodes[title_level+1:] = [None for _ in range(len(current_nodes[title_level+1:]))]
                     prev_was_title = True
                 elif prev_was_title:
-                    last_node.set_title(line_str)
+                    last_node.append_title(line_str)
             elif title_type == 2:
                 future_title += line_str + " "
+                prev_was_title = False
             else:
                 level, name, content = self.detector.detect_content_header(line_str.lower())
                 if level == -1: # No content header found
