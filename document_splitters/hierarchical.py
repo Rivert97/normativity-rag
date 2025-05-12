@@ -1,48 +1,13 @@
-from typing import Dict
 import pandas as pd
 import re
 from anytree import RenderTree, NodeMixin, PreOrderIter
 from anytree.node.node import _repr
 from anytree.exporter import UniqueDotExporter
 
-METADATA_REGEX = {
-    'titulo-capitulo': {
-        'titles': {
-            2: r'^(t[iíÍ]tulo|[xiv]+\.) .*',
-            3: r'^cap[iíÍ]tulo .*',
-        },
-        'contents': {
-            0: r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|ro|to|mo|vo|no)|[Úú]nico)(bis|ter|qu[aá]ter|quinquies)?\.',
-        }
-    },
-    'titulo-seccion': {
-        'titles': {
-            2: r'^(t[iíÍ]tulo|[xiv]+\.) .*',
-            3: r'^secci[oóÓ]n .*',
-            4: r'^cap[iíÍ]tulo .*',
-        },
-        'contents': {
-            0: r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|ro|to|mo|vo|no)|[Úú]nico)(bis|ter|qu[aá]ter|quinquies)?\.',
-        }
-    }
-}
+from .data import Document
+from .detectors import TitleDetector
 
-class Document:
-
-    def __init__(self, content:str, metadata:Dict={}):
-        self.content = content
-        self.metadata = metadata
-
-    def get_content(self):
-        return self.content
-
-    def get_metadata(self):
-        return self.metadata
-
-    def __str__(self):
-        return f"Document(content='{self.content}', metadata={{{', '.join([f"{key}:{value}" for key, value in self.metadata.items()])}}})"
-
-class SplitNode(NodeMixin):
+class DocNode(NodeMixin):
 
     def __init__(self, name:str, parent=None, children=None):
         super().__init__()
@@ -65,7 +30,7 @@ class SplitNode(NodeMixin):
 
         return text
 
-    def add_content(self, content:str):
+    def append_content(self, content:str):
         self.content += content + "\n"
 
     def get_content(self, remove_hypens:bool=True):
@@ -100,14 +65,14 @@ class SplitNode(NodeMixin):
         args = ["{!r}".format(self.separator.join([""] + [str(node.name) for node in self.path]))]
         return _repr(self, args=args, nameblacklist=["name"])
 
-class NormativitySplitter:
+class TreeSplitter:
 
-    def __init__(self, data: pd.DataFrame, metadata_tab:str):
+    def __init__(self, data: pd.DataFrame):
         self.data = data.copy()
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
         self.line_height = (self.data['bottom'] - self.data['top']).mean()
-        self.metadata = METADATA_REGEX[metadata_tab]
+        self.detector = TitleDetector()
 
         self.root = None
 
@@ -178,12 +143,7 @@ class NormativitySplitter:
         self.data['title_level'] = 0
         for line, line_words in self.data[self.data['title_type'] == 1].sort_values('left').groupby('line'):
             text = ' '.join(line_words['text'])
-            for lvl in self.metadata['titles']:
-                if re.match(self.metadata['titles'][lvl], text.lower()):
-                    self.data.loc[line_words.index, 'title_level'] = lvl
-                    break
-            else:
-                self.data.loc[line_words.index, 'title_level'] = 1
+            self.data.loc[line_words.index, 'title_level'] = self.detector.get_title_level(text)
 
     def __element_is_centered(self, min_x:float, max_x:float, reference_center:float, reference_width:float):
         center_rate = (reference_center - min_x) / (max_x - reference_center)
@@ -202,37 +162,27 @@ class NormativitySplitter:
             return False
 
     def __create_tree_structure(self):
-        n_titles = len(self.metadata['titles']) + 2
+        n_titles = self.detector.get_number_of_titles()
+        n_content_titles = self.detector.get_number_of_content_tiltes()
 
-        self.root = SplitNode("root")
-        current_nodes = [None for _ in range(n_titles)]
-        current_nodes[0] = self.root
-        last_node = None
-        last_title_node = None
+        self.root = DocNode("root")
+        current_nodes = [None for _ in range(n_titles + n_content_titles)]
+        last_node = self.root
+        current_nodes[0] = last_node
+
         prev_was_title = False
         prev_y = 0
         for line, line_words in self.data.sort_values(['page', 'line', 'left']).groupby(['page', 'group', 'col_position', 'line']):
-            title_type = line_words.iloc[0]['title_type']
-            title_level = line_words.iloc[0]['title_level']
             line_str = ' '.join(line_words['text'])
+            title_type = line_words.iloc[0]['title_type']
+
             if title_type == 1:
                 if self.__element_is_vertically_separated(line_words['top'].min(), prev_y):
-                    for lvl in self.metadata['titles']:
-                        if title_level == lvl:
-                            if current_nodes[lvl - 1] is None:
-                                parent = current_nodes[lvl - 2]
-                            else:
-                                parent = current_nodes[lvl - 1]
-                            last_node = SplitNode(line_str, parent=parent)
-                            current_nodes[lvl] = last_node
-                            current_nodes[lvl+1:n_titles] = [None for _ in range(lvl+1, n_titles)]
-                            last_title_node = last_node
-                            break
-                    else:
-                        last_node = SplitNode(line_str, parent=current_nodes[0])
-                        current_nodes[1] = last_node
-                        current_nodes[2:n_titles] = [None for _ in range(2, n_titles)]
-                        last_title_node = last_node
+                    title_level = self.detector.get_title_level(line_str)
+                    parent = next(node for node in current_nodes[title_level - 1::-1] if node is not None)
+                    last_node = DocNode(line_str, parent=parent)
+                    current_nodes[title_level] = last_node
+                    current_nodes[title_level+1:] = [None for _ in range(len(current_nodes[title_level+1:]))]
                     prev_was_title = True
                 elif prev_was_title:
                     last_node.set_title(line_str)
@@ -240,15 +190,16 @@ class NormativitySplitter:
                 #TODO: implement inner titles
                 pass
             else:
-                for lvl in self.metadata['contents']:
-                    matches = re.search(self.metadata['contents'][lvl], line_str.lower())
-                    if matches:
-                        l_match = len(matches.group(0))
-                        last_node = SplitNode(line_str[:l_match].rstrip('.'), parent=last_title_node)
-                        last_node.add_content(line_str[l_match:].strip())
-                        break
+                level, name, content = self.detector.detect_content_header(line_str.lower())
+                if level == -1: # No content header found
+                    last_node.append_content(content)
                 else:
-                    last_node.add_content(line_str)
+                    parent = next(node for node in current_nodes[level - 1::-1] if node is not None)
+                    last_node = DocNode(name, parent=parent)
+                    last_node.append_content(content)
+                    current_nodes[level] = last_node
+                    current_nodes[level+1:] = [None for _ in range(len(current_nodes[level+1:]))]
+
                 prev_was_title = False
 
             prev_y = line_words['bottom'].max()
