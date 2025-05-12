@@ -8,7 +8,6 @@ METADATA_REGEX = {
     },
     'contents': {
         5: r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|ro|to|mo|vo|no)|[Úú]nico) ?(bis|ter|qu[aá]ter|quinquies)?\.',
-        6: r'^[xiv]+ ?\.',
     }
 }
 

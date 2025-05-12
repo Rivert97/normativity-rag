@@ -151,7 +151,7 @@ class TreeSplitter:
     def __element_is_centered(self, min_x:float, max_x:float, reference_center:float, reference_width:float):
         center_rate = (reference_center - min_x) / (max_x - reference_center)
         column_percentage = (max_x - min_x) / reference_width
-        if min_x < reference_center < max_x and abs(1.0 - center_rate) < 0.2 and column_percentage < 0.9:
+        if min_x < reference_center < max_x and abs(1.0 - center_rate) < 0.2 and column_percentage < 0.8:
             return True
         else:
             return False
