@@ -123,20 +123,23 @@ class TreeSplitter:
                     column_width = values_col['right']['max'] - values_col['left']['min']
                     column_center = values_col['left']['min'] + column_width * 0.5
                     prev_y = 0
+                    prev_level = 0
                     for line, line_words in column_words.groupby('line'):
                         values = line_words.agg({'left': ['min'], 'right': ['max'], 'top': ['min'], 'bottom': ['max']})
                         if num_cols == 1:
                             if self.__element_is_centered(values['left']['min'], values['right']['max'], page_center, self.writable_width):
-                                self.data.loc[line_words.index, 'title_type'] = 1
+                                title_level = 1
                             else:
-                                self.data.loc[line_words.index, 'title_type'] = 0
+                                title_level = 0
                         else:
                             if (self.__element_is_centered(values['left']['min'], values['right']['max'], column_center, column_width)
-                                and self.__element_is_vertically_separated(values['top']['min'], prev_y)):
-                                self.data.loc[line_words.index, 'title_type'] = 2
+                                and (self.__element_is_vertically_separated(values['top']['min'], prev_y) or prev_level == 2)):
+                                title_level = 2
                             else:
-                                self.data.loc[line_words.index, 'title_type'] = 0
+                                title_level = 0
+                        self.data.loc[line_words.index, 'title_type'] = title_level
                         prev_y = values['bottom']['max']
+                        prev_level = title_level
 
     def __assign_title_level(self):
         self.data['title_level'] = pd.Series(dtype=int)
@@ -148,7 +151,7 @@ class TreeSplitter:
     def __element_is_centered(self, min_x:float, max_x:float, reference_center:float, reference_width:float):
         center_rate = (reference_center - min_x) / (max_x - reference_center)
         column_percentage = (max_x - min_x) / reference_width
-        if min_x < reference_center < max_x and abs(1.0 - center_rate) < 0.1 and column_percentage < 0.9:
+        if min_x < reference_center < max_x and abs(1.0 - center_rate) < 0.2 and column_percentage < 0.9:
             return True
         else:
             return False
@@ -172,6 +175,7 @@ class TreeSplitter:
 
         prev_was_title = False
         prev_y = 0
+        future_title = ''
         for line, line_words in self.data.sort_values(['page', 'line', 'left']).groupby(['page', 'group', 'col_position', 'line']):
             line_str = ' '.join(line_words['text'])
             title_type = line_words.iloc[0]['title_type']
@@ -187,8 +191,7 @@ class TreeSplitter:
                 elif prev_was_title:
                     last_node.set_title(line_str)
             elif title_type == 2:
-                #TODO: implement inner titles
-                pass
+                future_title += line_str + " "
             else:
                 level, name, content = self.detector.detect_content_header(line_str.lower())
                 if level == -1: # No content header found
@@ -197,6 +200,9 @@ class TreeSplitter:
                     parent = next(node for node in current_nodes[level - 1::-1] if node is not None)
                     last_node = DocNode(name, parent=parent)
                     last_node.append_content(content)
+                    if future_title != '':
+                        last_node.set_title(future_title.strip())
+                        future_title = ''
                     current_nodes[level] = last_node
                     current_nodes[level+1:] = [None for _ in range(len(current_nodes[level+1:]))]
 
