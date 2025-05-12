@@ -162,8 +162,7 @@ class DataReconstructor():
 
     def __column_is_centered(self, min_x, max_x):
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
-        column_percentage = (max_x - min_x) / self.writable_width
-        if min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1 and column_percentage < 0.9:
+        if min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1:
             return True
         else:
             return False
