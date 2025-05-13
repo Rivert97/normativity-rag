@@ -5,8 +5,8 @@ import dotenv
 from AppLogger import AppLogger
 from document_loaders.representations import PdfDocumentData
 from document_splitters.hierarchical import TreeSplitter
-from embedders import AllMiniLM
-from storage import CSVStorage
+from embeddings.embedders import AllMiniLM
+from embeddings.storage import CSVStorage
 
 dotenv.load_dotenv()
 
