@@ -1,3 +1,4 @@
+from typing import List, Tuple
 import pandas as pd
 import re
 from anytree import RenderTree, NodeMixin, PreOrderIter
@@ -87,7 +88,6 @@ class TreeSplitter:
 
     def analyze(self):
         self.__assign_title_type()
-        self.__assign_title_level()
         self.__create_tree_structure()
 
     def extract_documents(self):
@@ -121,41 +121,58 @@ class TreeSplitter:
 
     def __assign_title_type(self):
         self.data['title_type'] = pd.Series(dtype=int)
+
         for page, page_words in self.data.groupby('page'):
-            page_values = page_words.agg({'left': ['min'], 'right': ['max']})
-            page_center = page_values['left']['min'] + (page_values['right']['max'] - page_values['left']['min']) * 0.5
+            page_center = self.__calculate_center(page_words, 'left', 'right')
 
             for group, group_words in page_words.groupby('group'):
                 num_cols = group_words['column'].max() + 1
-                for column, column_words in group_words.groupby('col_position'):
-                    values_col = column_words.agg({'left': ['min'], 'right': ['max']})
-                    column_width = values_col['right']['max'] - values_col['left']['min']
-                    column_center = values_col['left']['min'] + column_width * 0.5
+
+                for col_pos, col_words in group_words.groupby('col_position'):
+                    col_center = self.__calculate_center(col_words, 'left', 'right')
+                    col_width = col_words['right'].max() - col_words['left'].min()
+
                     prev_y = 0
                     prev_level = 0
-                    for line, line_words in column_words.groupby('line'):
-                        values = line_words.agg({'left': ['min'], 'right': ['max'], 'top': ['min'], 'bottom': ['max']})
-                        if num_cols == 1:
-                            if self.__element_is_centered(values['left']['min'], values['right']['max'], page_center, self.writable_width):
-                                title_level = 1
-                            else:
-                                title_level = 0
-                        else:
-                            if (self.__element_is_centered(values['left']['min'], values['right']['max'], column_center, column_width)
-                                and (self.__element_is_vertically_separated(values['top']['min'], prev_y) or prev_level == 2)):
-                                title_level = 2
-                            else:
-                                title_level = 0
-                        self.data.loc[line_words.index, 'title_type'] = title_level
-                        prev_y = values['bottom']['max']
-                        prev_level = title_level
 
-    def __assign_title_level(self):
-        self.data['title_level'] = pd.Series(dtype=int)
-        self.data['title_level'] = 0
-        for line, line_words in self.data[self.data['title_type'] == 1].sort_values('left').groupby('line'):
-            text = ' '.join(line_words['text'])
-            self.data.loc[line_words.index, 'title_level'] = self.detector.get_title_level(text)
+                    for line, line_words in col_words.groupby('line'):
+                        title_level, prev_y, prev_level = self.__process_line(
+                            line_words,
+                            num_cols,
+                            page_center,
+                            col_center,
+                            col_width,
+                            prev_y,
+                            prev_level
+                        )
+                        self.data.loc[line_words.index, 'title_type'] = title_level
+
+    def __calculate_center(self, df:pd.DataFrame, left_col:int, right_col:int):
+        left = df[left_col].min()
+        right = df[right_col].max()
+        return left + (right - left) * 0.5
+
+    def __process_line(self, line_words, num_columns, page_center, col_center, col_width, prev_y, prev_level):
+        left = line_words['left'].min()
+        right = line_words['right'].max()
+        top = line_words['top'].min()
+        bottom = line_words['bottom'].max()
+
+        if num_columns == 1:
+            is_centered = self.__element_is_centered(left, right, page_center, self.writable_width)
+            if is_centered:
+                title_level = 1
+            else:
+                title_level = 0
+        else:
+            is_centered = self.__element_is_centered(left, right, col_center, col_width)
+            is_separated = self.__element_is_vertically_separated(top, prev_y)
+            if is_centered and (is_separated or prev_level == 2):
+                title_level = 2
+            else:
+                title_level = 0
+
+        return title_level, bottom, title_level
 
     def __element_is_centered(self, min_x:float, max_x:float, reference_center:float, reference_width:float):
         center_rate = (reference_center - min_x) / (max_x - reference_center)
@@ -185,37 +202,62 @@ class TreeSplitter:
         prev_was_title = False
         prev_y = 0
         future_title = ''
-        for line, line_words in self.data.sort_values(['page', 'line', 'left']).groupby(['page', 'group', 'col_position', 'line']):
-            line_str = ' '.join(line_words['text'])
+
+        sorted_lines = self.data.sort_values(['page', 'line', 'left'])
+        for line, line_words in sorted_lines.groupby(['page', 'group', 'col_position', 'line']):
+            line_text = ' '.join(line_words['text'])
             title_type = line_words.iloc[0]['title_type']
+            top = line_words['top'].min()
+            bottom = line_words['bottom'].max()
 
             if title_type == 1:
-                if self.__element_is_vertically_separated(line_words['top'].min(), prev_y):
-                    title_level = self.detector.get_title_level(line_str)
-                    parent = next(node for node in current_nodes[title_level - 1::-1] if node is not None)
-                    last_node = DocNode(line_str, parent=parent)
-                    current_nodes[title_level] = last_node
-                    current_nodes[title_level+1:] = [None for _ in range(len(current_nodes[title_level+1:]))]
-                    prev_was_title = True
-                elif prev_was_title:
-                    last_node.append_title(line_str)
+                last_node, prev_was_title = self.__handle_title_type_1(
+                    line_text, top, prev_y, current_nodes, last_node, prev_was_title
+                )
             elif title_type == 2:
-                future_title += line_str + " "
+                future_title += line_text + " "
                 prev_was_title = False
             else:
-                level, name, content = self.detector.detect_content_header(line_str.lower())
-                if level == -1: # No content header found
-                    last_node.append_content(content)
-                else:
-                    parent = next(node for node in current_nodes[level - 1::-1] if node is not None)
-                    last_node = DocNode(name, parent=parent)
-                    last_node.append_content(content)
-                    if future_title != '':
-                        last_node.set_title(future_title.strip())
-                        future_title = ''
-                    current_nodes[level] = last_node
-                    current_nodes[level+1:] = [None for _ in range(len(current_nodes[level+1:]))]
-
+                last_node, future_title = self.__handle_content_line(
+                    line_text, current_nodes, last_node, future_title
+                )
                 prev_was_title = False
 
-            prev_y = line_words['bottom'].max()
+            prev_y = bottom
+
+    def __handle_title_type_1(self, line_text:str, current_top:float, prev_y:float, current_nodes:List[DocNode], last_node:DocNode, prev_was_title:bool) -> Tuple[DocNode, bool]:
+        if self.__element_is_vertically_separated(current_top, prev_y):
+            title_level = self.detector.get_title_level(line_text)
+            parent = self.__find_nearest_parent(current_nodes, title_level)
+            new_node = DocNode(line_text, parent=parent)
+            current_nodes[title_level] = new_node
+            self.__clear_lower_children(current_nodes, title_level)
+            return new_node, True
+        elif prev_was_title:
+            last_node.append_title(line_text)
+
+        return last_node, prev_was_title
+
+    def __handle_content_line(self, line_text:str, current_nodes:List[DocNode], last_node:DocNode, future_title:str):
+        level, name, content = self.detector.detect_content_header(line_text.lower())
+        if level == -1:
+            last_node.append_content(content)
+        else:
+            parent = self.__find_nearest_parent(current_nodes, level)
+            new_node = DocNode(name, parent=parent)
+            new_node.append_content(content)
+            if future_title.strip():
+                new_node.set_title(future_title.strip())
+                future_title = ''
+            current_nodes[level] = new_node
+            self.__clear_lower_children(current_nodes, level)
+            last_node = new_node
+
+        return last_node, future_title
+
+    def __find_nearest_parent(self, nodes:List[DocNode], level:int):
+        return next(node for node in nodes[level - 1::-1] if node is not None)
+
+    def __clear_lower_children(self, nodes:List[DocNode], from_level:int):
+        for i in range(from_level + 1, len(nodes)):
+            nodes[i] = None
