@@ -4,7 +4,7 @@ import glob
 import dotenv
 
 from document_loaders.pdf import PyPDFMixedLoader
-from AppLogger import AppLogger
+from utils.logger import AppLogger
 
 dotenv.load_dotenv()
 

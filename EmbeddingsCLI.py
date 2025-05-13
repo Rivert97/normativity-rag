@@ -2,7 +2,7 @@ import argparse
 import os
 import dotenv
 
-from AppLogger import AppLogger
+from utils.logger import AppLogger
 from document_loaders.representations import PdfDocumentData
 from document_splitters.hierarchical import TreeSplitter
 from embeddings.embedders import AllMiniLM
