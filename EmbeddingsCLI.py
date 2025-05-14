@@ -19,14 +19,8 @@ EMBEDDERS = {
 }
 
 STORAGES = {
-    'csv': {
-        'model': CSVStorage,
-        'suffix': '-embeddings.csv',
-    },
-    'chromadb': {
-        'model': ChromaDBStorage,
-        'suffix': '',
-    }
+    'csv': CSVStorage,
+    'chromadb': ChromaDBStorage,
 }
 
 class CLIException(Exception):
@@ -80,6 +74,7 @@ class CLIController():
         )
 
         parser.add_argument('-a', '--action', default='embeddings', choices=['embeddings', 'structure', 'tree'], type=str, help='Action to perform: "embeddings" to split the file and get the embeddings, "structure" to show file structure in console. "tree" to show an image of the tree of titles of the file.')
+        parser.add_argument('-c', '--collection', default='', type=str, help='In embeddings mode and storage is not csv, name of the collection where the embeddings should be stored')
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
         parser.add_argument('-e', '--embedder', default='AllMiniLM', choices=['AllMiniLM'], type=str, help='Embeddings function to be used')
         parser.add_argument('-f', '--file', default='', type=str, help='Path to file containing the data or text of the document')
@@ -124,11 +119,8 @@ class CLIController():
         else:
             raise CLIException(f"Invalid storage '{args.storage}'")
 
-        if args.storage != 'csv':
-            if args.output == './':
-                args.output = ''
-            else:
-                args.output.replace('/', '')
+        if args.action == 'embeddings' and args.storage != 'csv' and args.collection == '':
+            raise CLIException("Please specify a name for the collection")
 
         return args
 
@@ -158,14 +150,18 @@ class CLIController():
 
         embeddings = embed.get_embeddings(sentences)
 
-        if self.print_to_console:
+        if self.print_to_console and self._args.storage == 'csv':
             print('sentences,metadatas,embeddings')
             for sent, meta, emb in zip(sentences, metadatas, embeddings):
                 print(f'{sent},{meta},{emb}')
         else:
-            base_filename = os.path.splitext(output)[0]
-            storage = self.storage['model']()
-            storage.save_info(base_filename + self.storage['suffix'], sentences, metadatas, embeddings)
+            if self._args.storage == 'csv':
+                name = os.path.splitext(output)[0] + '-embeddings.csv'
+            else:
+                name = self._args.collection
+
+            storage = self.storage()
+            storage.save_info(name, sentences, metadatas, embeddings)
 
     def __action_structure(self, filename:str, output:str):
         splitter = self.__load_and_split_doc(filename)
