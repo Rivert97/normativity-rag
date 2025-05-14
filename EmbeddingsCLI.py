@@ -185,9 +185,9 @@ class CLIController():
         document_data = PdfDocumentData()
         document_data.load_data(filename)
         if self._args.page != None:
-            splitter = TreeSplitter(document_data.get_page_data(self._args.page, remove_headers=True))
+            splitter = TreeSplitter(document_data.get_page_data(self._args.page, remove_headers=True), filename)
         else:
-            splitter = TreeSplitter(document_data.get_data(remove_headers=True))
+            splitter = TreeSplitter(document_data.get_data(remove_headers=True), filename)
 
         splitter.analyze()
 

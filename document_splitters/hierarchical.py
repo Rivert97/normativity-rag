@@ -80,8 +80,9 @@ class DocNode(NodeMixin):
 
 class TreeSplitter:
 
-    def __init__(self, data: pd.DataFrame):
+    def __init__(self, data: pd.DataFrame, document_name: str = ''):
         self.data = data.copy()
+        self.document_name = document_name
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
         self.line_height = (self.data['bottom'] - self.data['top']).mean()
@@ -101,6 +102,7 @@ class TreeSplitter:
                 doc = Document(
                     content=split,
                     metadata={
+                        'document_name': self.document_name,
                         'title': node.get_full_title(),
                         'path': node.get_path(),
                     }
