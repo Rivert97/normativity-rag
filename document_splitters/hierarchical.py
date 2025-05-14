@@ -1,6 +1,9 @@
 from typing import List, Tuple
 import pandas as pd
 import re
+import os
+from PIL import Image
+
 from anytree import RenderTree, NodeMixin, PreOrderIter
 from anytree.node.node import _repr
 from anytree.exporter import UniqueDotExporter
@@ -116,7 +119,15 @@ class TreeSplitter:
     def show_file_structure(self):
         print(self.get_file_structure())
 
-    def show_tree(self, filename:str):
+    def show_tree(self):
+        filename = '.tree.png'
+        UniqueDotExporter(self.root).to_picture(filename)
+        img = Image.open(filename)
+        img.show()
+
+        os.remove(filename)
+
+    def save_tree(self, filename:str):
         UniqueDotExporter(self.root).to_picture(filename)
 
     def __assign_title_type(self):
