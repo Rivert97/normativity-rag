@@ -81,6 +81,7 @@ class CLIController():
         parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         parser.add_argument('-s', '--storage', default='csv', type=str, help='Type of storage to be used for embeddings')
+        parser.add_argument('--inner-splitter', default='paragraph', choices=['paragraph', 'section'], help='Once sections are detected by the splitter, indicates how the sections should be subdivided')
         parser.add_argument('-t', '--type', default='csv', choices=['csv', 'txt'], type=str, help='Type of input')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
 
@@ -143,7 +144,7 @@ class CLIController():
 
         sentences = []
         metadatas = []
-        documents =splitter.extract_documents()
+        documents = splitter.extract_documents(self._args.inner_splitter)
         for doc in documents:
             sentences.append(doc.get_content())
             metadatas.append(doc.get_metadata())

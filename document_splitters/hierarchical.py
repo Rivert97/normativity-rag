@@ -52,12 +52,18 @@ class DocNode(NodeMixin):
         else:
             return self.content
 
-    def split_content(self, remove_hypens:bool=True):
+    def split_content(self, remove_hypens:bool=True, split_type:str='paragraph'):
         content = self.get_content(remove_hypens)
-
         content = re.sub(r'([^.:;\n])(\n)', r'\1 ', content)
 
-        return content.split('\n')
+        if split_type == 'paragraph':
+            splits = content.split('\n')
+        elif split_type == 'section':
+            splits = [content]
+        else:
+            splits = [content]
+
+        return splits
 
     def get_path(self):
         return "{!r}".format(self.separator.join([""] + [str(node.name) for node in self.path]))
@@ -94,10 +100,10 @@ class TreeSplitter:
         self.__assign_title_type()
         self.__create_tree_structure()
 
-    def extract_documents(self):
+    def extract_documents(self, inner_splitter: str):
         documents = []
         for node in PreOrderIter(self.root):
-            splits = node.split_content(remove_hypens=True)
+            splits = node.split_content(remove_hypens=True, split_type=inner_splitter)
             for split in splits:
                 doc = Document(
                     content=split,
