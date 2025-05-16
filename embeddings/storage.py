@@ -17,8 +17,6 @@ class ChromaDBStorage(Storage):
     def save_info(self, name:str, sentences:List[str], metadatas:List[str], embeddings:List[str]=None):
         try:
             collection = self.client.get_collection(name)
-            print("Collection already exists")
-            return
         except chromadb.errors.NotFoundError as e:
             collection = self.client.create_collection(name)
 

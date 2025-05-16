@@ -12,7 +12,7 @@ import pandas as pd
 import hashlib
 import shutil
 
-from Visitors import PageTextVisitor
+from .visitors import PageTextVisitor
 
 class PypdfPage():
     """This class stores the text extracted by PyPDF and provides
@@ -162,8 +162,7 @@ class DataReconstructor():
 
     def __column_is_centered(self, min_x, max_x):
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
-        column_percentage = (max_x - min_x) / self.writable_width
-        if min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1 and column_percentage < 0.9:
+        if min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1:
             return True
         else:
             return False
@@ -325,7 +324,7 @@ class OcrPage():
         for _, row in self.data.iterrows():
             if row['level'] == level:
                 (x, y, w, h) = (int(row['left']*self.width), int(row['top']*self.height), int(row['width']*self.width), int(row['height']*self.height))
-                draw.rectangle(((x, y), (x + w, y + h)), outline="green", width=3)
+                draw.rectangle(((x, y), (x + w, y + h)), outline="green", width=10)
 
         plt.imshow(canvas)
         plt.show()
@@ -337,7 +336,7 @@ class OcrPage():
         # Draw regions
         for group, values in self.data.dropna().groupby(['group']).agg({'left': ['min'], 'top': ['min'], 'bottom': ['max'], 'right': ['max']}).iterrows():
             (x_1, y_1, x_2, y_2) = (int(values['left', 'min']*self.width), int(values['top', 'min']*self.height), int(values['right', 'max']*self.width), int(values['bottom', 'max']*self.height))
-            draw.rectangle(((x_1, y_1), (x_2, y_2)), outline="green", width=3)
+            draw.rectangle(((x_1, y_1), (x_2, y_2)), outline="green", width=10)
 
         plt.imshow(canvas)
         plt.show()

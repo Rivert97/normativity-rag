@@ -1,10 +1,11 @@
+from typing import Tuple
 import argparse
 import os
 import glob
 import dotenv
 
-from Loaders import PdfMixedLoader
-from AppLogger import AppLogger
+from document_loaders.pdf import PyPDFMixedLoader
+from utils.logger import AppLogger
 
 dotenv.load_dotenv()
 
@@ -46,7 +47,7 @@ class CLIController():
         parser.add_argument('-f', '--file', default='', type=str, help='File to be processed in single file mode')
         parser.add_argument('-o', '--output', default='', type=str, help='File or directory to store the output text file(s). When -d is used, this defaults to ./')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
-        parser.add_argument('-t', '--type', default='txt', choices=['txt', 'csv'], type=str, help='Type of output')
+        parser.add_argument('-t', '--type', default='txt', choices=['txt', 'csv'], nargs='+', type=str, help='Type of output')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
 
         args = parser.parse_args()
@@ -80,7 +81,7 @@ class CLIController():
         return args
 
     def __process_file(self, filename: str, output: str = None):
-        pdf_loader = PdfMixedLoader(self._args.cache_dir)
+        pdf_loader = PyPDFMixedLoader(self._args.cache_dir)
         if self._args.page != None:
             pdf_loader.load_page(filename, self._args.page)
         else:
@@ -92,14 +93,15 @@ class CLIController():
         for file in glob.glob(f'{self._args.directory}/*.pdf'):
             basename = ''.join(os.path.basename(file).split('.')[:-1])
             if self._args.page != None:
-                out_name = f"{self._args.output}/{basename}_{self._args.page}.{self._args.type}"
+                out_name = f"{self._args.output}/{basename}_{self._args.page}"
             else:
-                out_name = f"{self._args.output}/{basename}.{self._args.type}"
+                out_name = f"{self._args.output}/{basename}"
 
             self.__process_file(file, out_name)
 
-    def __make_output(self, pdf_loader: PdfMixedLoader, filename: str = None):
-        if self._args.type == 'txt':
+    def __make_output(self, pdf_loader: PyPDFMixedLoader, output:str=None):
+        base_filename = os.path.splitext(output)[0]
+        if 'txt' in self._args.type:
             if self._args.page is not None:
                 text = pdf_loader.get_page_text(self._args.page)
             else:
@@ -108,8 +110,8 @@ class CLIController():
             if self.print_to_console:
                 print(text)
             else:
-                self.__save_text(text, filename)
-        elif self._args.type == 'csv':
+                self.__save_text(text, base_filename + '.txt')
+        if 'csv' in self._args.type:
             data = pdf_loader.get_document_data()
 
             if self.print_to_console:
@@ -119,9 +121,9 @@ class CLIController():
                     print(data.get_data().to_csv(index=False))
             else:
                 if self._args.page is not None:
-                    data.save_page_data(self._args.page, filename)
+                    data.save_page_data(self._args.page, base_filename + '.csv')
                 else:
-                    data.save_data(filename)
+                    data.save_data(base_filename + '.csv')
 
     def __save_text(self, text:str, filename: str):
         try:
