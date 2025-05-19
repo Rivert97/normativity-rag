@@ -6,22 +6,13 @@ import glob
 from utils.logger import AppLogger
 from document_loaders.representations import PdfDocumentData
 from document_splitters.hierarchical import TreeSplitter, DataTreeSplitter, TextTreeSplitter
-from embeddings.embedders import AllMiniLM
+from embeddings.embedders import STEmbedder
 from embeddings.storage import CSVStorage, ChromaDBStorage
 
 dotenv.load_dotenv()
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
-
-EMBEDDERS = {
-    'AllMiniLM': AllMiniLM,
-}
-
-STORAGES = {
-    'csv': CSVStorage,
-    'chromadb': ChromaDBStorage,
-}
 
 class CLIException(Exception):
     def __init__(self, message):
@@ -35,7 +26,6 @@ class CLIController():
         self._logger = AppLogger.get_logger('CLIController')
 
         self.print_to_console = True
-        self.embedder = None
         self.storage = None
 
         self._args = self.__process_args()
@@ -68,7 +58,7 @@ class CLIController():
         parser.add_argument('-a', '--action', default='embeddings', choices=['embeddings', 'structure', 'tree'], type=str, help='Action to perform: "embeddings" to split the file and get the embeddings, "structure" to show file structure in console. "tree" to show an image of the tree of titles of the file.')
         parser.add_argument('-c', '--collection', default='', type=str, help='In embeddings mode and storage is not csv, name of the collection where the embeddings should be stored')
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
-        parser.add_argument('-e', '--embedder', default='AllMiniLM', choices=['AllMiniLM'], type=str, help='Embeddings function to be used')
+        parser.add_argument('-e', '--embedder', default='all-MiniLM-L6-v2', type=str, help='Embeddings model to be used. Check SentenceTransformers doc for all the options (https://sbert.net/docs/sentence_transformer/pretrained_models.html)')
         parser.add_argument('-f', '--file', default='', type=str, help='Path to file containing the data or text of the document')
         parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
@@ -99,16 +89,13 @@ class CLIController():
             if not os.path.isdir(args.output):
                 raise CLIException("Destination directory does not exist")
 
-        if args.output != '':
+        if args.output != '' or (args.action == 'embeddings' and args.storage != 'csv'):
             self.print_to_console = False
 
-        if args.embedder in EMBEDDERS:
-            self.embedder = EMBEDDERS[args.embedder]
-        else:
-            raise CLIException(f"Invalid embedder '{args.embedder}'")
-
-        if args.storage in STORAGES:
-            self.storage = STORAGES[args.storage]
+        if args.storage == 'csv':
+            self.storage = CSVStorage()
+        elif args.storage == 'chromadb':
+            self.storage = ChromaDBStorage(args.embedder)
         else:
             raise CLIException(f"Invalid storage '{args.storage}'")
 
@@ -138,8 +125,12 @@ class CLIController():
         sentences, metadatas = self.__extract_info(splitter)
 
         if self._args.storage == 'csv':
-            emb = self.embedder()
-            embeddings = emb.get_embeddings(sentences)
+            try:
+                self.embedder = STEmbedder(self._args.embedder)
+            except OSError as e:
+                raise CLIException(f"Invalid embedder '{self._args.embedder}'")
+
+            embeddings = self.embedder.get_embeddings(sentences)
         else:
             embeddings = None
 
@@ -153,8 +144,7 @@ class CLIController():
             else:
                 name = self._args.collection
 
-            storage = self.storage()
-            storage.save_info(name, sentences, metadatas, embeddings)
+            self.storage.save_info(name, sentences, metadatas, embeddings)
 
     def __action_structure(self, splitter:TreeSplitter, output:str):
         if self.print_to_console:
