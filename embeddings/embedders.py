@@ -1,17 +1,9 @@
-from typing import List
-from abc import ABC, abstractmethod
 from sentence_transformers import SentenceTransformer
 
-class Embedder(ABC):
+class STEmbedder():
 
-    @abstractmethod
-    def get_embeddings(self, sentences: List[str]):
-        pass
-
-class AllMiniLM(Embedder):
-
-    def __init__(self):
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+    def __init__(self, model:str = 'all-MiniLM-L6-v2'):
+        self.model = SentenceTransformer(model)
 
     def get_embeddings(self, sentences):
         embeddings = self.model.encode(sentences)
