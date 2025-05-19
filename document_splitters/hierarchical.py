@@ -84,21 +84,17 @@ class DocNode(NodeMixin):
         args = ["{!r}".format(self.separator.join([""] + [str(node.name) for node in self.path]))]
         return _repr(self, args=args, nameblacklist=["name"])
 
-class TreeSplitter:
+class TreeSplitter():
 
-    def __init__(self, data: pd.DataFrame, document_name: str = ''):
-        self.data = data.copy()
-        self.document_name = document_name
+    def __init__(self):
+        self.root = DocNode("root")
 
-        self.writable_width = self.data['right'].max() - self.data['left'].min()
-        self.line_height = (self.data['bottom'] - self.data['top']).mean()
-        self.detector = TitleDetector()
+    def get_file_structure(self):
+        text = ''
+        for pre, fill, node in RenderTree(self.root):
+            text += (f'{pre} {node}\n')
 
-        self.root = None
-
-    def analyze(self):
-        self.__assign_title_type()
-        self.__create_tree_structure()
+        return text
 
     def extract_documents(self, inner_splitter: str):
         documents = []
@@ -117,13 +113,6 @@ class TreeSplitter:
 
         return documents
 
-    def get_file_structure(self):
-        text = ''
-        for pre, fill, node in RenderTree(self.root):
-            text += (f'{pre} {node}\n')
-
-        return text
-
     def show_file_structure(self):
         print(self.get_file_structure())
 
@@ -137,6 +126,30 @@ class TreeSplitter:
 
     def save_tree(self, filename:str):
         UniqueDotExporter(self.root).to_picture(filename)
+
+    def find_nearest_parent(self, nodes:List[DocNode], level:int):
+        return next(node for node in nodes[level - 1::-1] if node is not None)
+
+    def clear_lower_children(self, nodes:List[DocNode], from_level:int):
+        for i in range(from_level + 1, len(nodes)):
+            nodes[i] = None
+
+
+class DataTreeSplitter(TreeSplitter):
+
+    def __init__(self, data: pd.DataFrame, document_name: str = ''):
+        super().__init__()
+
+        self.data = data.copy()
+        self.document_name = document_name
+
+        self.writable_width = self.data['right'].max() - self.data['left'].min()
+        self.line_height = (self.data['bottom'] - self.data['top']).mean()
+        self.detector = TitleDetector()
+
+    def analyze(self):
+        self.__assign_title_type()
+        self.__create_tree_structure()
 
     def __assign_title_type(self):
         self.data['title_type'] = pd.Series(dtype=int)
@@ -213,7 +226,6 @@ class TreeSplitter:
         n_titles = self.detector.get_number_of_titles()
         n_content_titles = self.detector.get_number_of_content_tiltes()
 
-        self.root = DocNode("root")
         current_nodes = [None for _ in range(n_titles + n_content_titles)]
         last_node = self.root
         current_nodes[0] = last_node
@@ -247,10 +259,10 @@ class TreeSplitter:
     def __handle_title_type_1(self, line_text:str, current_top:float, prev_y:float, current_nodes:List[DocNode], last_node:DocNode, prev_was_title:bool) -> Tuple[DocNode, bool]:
         if self.__element_is_vertically_separated(current_top, prev_y):
             title_level = self.detector.get_title_level(line_text)
-            parent = self.__find_nearest_parent(current_nodes, title_level)
+            parent = self.find_nearest_parent(current_nodes, title_level)
             new_node = DocNode(line_text, parent=parent)
             current_nodes[title_level] = new_node
-            self.__clear_lower_children(current_nodes, title_level)
+            self.clear_lower_children(current_nodes, title_level)
             return new_node, True
         elif prev_was_title:
             last_node.append_title(line_text)
@@ -262,17 +274,57 @@ class TreeSplitter:
         if level == -1:
             last_node.append_content(content)
         else:
-            parent = self.__find_nearest_parent(current_nodes, level)
+            parent = self.find_nearest_parent(current_nodes, level)
             new_node = DocNode(name, parent=parent)
             new_node.append_content(content)
             if future_title.strip():
                 new_node.set_title(future_title.strip())
                 future_title = ''
             current_nodes[level] = new_node
-            self.__clear_lower_children(current_nodes, level)
+            self.clear_lower_children(current_nodes, level)
             last_node = new_node
 
         return last_node, future_title
+
+
+class TextTreeSplitter(TreeSplitter):
+    def __init__(self, text: str, document_name: str = ''):
+        super().__init__()
+
+        self.text = text
+        self.document_name = document_name
+
+        self.detector = TitleDetector('not_permissive_titles')
+
+    def analyze(self):
+        n_titles = self.detector.get_number_of_titles()
+        n_content_titles = self.detector.get_number_of_content_tiltes()
+
+        current_nodes = [None for _ in range(n_titles + n_content_titles)]
+        last_node = self.root
+        current_nodes[0] = last_node
+
+        for line_text in self.text.split('\n'):
+            title_level = self.detector.get_title_level(line_text)
+            if title_level == 1:
+                level, name, content = self.detector.detect_content_header(line_text.lower())
+
+                if level == -1:
+                    last_node.append_content(content)
+                else:
+                    parent = self.__find_nearest_parent(current_nodes, level)
+                    new_node = DocNode(name, parent=parent)
+                    new_node.append_content(content)
+                    current_nodes[level] = new_node
+                    self.__clear_lower_children(current_nodes, level)
+                    last_node = new_node
+            else:
+                parent = self.__find_nearest_parent(current_nodes, title_level)
+                new_node = DocNode(line_text, parent=parent)
+                current_nodes[title_level] = new_node
+                self.__clear_lower_children(current_nodes, title_level)
+                last_node = new_node
+
 
     def __find_nearest_parent(self, nodes:List[DocNode], level:int):
         return next(node for node in nodes[level - 1::-1] if node is not None)
