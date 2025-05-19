@@ -4,7 +4,7 @@ import os
 import glob
 import dotenv
 
-from document_loaders.pdf import PyPDFMixedLoader
+from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
 from utils.logger import AppLogger
 
 dotenv.load_dotenv()
@@ -45,6 +45,7 @@ class CLIController():
         parser.add_argument('--cache-dir', default='./.cache/', type=str, help='Directory to be used as cache. Defaults to ./.cache/')
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
         parser.add_argument('-f', '--file', default='', type=str, help='File to be processed in single file mode')
+        parser.add_argument('-l', '--loader', default='mixed', type=str, choices=['mixed', 'text', 'ocr'], help='Type of loader to use')
         parser.add_argument('-o', '--output', default='', type=str, help='File or directory to store the output text file(s). When -d is used, this defaults to ./')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         parser.add_argument('-t', '--type', default='txt', choices=['txt', 'csv'], nargs='+', type=str, help='Type of output')
@@ -75,18 +76,16 @@ class CLIController():
             if dirname != '' and not os.path.exists(dirname):
                 raise CLIException("Output path does not exist")
 
+        if args.loader == 'text' and args.type == 'csv':
+            raise CLIException("Type of output not supported for '{args.loader}' loader")
+
         if args.output != '':
             self.print_to_console = False
 
         return args
 
     def __process_file(self, filename: str, output: str = None):
-        pdf_loader = PyPDFMixedLoader(self._args.cache_dir)
-        if self._args.page != None:
-            pdf_loader.load_page(filename, self._args.page)
-        else:
-            pdf_loader.load(filename)
-
+        pdf_loader = self.__get_loader(filename)
         self.__make_output(pdf_loader, output)
 
     def __process_directory(self):
@@ -98,6 +97,22 @@ class CLIController():
                 out_name = f"{self._args.output}/{basename}"
 
             self.__process_file(file, out_name)
+
+    def __get_loader(self, filename:str):
+        if self._args.loader == 'mixed':
+            loader = PyPDFMixedLoader(self._args.cache_dir)
+            if self._args.page != None:
+                loader.load_page(filename, self._args.page)
+            else:
+                loader.load(filename)
+        elif self._args.loader == 'text':
+            loader = PyPDFLoader(filename)
+        elif self._args.loader == 'ocr':
+            loader = OCRLoader(filename, self._args.cache_dir)
+        else:
+            raise CLIException("Invalid type of loader")
+
+        return loader
 
     def __make_output(self, pdf_loader: PyPDFMixedLoader, output:str=None):
         base_filename = os.path.splitext(output)[0]

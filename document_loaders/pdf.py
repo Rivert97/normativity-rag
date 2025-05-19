@@ -278,3 +278,25 @@ class PyPDFMixedLoader():
             merged.append((added_words[num_iter - 1][0], ''.join(removed_words)))
 
         return merged
+
+class PyPDFLoader():
+    def __init__(self, file_path:str):
+        self.parser = PypdfParser(file_path)
+
+    def get_text(self):
+        return self.parser.get_text()
+
+    def get_page_text(self, page_num: int):
+        page = self.parser.get_page(page_num)
+        return page.get_text()
+
+class OCRLoader():
+    def __init__(self, file_path:str, cache_dir: str='./.cache'):
+        self.parser = OcrPdfParser(file_path, cache_dir)
+
+    def get_text(self):
+        return self.parser.get_text()
+
+    def get_page_text(self, page_num: int):
+        page = self.parser.get_page(page_num)
+        return page.get_raw_text()
