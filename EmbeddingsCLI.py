@@ -14,11 +14,6 @@ dotenv.load_dotenv()
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
 
-STORAGES = {
-    'csv': CSVStorage,
-    'chromadb': ChromaDBStorage,
-}
-
 class CLIException(Exception):
     def __init__(self, message):
         super().__init__(f"{PROGRAM_NAME} ERROR: {message}")
@@ -103,8 +98,10 @@ class CLIController():
         except OSError as e:
             raise CLIException(f"Invalid embedder '{args.embedder}'")
 
-        if args.storage in STORAGES:
-            self.storage = STORAGES[args.storage]
+        if args.storage == 'csv':
+            self.storage = CSVStorage()
+        elif args.storage == 'chromadb':
+            self.storage = ChromaDBStorage(args.embedder)
         else:
             raise CLIException(f"Invalid storage '{args.storage}'")
 
@@ -148,8 +145,7 @@ class CLIController():
             else:
                 name = self._args.collection
 
-            storage = self.storage()
-            storage.save_info(name, sentences, metadatas, embeddings)
+            self.storage.save_info(name, sentences, metadatas, embeddings)
 
     def __action_structure(self, splitter:TreeSplitter, output:str):
         if self.print_to_console:

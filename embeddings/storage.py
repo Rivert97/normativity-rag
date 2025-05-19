@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import chromadb
 import chromadb.errors
+from chromadb.utils import embedding_functions
 import pandas as pd
 
 class Storage(ABC):
@@ -15,14 +16,15 @@ class Storage(ABC):
 
 class ChromaDBStorage(Storage):
 
-    def __init__(self):
-        self.client = chromadb.PersistentClient(path="./db")
+    def __init__(self, model:str='all-MiniLM-L6-v2', db_path:str='./db'):
+        self.client = chromadb.PersistentClient(path=db_path)
+        self.em_func = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model)
 
     def save_info(self, name:str, sentences:list[str], metadatas:list[str], embeddings:list[str]=None):
         try:
-            collection = self.client.get_collection(name)
+            collection = self.client.get_collection(name, embedding_function=self.em_func)
         except chromadb.errors.NotFoundError as e:
-            collection = self.client.create_collection(name)
+            collection = self.client.create_collection(name, embedding_function=self.em_func)
 
         collection.add(
             documents=sentences,
@@ -31,8 +33,9 @@ class ChromaDBStorage(Storage):
         )
 
     def query_sentence(self, collection, sentence, n_results):
+        import pdb; pdb.set_trace()
         try:
-            collection = self.client.get_collection(collection)
+            collection = self.client.get_collection(collection, embedding_function=self.em_func)
         except chromadb.errors.NotFoundError as e:
             return None
 
