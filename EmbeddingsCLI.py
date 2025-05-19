@@ -5,7 +5,7 @@ import glob
 
 from utils.logger import AppLogger
 from document_loaders.representations import PdfDocumentData
-from document_splitters.hierarchical import TreeSplitter
+from document_splitters.hierarchical import TreeSplitter, DataTreeSplitter, TextTreeSplitter
 from embeddings.embedders import AllMiniLM
 from embeddings.storage import CSVStorage, ChromaDBStorage
 
@@ -42,19 +42,11 @@ class CLIController():
 
     def run(self):
         if self._args.file != '':
-            self.__process_file(self._args.file, self._args.output)
+            self.__process_file(self._args.file, self._args.output, self._args.type)
         elif self._args.directory != '':
             self.__process_directory(self._args.directory)
         else:
             raise CLIException("Input not specified")
-
-    def __process_file(self, filename: str, output: str = None):
-        if self._args.type == 'csv':
-            self.__process_csv_file(filename, output)
-        elif self._args.type == 'txt':
-            self.__process_txt_file(filename, output)
-        else:
-            raise CLIException("Tipo de archivo no valido")
 
     def __process_directory(self, directory: str):
         for file in glob.glob(f'{directory}/*.{self._args.type}'):
@@ -64,7 +56,7 @@ class CLIController():
             else:
                 out_name = os.path.join(self._args.output, f"{basename}")
 
-            self.__process_file(file, out_name)
+            self.__process_file(file, out_name, self._args.type)
 
     def __process_args(self) -> argparse.Namespace:
         parser = argparse.ArgumentParser(
@@ -80,7 +72,7 @@ class CLIController():
         parser.add_argument('-f', '--file', default='', type=str, help='Path to file containing the data or text of the document')
         parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
-        parser.add_argument('-s', '--storage', default='csv', type=str, help='Type of storage to be used for embeddings')
+        parser.add_argument('-s', '--storage', default='csv', type=str, choices=['csv', 'chromadb'], help='Type of storage to be used for embeddings')
         parser.add_argument('--inner-splitter', default='paragraph', choices=['paragraph', 'section'], help='Once sections are detected by the splitter, indicates how the sections should be subdivided')
         parser.add_argument('-t', '--type', default='csv', choices=['csv', 'txt'], type=str, help='Type of input')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
@@ -125,33 +117,33 @@ class CLIController():
 
         return args
 
-    def __process_csv_file(self, filename: str, output: str):
-        if self._args.action == 'embeddings':
-            self.__action_embeddings(filename, output)
-        elif self._args.action == 'structure':
-            self.__action_structure(filename, output)
-        elif self._args.action == 'tree':
-            self.__action_tree(filename, output)
+    def __process_file(self, filename: str, output: str, type: str):
+        if type == 'csv':
+            splitter = self.__load_and_split_doc(filename)
+        elif type == 'txt':
+            splitter = self.__load_and_split_txt(filename)
         else:
-            raise CLIException("Invalid action '{self._args.action}'")
+            raise CLIException(f"Invalid type of file: '{type}'")
 
-    def __process_txt_file(self, filename: str):
-        raise CLIException("Functionality not implemented")
+        if self._args.action == 'embeddings':
+            self.__action_embeddings(splitter, output)
+        elif self._args.action == 'structure':
+            self.__action_structure(splitter, output)
+        elif self._args.action == 'tree':
+            self.__action_tree(splitter, output)
+        else:
+            raise CLIException(f"Invalid action '{self._args.action}'")
 
-    def __action_embeddings(self, filename:str, output: str):
-        splitter = self.__load_and_split_doc(filename)
-        embed = self.embedder()
+    def __action_embeddings(self, splitter:TreeSplitter, output: str):
+        sentences, metadatas = self.__extract_info(splitter)
 
-        sentences = []
-        metadatas = []
-        documents = splitter.extract_documents(self._args.inner_splitter)
-        for doc in documents:
-            sentences.append(doc.get_content())
-            metadatas.append(doc.get_metadata())
+        if self._args.storage == 'csv':
+            emb = self.embedder()
+            embeddings = emb.get_embeddings(sentences)
+        else:
+            embeddings = None
 
-        embeddings = embed.get_embeddings(sentences)
-
-        if self.print_to_console and self._args.storage == 'csv':
+        if self.print_to_console:
             print('sentences,metadatas,embeddings')
             for sent, meta, emb in zip(sentences, metadatas, embeddings):
                 print(f'{sent},{meta},{emb}')
@@ -164,8 +156,7 @@ class CLIController():
             storage = self.storage()
             storage.save_info(name, sentences, metadatas, embeddings)
 
-    def __action_structure(self, filename:str, output:str):
-        splitter = self.__load_and_split_doc(filename)
+    def __action_structure(self, splitter:TreeSplitter, output:str):
         if self.print_to_console:
             splitter.show_file_structure()
         else:
@@ -173,23 +164,30 @@ class CLIController():
             structure = splitter.get_file_structure()
             self.__save_txt_file(base_filename + '-structure.txt', structure)
 
-    def __action_tree(self, filename:str, output:str):
-        splitter = self.__load_and_split_doc(filename)
-
+    def __action_tree(self, splitter:TreeSplitter, output:str):
         if self.print_to_console:
             splitter.show_tree()
         else:
             base_filename = os.path.splitext(output)[0]
             splitter.save_tree(base_filename + '-tree.png')
 
-    def __load_and_split_doc(self, filename:str):
+    def __load_and_split_doc(self, filename:str) -> DataTreeSplitter:
         document_data = PdfDocumentData()
         document_data.load_data(filename)
         if self._args.page != None:
-            splitter = TreeSplitter(document_data.get_page_data(self._args.page, remove_headers=True), filename)
+            splitter = DataTreeSplitter(document_data.get_page_data(self._args.page, remove_headers=True), filename)
         else:
-            splitter = TreeSplitter(document_data.get_data(remove_headers=True), filename)
+            splitter = DataTreeSplitter(document_data.get_data(remove_headers=True), filename)
 
+        splitter.analyze()
+
+        return splitter
+
+    def __load_and_split_txt(self, filename:str) -> TextTreeSplitter:
+        with open(filename, 'r') as f:
+            file_content = f.read()
+
+        splitter = TextTreeSplitter(file_content, filename)
         splitter.analyze()
 
         return splitter
@@ -197,6 +195,16 @@ class CLIController():
     def __save_txt_file(self, filename:str, content:str):
         with open(filename, 'w') as f:
             f.write(content)
+
+    def __extract_info(self, splitter:TreeSplitter):
+        sentences = []
+        metadatas = []
+        documents = splitter.extract_documents(self._args.inner_splitter)
+        for doc in documents:
+            sentences.append(doc.get_content())
+            metadatas.append(doc.get_metadata())
+
+        return sentences, metadatas
 
 if __name__ == "__main__":
     try:
