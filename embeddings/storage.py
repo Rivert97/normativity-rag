@@ -33,15 +33,16 @@ class ChromaDBStorage(Storage):
         )
 
     def query_sentence(self, collection, sentence, n_results):
-        import pdb; pdb.set_trace()
         try:
             collection = self.client.get_collection(collection, embedding_function=self.em_func)
-        except chromadb.errors.NotFoundError as e:
-            return None
+        except (chromadb.errors.NotFoundError, ValueError) as e:
+            print(e)
+            return []
 
         results = collection.query(
             query_texts=[sentence],
-            n_results=n_results
+            n_results=n_results,
+            include=['documents', 'metadatas', 'embeddings'],
         )
 
         documents = []
@@ -49,6 +50,7 @@ class ChromaDBStorage(Storage):
             doc = {
                 'content': results['documents'][0][i],
                 'metadata': results['metadatas'][0][i],
+                'embeddings': results['embeddings'][0][i],
             }
             documents.append(doc)
 

@@ -34,6 +34,7 @@ class CLIController():
 
         parser.add_argument('-c', '--collection', default='', type=str, help='Name of the collection to search in the database')
         parser.add_argument('-d', '--database-dir', default='.db/', type=str, help='Database directory to be used')
+        parser.add_argument('-e', '--embedder', default='all-MiniLM-L6-v2', type=str, help='Embeddings model to be used. Check SentenceTransformers doc for all the options (https://sbert.net/docs/sentence_transformer/pretrained_models.html)')
         parser.add_argument('-n', '--number-results', default=5, type=int, help='Number of relevant documents to retrieve')
         parser.add_argument('--version', action='store_true', help='Show version of this tool')
 
@@ -51,13 +52,14 @@ class CLIController():
         return args
 
     def run(self):
-        storage = ChromaDBStorage()
+        storage = ChromaDBStorage(self._args.embedder)
         documents = storage.query_sentence(self._args.collection, self._args.sentence, self._args.number_results)
 
         for doc in documents:
             print("\n---------------------------------------")
             print(f"Sentence: {doc['content']}")
             print(f"Path: {doc['metadata']['path']}")
+            print(f"Embeddings size: {doc['embeddings'].shape}")
 
 if __name__ == "__main__":
     try:

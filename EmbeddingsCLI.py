@@ -26,7 +26,6 @@ class CLIController():
         self._logger = AppLogger.get_logger('CLIController')
 
         self.print_to_console = True
-        self.embedder = None
         self.storage = None
 
         self._args = self.__process_args()
@@ -93,11 +92,6 @@ class CLIController():
         if args.output != '' or (args.action == 'embeddings' and args.storage != 'csv'):
             self.print_to_console = False
 
-        try:
-            self.embedder = STEmbedder(args.embedder)
-        except OSError as e:
-            raise CLIException(f"Invalid embedder '{args.embedder}'")
-
         if args.storage == 'csv':
             self.storage = CSVStorage()
         elif args.storage == 'chromadb':
@@ -131,6 +125,11 @@ class CLIController():
         sentences, metadatas = self.__extract_info(splitter)
 
         if self._args.storage == 'csv':
+            try:
+                self.embedder = STEmbedder(self._args.embedder)
+            except OSError as e:
+                raise CLIException(f"Invalid embedder '{self._args.embedder}'")
+
             embeddings = self.embedder.get_embeddings(sentences)
         else:
             embeddings = None
