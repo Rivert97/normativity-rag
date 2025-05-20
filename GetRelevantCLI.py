@@ -1,6 +1,7 @@
 import argparse
 import os
 import dotenv
+import sys
 
 from utils.logger import AppLogger
 from embeddings.storage import ChromaDBStorage
@@ -19,7 +20,7 @@ class CLIController():
     CLI.
     """
     def __init__(self):
-        self._logger = AppLogger.get_logger('CLIController')
+        self._logger = AppLogger.get_logger(PROGRAM_NAME)
 
         self._args = self.__process_args()
 
@@ -33,9 +34,9 @@ class CLIController():
         parser.add_argument('sentence', type=str, help='Reference sentence to retrieve similar documents')
 
         parser.add_argument('-c', '--collection', default='', type=str, help='Name of the collection to search in the database')
-        parser.add_argument('-d', '--database-dir', default='.db/', type=str, help='Database directory to be used')
-        parser.add_argument('-e', '--embedder', default='all-MiniLM-L6-v2', type=str, help='Embeddings model to be used. Check SentenceTransformers doc for all the options (https://sbert.net/docs/sentence_transformer/pretrained_models.html)')
-        parser.add_argument('-n', '--number-results', default=5, type=int, help='Number of relevant documents to retrieve')
+        parser.add_argument('-d', '--database-dir', default='.db/', type=str, help='Database directory to be used. Defaults to .db/')
+        parser.add_argument('-e', '--embedder', default='all-MiniLM-L6-v2', type=str, help='Embeddings model to be used. Check SentenceTransformers doc for all the options (https://sbert.net/docs/sentence_transformer/pretrained_models.html). Defaults to all-MiniLM-L6-v2')
+        parser.add_argument('-n', '--number-results', default=5, type=int, help='Number of relevant documents to retrieve. Defaults to 5')
         parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = parser.parse_args()
@@ -52,9 +53,13 @@ class CLIController():
         return args
 
     def run(self):
+        self._logger.debug('Loading database')
         storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
+
+        self._logger.debug('Querying sentences')
         documents = storage.query_sentence(self._args.collection, self._args.sentence, self._args.number_results)
 
+        self._logger.debug('Showing results')
         for doc in documents:
             print("\n---------------------------------------")
             print(f"Sentence: {doc['content']}")
@@ -73,6 +78,7 @@ if __name__ == "__main__":
         exit(1)
 
     _logger = AppLogger.get_logger(PROGRAM_NAME)
+    _logger.info(' '.join(sys.argv))
 
     try:
         controller = CLIController()
