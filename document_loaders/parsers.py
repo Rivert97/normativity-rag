@@ -282,8 +282,9 @@ class OcrPage():
     of a document and provides functions to process it.
     """
 
-    def __init__(self, image: Image):
+    def __init__(self, image: Image, cache_file:str|None=None):
         self.image = image
+        self.cache_file = cache_file
 
         self.data = self.__get_data_from_image()
         self.width = self.data.loc[0, 'width']
@@ -345,7 +346,11 @@ class OcrPage():
         return self.data
 
     def __get_data_from_image(self):
-        data = pytesseract.image_to_data(self.image, lang='spa', output_type=pytesseract.Output.DATAFRAME)
+        if self.cache_file is not None and os.path.exists(self.cache_file):
+            data = pd.read_csv(self.cache_file, sep=',')
+        else:
+            data = pytesseract.image_to_data(self.image, lang='spa', output_type=pytesseract.Output.DATAFRAME)
+            data.to_csv(self.cache_file, sep=',', index=False)
 
         # Corregimos condición que detecta 'nan' en texto como NaN en float
         if len(data[data['text'].isna() & (data['conf'] != -1)]) > 0:
@@ -371,10 +376,9 @@ class OcrPdfParser():
 
     def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
         self.pdf_path = pdf_path
-        self.basename = os.path.basename(self.pdf_path).split('.')[0]
 
-        self.cache_subfolder = os.path.join(cache_dir, self.basename)
-        self.cache_validation_file = os.path.join(self.cache_subfolder, f'{self.basename}.md5')
+        file_md5 = hashlib.md5(open(self.pdf_path, 'rb').read()).hexdigest()
+        self.cache_subfolder = os.path.join(cache_dir, file_md5)
 
         if not self.__cache_is_valid():
             self.__create_cache()
@@ -390,7 +394,7 @@ class OcrPdfParser():
         # TODO: Verificar ordenamiento
         text = ""
         for page_path in sorted(pages_path):
-            data = pytesseract.image_to_data(Image.open(page_path), lang='spa', output_type=pytesseract.Output.DATAFRAME)
+            data = self.__get_data_from_image(page_path)
             text += '\n'.join(data.dropna().groupby(['block_num', 'par_num', 'line_num'])['text'].apply(' '.join).groupby(['block_num', 'par_num']).apply('\n'.join).groupby('block_num').apply('\n'.join)) + page_separator
 
         return text
@@ -404,32 +408,41 @@ class OcrPdfParser():
         pages_path = glob.glob(f'{self.cache_subfolder}/0001-*.jpg')
         # TODO: Verificar ordenamiento
         for page_path in sorted(pages_path):
-            yield OcrPage(Image.open(page_path))
+            basepath = os.path.splitext(page_path)[0]
+            yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
 
     def get_page(self, page_num: int) -> OcrPage:
-        return OcrPage(Image.open(f'{self.cache_subfolder}/0001-{page_num+1:02d}.jpg'))
+        basepath = f'{self.cache_subfolder}/0001-{page_num+1:02d}'
+        return OcrPage(Image.open(f'{basepath}.jpg'), f'{basepath}.csv')
 
     def __cache_is_valid(self) -> bool:
-        if not os.path.exists(self.cache_validation_file):
-            return False
-
-        with open(self.cache_validation_file, 'r') as f:
-            stored_md5 = f.read().strip()
-
-        new_md5 = hashlib.md5(open(self.pdf_path, 'rb').read()).hexdigest()
-
-        if stored_md5 == new_md5:
+        if os.path.exists(self.cache_subfolder):
             return True
         else:
             return False
 
     def __create_cache(self):
+        tmp_cache = f'{self.cache_subfolder}.tmp'
+
         if os.path.exists(self.cache_subfolder):
             shutil.rmtree(self.cache_subfolder)
+        if os.path.exists(tmp_cache):
+            shutil.rmtree(tmp_cache)
+
         os.makedirs(self.cache_subfolder, exist_ok=True)
+        os.makedirs(tmp_cache, exist_ok=True)
 
-        _ = pdf2image.convert_from_path(self.pdf_path, output_folder=self.cache_subfolder, fmt='jpeg', dpi=1000, output_file='')
-        new_md5 = hashlib.md5(open(self.pdf_path, 'rb').read()).hexdigest()
+        _ = pdf2image.convert_from_path(self.pdf_path, output_folder=tmp_cache, fmt='jpeg', dpi=1000, output_file='')
+        os.rename(tmp_cache, self.cache_subfolder) # Just to make shure all information is there
 
-        with open(self.cache_validation_file, 'w') as f:
-            f.write(new_md5)
+    def __get_data_from_image(self, image_path:str):
+        image_base_path = os.path.splitext(image_path)[0]
+        image_data_path = f'{image_base_path}.csv'
+
+        if os.path.exists(image_data_path):
+            data = pd.read_csv(image_data_path, sep=',')
+        else:
+            data = pytesseract.image_to_data(Image.open(image_path), lang='spa', output_type=pytesseract.Output.DATAFRAME)
+            data.to_csv(image_data_path, sep=',', index=False)
+
+        return data
