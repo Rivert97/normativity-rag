@@ -49,7 +49,7 @@ class CLIController():
         parser.add_argument('-o', '--output', default='', type=str, help='File or directory to store the output text file(s). When -d is used, this defaults to ./')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         parser.add_argument('-t', '--type', default='txt', choices=['txt', 'csv'], nargs='+', type=str, help='Type of output')
-        parser.add_argument('--version', action='store_true', help='Show version of this tool')
+        parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = parser.parse_args()
 

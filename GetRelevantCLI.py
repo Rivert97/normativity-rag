@@ -36,7 +36,7 @@ class CLIController():
         parser.add_argument('-d', '--database-dir', default='.db/', type=str, help='Database directory to be used')
         parser.add_argument('-e', '--embedder', default='all-MiniLM-L6-v2', type=str, help='Embeddings model to be used. Check SentenceTransformers doc for all the options (https://sbert.net/docs/sentence_transformer/pretrained_models.html)')
         parser.add_argument('-n', '--number-results', default=5, type=int, help='Number of relevant documents to retrieve')
-        parser.add_argument('--version', action='store_true', help='Show version of this tool')
+        parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = parser.parse_args()
 

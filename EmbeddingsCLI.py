@@ -66,7 +66,7 @@ class CLIController():
         parser.add_argument('-s', '--storage', default='csv', type=str, choices=['csv', 'chromadb'], help='Type of storage to be used for embeddings')
         parser.add_argument('--inner-splitter', default='paragraph', choices=['paragraph', 'section'], help='Once sections are detected by the splitter, indicates how the sections should be subdivided')
         parser.add_argument('-t', '--type', default='csv', choices=['csv', 'txt'], type=str, help='Type of input')
-        parser.add_argument('--version', action='store_true', help='Show version of this tool')
+        parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = parser.parse_args()
 
