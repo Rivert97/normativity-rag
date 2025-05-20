@@ -46,13 +46,13 @@ class CLIController():
         if args.collection == '':
             raise CLIException("Please specify a collection")
 
-        if os.path.exists(args.database_dir):
+        if not os.path.exists(args.database_dir):
             raise CLIException(f"Database folder '{args.database_dir}' not found")
 
         return args
 
     def run(self):
-        storage = ChromaDBStorage(self._args.embedder)
+        storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
         documents = storage.query_sentence(self._args.collection, self._args.sentence, self._args.number_results)
 
         for doc in documents:
