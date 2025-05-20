@@ -376,9 +376,10 @@ class OcrPdfParser():
 
     def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
         self.pdf_path = pdf_path
+        self.cache_dir = cache_dir
 
         file_md5 = hashlib.md5(open(self.pdf_path, 'rb').read()).hexdigest()
-        self.cache_subfolder = os.path.join(cache_dir, file_md5)
+        self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
 
         if not self.__cache_is_valid():
             self.__create_cache()
@@ -414,6 +415,17 @@ class OcrPdfParser():
     def get_page(self, page_num: int) -> OcrPage:
         basepath = f'{self.cache_subfolder}/0001-{page_num+1:02d}'
         return OcrPage(Image.open(f'{basepath}.jpg'), f'{basepath}.csv')
+
+    def clear_cache(self):
+        tmp_cache = f'{self.cache_subfolder}.tmp'
+
+        if os.path.exists(self.cache_subfolder):
+            shutil.rmtree(self.cache_subfolder)
+        if os.path.exists(tmp_cache):
+            shutil.rmtree(tmp_cache)
+
+        if not os.listdir(self.cache_dir):
+            os.rmdir(self.cache_dir)
 
     def __cache_is_valid(self) -> bool:
         if os.path.exists(self.cache_subfolder):

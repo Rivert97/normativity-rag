@@ -42,9 +42,10 @@ class CLIController():
             epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>'
         )
 
-        parser.add_argument('--cache-dir', default='./.cache/', type=str, help='Directory to be used as cache. Defaults to ./.cache/')
+        parser.add_argument('--cache-dir', default='./.cache', type=str, help='Directory to be used as cache. Defaults to ./.cache')
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
         parser.add_argument('-f', '--file', default='', type=str, help='File to be processed in single file mode')
+        parser.add_argument('-k', '--keep-cache', default=False, action='store_true', help='Keep Tesseract cache after processing. Usefull when the same file is going to be processed multiple times')
         parser.add_argument('-l', '--loader', default='mixed', type=str, choices=['mixed', 'text', 'ocr'], help='Type of loader to use. Defaults to mixed')
         parser.add_argument('-o', '--output', default='', type=str, help='File or directory to store the output text file(s). When -d is used, this defaults to ./')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
@@ -62,7 +63,8 @@ class CLIController():
         if args.file == '' and args.directory == '':
             raise CLIException("Please specify an input file or directory")
 
-        if not os.path.exists('/'.join(args.cache_dir.split('/')[:-1])):
+        args.cache_dir = args.cache_dir.rstrip('/')
+        if not os.path.exists(os.path.split(args.cache_dir)[0]):
             raise CLIException("Parent cache directory must exist")
 
         if args.directory != '':
@@ -89,6 +91,9 @@ class CLIController():
 
         pdf_loader = self.__get_loader(filename)
         self.__make_output(pdf_loader, output)
+
+        if not self._args.keep_cache:
+            pdf_loader.clear_cache()
 
     def __process_directory(self):
         for file in glob.glob(f'{self._args.directory}/*.pdf'):

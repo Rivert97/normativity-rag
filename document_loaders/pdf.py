@@ -58,6 +58,9 @@ class PyPDFMixedLoader():
     def get_document_data(self):
         return self.documentData
 
+    def clear_cache(self):
+        self.ocr_parser.clear_cache()
+
     def __merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, page_num: int = None):
         txt_words = pypdf_page.get_words(suffix='\n')
         ocr_words = ocr_page.get_words(suffix='\n')
@@ -290,6 +293,9 @@ class PyPDFLoader():
         page = self.parser.get_page(page_num)
         return page.get_text()
 
+    def clear_cache(self):
+        pass
+
 class OCRLoader():
     def __init__(self, file_path:str, cache_dir: str='./.cache'):
         self.parser = OcrPdfParser(file_path, cache_dir)
@@ -300,3 +306,6 @@ class OCRLoader():
     def get_page_text(self, page_num: int):
         page = self.parser.get_page(page_num)
         return page.get_raw_text()
+
+    def clear_cache(self):
+        self.parser.clear_cache()
