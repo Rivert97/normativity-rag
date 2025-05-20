@@ -59,7 +59,7 @@ class CLIController():
         parser.add_argument('-a', '--action', default='embeddings', choices=['embeddings', 'structure', 'tree'], type=str, help='Action to perform: "embeddings" to split the file and get the embeddings, "structure" to show file structure in console. "tree" to show an image of the tree of titles of the file. Default to embeddings')
         parser.add_argument('-c', '--collection', default='', type=str, help='In embeddings mode and storage is not csv, name of the collection where the embeddings should be stored')
         parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
-        parser.add_argument('--database-dir', default='.db/', type=str, help='Directory to store the database. Defaults to .db/')
+        parser.add_argument('--database-dir', default='./db', type=str, help='Directory to store the database. Defaults to ./db')
         parser.add_argument('-e', '--embedder', default='all-MiniLM-L6-v2', type=str, help='Embeddings model to be used. Check SentenceTransformers doc for all the options (https://sbert.net/docs/sentence_transformer/pretrained_models.html). Defaults to all-MiniLM-L6-v2')
         parser.add_argument('-f', '--file', default='', type=str, help='Path to file containing the data or text of the document')
         parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
