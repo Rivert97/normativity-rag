@@ -34,7 +34,7 @@ class CLIController():
         parser.add_argument('sentence', type=str, help='Reference sentence to retrieve similar documents')
 
         parser.add_argument('-c', '--collection', default='', type=str, help='Name of the collection to search in the database')
-        parser.add_argument('-d', '--database-dir', default='.db/', type=str, help='Database directory to be used. Defaults to .db/')
+        parser.add_argument('-d', '--database-dir', default='./db', type=str, help='Database directory to be used. Defaults to ./db')
         parser.add_argument('-e', '--embedder', default='all-MiniLM-L6-v2', type=str, help='Embeddings model to be used. Check SentenceTransformers doc for all the options (https://sbert.net/docs/sentence_transformer/pretrained_models.html). Defaults to all-MiniLM-L6-v2')
         parser.add_argument('-n', '--number-results', default=5, type=int, help='Number of relevant documents to retrieve. Defaults to 5')
         parser.add_argument('-v', '--version', action='version', version=VERSION)
