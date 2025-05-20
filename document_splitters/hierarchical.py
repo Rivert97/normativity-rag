@@ -1,4 +1,3 @@
-from typing import List, Tuple
 import pandas as pd
 import re
 import os
@@ -127,10 +126,10 @@ class TreeSplitter():
     def save_tree(self, filename:str):
         UniqueDotExporter(self.root).to_picture(filename)
 
-    def find_nearest_parent(self, nodes:List[DocNode], level:int):
+    def find_nearest_parent(self, nodes:list[DocNode], level:int):
         return next(node for node in nodes[level - 1::-1] if node is not None)
 
-    def clear_lower_children(self, nodes:List[DocNode], from_level:int):
+    def clear_lower_children(self, nodes:list[DocNode], from_level:int):
         for i in range(from_level + 1, len(nodes)):
             nodes[i] = None
 
@@ -256,7 +255,7 @@ class DataTreeSplitter(TreeSplitter):
 
             prev_y = bottom
 
-    def __handle_title_type_1(self, line_text:str, current_top:float, prev_y:float, current_nodes:List[DocNode], last_node:DocNode, prev_was_title:bool) -> Tuple[DocNode, bool]:
+    def __handle_title_type_1(self, line_text:str, current_top:float, prev_y:float, current_nodes:list[DocNode], last_node:DocNode, prev_was_title:bool) -> tuple[DocNode, bool]:
         if self.__element_is_vertically_separated(current_top, prev_y):
             title_level = self.detector.get_title_level(line_text)
             parent = self.find_nearest_parent(current_nodes, title_level)
@@ -269,7 +268,7 @@ class DataTreeSplitter(TreeSplitter):
 
         return last_node, prev_was_title
 
-    def __handle_content_line(self, line_text:str, current_nodes:List[DocNode], last_node:DocNode, future_title:str):
+    def __handle_content_line(self, line_text:str, current_nodes:list[DocNode], last_node:DocNode, future_title:str):
         level, name, content = self.detector.detect_content_header(line_text.lower())
         if level == -1:
             last_node.append_content(content)
@@ -326,9 +325,9 @@ class TextTreeSplitter(TreeSplitter):
                 last_node = new_node
 
 
-    def __find_nearest_parent(self, nodes:List[DocNode], level:int):
+    def __find_nearest_parent(self, nodes:list[DocNode], level:int):
         return next(node for node in nodes[level - 1::-1] if node is not None)
 
-    def __clear_lower_children(self, nodes:List[DocNode], from_level:int):
+    def __clear_lower_children(self, nodes:list[DocNode], from_level:int):
         for i in range(from_level + 1, len(nodes)):
             nodes[i] = None

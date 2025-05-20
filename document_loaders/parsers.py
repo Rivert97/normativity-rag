@@ -1,4 +1,4 @@
-from typing import List, Iterator, Dict
+from typing import Iterator
 from pypdf._page import PageObject
 
 import os
@@ -296,7 +296,7 @@ class OcrPage():
     def get_text(self) -> str:
         return '\n'.join(self.data.sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
-    def get_indices(self) -> List[int]:
+    def get_indices(self) -> list[int]:
         return list(self.data.sort_values(['line', 'left']).reset_index().groupby(['group', 'col_position', 'line'])['index'].agg(list).groupby(['group', 'col_position']).sum().groupby('group').sum().sum())
 
     def get_raw_text(self) -> str:
@@ -313,7 +313,7 @@ class OcrPage():
 
         return df_words
 
-    def get_raw_words(self, suffix = '') -> List[str]:
+    def get_raw_words(self, suffix = '') -> list[str]:
         return [f'{w}{suffix}' for w in self.data.dropna()['text']]
 
     def show_detection(self, level=2):

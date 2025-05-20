@@ -1,4 +1,3 @@
-from typing import Tuple
 import argparse
 import os
 import glob

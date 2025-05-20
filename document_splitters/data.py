@@ -1,8 +1,6 @@
-from typing import Dict
-
 class Document:
 
-    def __init__(self, content:str, metadata:Dict={}):
+    def __init__(self, content:str, metadata:dict={}):
         self.content = content
         self.metadata = metadata
 

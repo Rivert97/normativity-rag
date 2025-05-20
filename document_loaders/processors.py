@@ -1,4 +1,3 @@
-from typing import List
 import re
 
 def remove_hyphens(text: str) -> str:
@@ -32,7 +31,7 @@ def remove_hyphens(text: str) -> str:
     return "\n".join(lines)
 
 
-def dehyphenate_end(lines: List[str], line_no: int) -> List[str]:
+def dehyphenate_end(lines: list[str], line_no: int) -> list[str]:
     next_line = lines[line_no + 1]
     word_suffix = next_line.split(" ")[0]
 
@@ -43,7 +42,7 @@ def dehyphenate_end(lines: List[str], line_no: int) -> List[str]:
     lines[line_no + 1] = lines[line_no + 1][len(word_suffix) + 1:]
     return lines
 
-def dehyphenate_start(lines: List[str], line_no: int) -> List[str]:
+def dehyphenate_start(lines: list[str], line_no: int) -> list[str]:
     if lines[line_no].startswith("- "):
         word_suffix = lines[line_no].split(" ")[1]
         suffix_offset = 3
