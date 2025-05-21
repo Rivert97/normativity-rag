@@ -372,11 +372,14 @@ class OcrPdfParser():
     :type pdf_path: str
     :param cache_dir: Path to the directory to be used as cache.
     :type cache_dir: str
+    :param keep_cache: True to keep the cache of images and Tessearct data. Defaults to False.
+    :type keep_cache: bool
     """
 
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache', keep_cache:bool = False):
         self.pdf_path = pdf_path
         self.cache_dir = cache_dir
+        self.keep_cache = keep_cache
 
         file_md5 = hashlib.md5(open(self.pdf_path, 'rb').read()).hexdigest()
         self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
@@ -384,6 +387,10 @@ class OcrPdfParser():
         if not self.__cache_is_valid():
             self.__create_cache()
         #TODO: Guardar arreglos numpy de datos en lugar de imagenes (?)
+
+    def __del__(self):
+        if not self.keep_cache:
+            self.clear_cache()
 
     def get_text(self, page_separator: str = '\n') -> str:
         """Return text detected in PDF as Tesseract detects it.
