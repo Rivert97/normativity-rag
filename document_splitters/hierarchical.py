@@ -45,6 +45,12 @@ class DocNode(NodeMixin):
         else:
             self.content += "\n" + content
 
+    def prepend_content(self, content:str):
+        if self.content == '':
+            self.content = content
+        else:
+            self.content = content + "\n" + self.content
+
     def get_content(self, remove_hypens:bool=True):
         if remove_hypens:
             return re.sub(r' ?- ?\n', '', self.content)
@@ -271,6 +277,9 @@ class DataTreeSplitter(TreeSplitter):
     def __handle_content_line(self, line_text:str, current_nodes:list[DocNode], last_node:DocNode, future_title:str):
         level, name, content = self.detector.detect_content_header(line_text.lower())
         if level == -1:
+            if future_title != '':
+                last_node.prepend_content(future_title)
+                future_title = ''
             last_node.append_content(content)
         else:
             parent = self.find_nearest_parent(current_nodes, level)
