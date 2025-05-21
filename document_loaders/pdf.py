@@ -12,23 +12,26 @@ class PyPDFMixedLoader():
 
     :param cache_dir: Path to the dir to be used as cache.
     :type cache_dir: str
+    :param keep_cache: True to keep the cache of images and Tessearct data. Defaults to False.
+    :type keep_cache: bool
     """
 
-    def __init__(self, cache_dir: str = './.cache'):
+    def __init__(self, cache_dir: str = './.cache', keep_cache: bool=False):
         self.cache_dir = cache_dir
+        self.keep_cache = keep_cache
 
         self.documentData = PdfDocumentData()
 
     def load(self, pdf_path: str):
         self.text_parser = PypdfParser(pdf_path)
-        self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir)
+        self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
 
         for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
             self.__merge_pages(pypdf_page, ocr_page)
 
     def load_page(self, pdf_path:str, page_num: int):
         self.text_parser = PypdfParser(pdf_path)
-        self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir)
+        self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
 
         pypdf_page = self.text_parser.get_page(page_num)
         ocr_page = self.ocr_parser.get_page(page_num)
@@ -57,6 +60,9 @@ class PyPDFMixedLoader():
 
     def get_document_data(self):
         return self.documentData
+
+    def clear_cache(self):
+        self.ocr_parser.clear_cache()
 
     def __merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, page_num: int = None):
         txt_words = pypdf_page.get_words(suffix='\n')
@@ -290,13 +296,26 @@ class PyPDFLoader():
         page = self.parser.get_page(page_num)
         return page.get_text()
 
+    def clear_cache(self):
+        pass
+
 class OCRLoader():
-    def __init__(self, file_path:str, cache_dir: str='./.cache'):
-        self.parser = OcrPdfParser(file_path, cache_dir)
+    def __init__(self, file_path:str, cache_dir: str='./.cache', keep_cache: bool = False):
+        self.parser = OcrPdfParser(file_path, cache_dir, keep_cache)
 
     def get_text(self):
-        return self.parser.get_text()
+        return self.parser.get_text(remove_headers=True)
 
     def get_page_text(self, page_num: int):
         page = self.parser.get_page(page_num)
         return page.get_raw_text()
+
+    def get_document_data(self):
+        documentData = PdfDocumentData()
+        for page in self.parser.get_pages():
+            documentData.add_page(page.get_data())
+
+        return documentData
+
+    def clear_cache(self):
+        self.parser.clear_cache()

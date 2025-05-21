@@ -1,0 +1,20 @@
+db:
+  directory: ~/99_Normativa
+
+  settings:
+    cache_dir: ./.cache
+    database_dir: ./db
+    keep_cache: True
+
+  collections:
+    NORM_001:
+      embedder: all-MiniLM-L6-v2
+      extraction_type: data
+      inner_splitter: paragraph
+      loader: mixed
+
+    NORM_002:
+      embedder: all-MiniLM-L6-v2
+      extraction_type: text
+      inner_splitter: section
+      loader: mixed

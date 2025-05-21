@@ -1,4 +1,4 @@
-from typing import List, Iterator, Dict
+from typing import Iterator
 from pypdf._page import PageObject
 
 import os
@@ -282,8 +282,16 @@ class OcrPage():
     of a document and provides functions to process it.
     """
 
-    def __init__(self, image: Image):
+    def __init__(self, image: Image, cache_file:str|None=None):
         self.image = image
+        self.cache_file = cache_file
+
+        self.boundaries = {
+            'left': 0.05,
+            'top': 0.1,
+            'right': 0.95,
+            'bottom': 0.95,
+        }
 
         self.data = self.__get_data_from_image()
         self.width = self.data.loc[0, 'width']
@@ -293,10 +301,13 @@ class OcrPage():
         reconstructor = DataReconstructor(self.data)
         self.data = reconstructor.get_reconstructed()
 
-    def get_text(self) -> str:
-        return '\n'.join(self.data.sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
+    def get_text(self, remove_headers: bool=False) -> str:
+        if remove_headers:
+            return '\n'.join(self.data[(self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['right'] < self.boundaries['right']) & (self.data['bottom'] < self.boundaries['bottom'])].sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
+        else:
+            return '\n'.join(self.data.sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
-    def get_indices(self) -> List[int]:
+    def get_indices(self) -> list[int]:
         return list(self.data.sort_values(['line', 'left']).reset_index().groupby(['group', 'col_position', 'line'])['index'].agg(list).groupby(['group', 'col_position']).sum().groupby('group').sum().sum())
 
     def get_raw_text(self) -> str:
@@ -313,7 +324,7 @@ class OcrPage():
 
         return df_words
 
-    def get_raw_words(self, suffix = '') -> List[str]:
+    def get_raw_words(self, suffix = '') -> list[str]:
         return [f'{w}{suffix}' for w in self.data.dropna()['text']]
 
     def show_detection(self, level=2):
@@ -345,7 +356,11 @@ class OcrPage():
         return self.data
 
     def __get_data_from_image(self):
-        data = pytesseract.image_to_data(self.image, lang='spa', output_type=pytesseract.Output.DATAFRAME)
+        if self.cache_file is not None and os.path.exists(self.cache_file):
+            data = pd.read_csv(self.cache_file, sep=',')
+        else:
+            data = pytesseract.image_to_data(self.image, lang='spa', output_type=pytesseract.Output.DATAFRAME)
+            data.to_csv(self.cache_file, sep=',', index=False)
 
         # Corregimos condición que detecta 'nan' en texto como NaN en float
         if len(data[data['text'].isna() & (data['conf'] != -1)]) > 0:
@@ -367,31 +382,29 @@ class OcrPdfParser():
     :type pdf_path: str
     :param cache_dir: Path to the directory to be used as cache.
     :type cache_dir: str
+    :param keep_cache: True to keep the cache of images and Tessearct data. Defaults to False.
+    :type keep_cache: bool
     """
 
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache'):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache', keep_cache:bool = False):
         self.pdf_path = pdf_path
-        self.basename = os.path.basename(self.pdf_path).split('.')[0]
+        self.cache_dir = cache_dir
+        self.keep_cache = keep_cache
 
-        self.cache_subfolder = os.path.join(cache_dir, self.basename)
-        self.cache_validation_file = os.path.join(self.cache_subfolder, f'{self.basename}.md5')
+        file_md5 = hashlib.md5(open(self.pdf_path, 'rb').read()).hexdigest()
+        self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
 
         if not self.__cache_is_valid():
             self.__create_cache()
-        #TODO: Guardar arreglos numpy de datos en lugar de imagenes (?)
 
-    def get_text(self, page_separator: str = '\n') -> str:
-        """Return text detected in PDF as Tesseract detects it.
+    def __del__(self):
+        if not self.keep_cache:
+            self.clear_cache()
 
-        :return: String of text contained in the file
-        :rtype: str
-        """
-        pages_path = glob.glob(f'{self.cache_subfolder}/0001-*.jpg')
-        # TODO: Verificar ordenamiento
+    def get_text(self, page_separator: str = '\n', remove_headers:bool = False) -> str:
         text = ""
-        for page_path in sorted(pages_path):
-            data = pytesseract.image_to_data(Image.open(page_path), lang='spa', output_type=pytesseract.Output.DATAFRAME)
-            text += '\n'.join(data.dropna().groupby(['block_num', 'par_num', 'line_num'])['text'].apply(' '.join).groupby(['block_num', 'par_num']).apply('\n'.join).groupby('block_num').apply('\n'.join)) + page_separator
+        for page in self.get_pages():
+            text += page.get_text(remove_headers) + page_separator
 
         return text
 
@@ -404,32 +417,52 @@ class OcrPdfParser():
         pages_path = glob.glob(f'{self.cache_subfolder}/0001-*.jpg')
         # TODO: Verificar ordenamiento
         for page_path in sorted(pages_path):
-            yield OcrPage(Image.open(page_path))
+            basepath = os.path.splitext(page_path)[0]
+            yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
 
     def get_page(self, page_num: int) -> OcrPage:
-        return OcrPage(Image.open(f'{self.cache_subfolder}/0001-{page_num+1:02d}.jpg'))
+        basepath = f'{self.cache_subfolder}/0001-{page_num+1:02d}'
+        return OcrPage(Image.open(f'{basepath}.jpg'), f'{basepath}.csv')
+
+    def clear_cache(self):
+        tmp_cache = f'{self.cache_subfolder}.tmp'
+
+        if os.path.exists(self.cache_subfolder):
+            shutil.rmtree(self.cache_subfolder)
+        if os.path.exists(tmp_cache):
+            shutil.rmtree(tmp_cache)
+
+        if not os.listdir(self.cache_dir):
+            os.rmdir(self.cache_dir)
 
     def __cache_is_valid(self) -> bool:
-        if not os.path.exists(self.cache_validation_file):
-            return False
-
-        with open(self.cache_validation_file, 'r') as f:
-            stored_md5 = f.read().strip()
-
-        new_md5 = hashlib.md5(open(self.pdf_path, 'rb').read()).hexdigest()
-
-        if stored_md5 == new_md5:
+        if os.path.exists(self.cache_subfolder):
             return True
         else:
             return False
 
     def __create_cache(self):
+        tmp_cache = f'{self.cache_subfolder}.tmp'
+
         if os.path.exists(self.cache_subfolder):
             shutil.rmtree(self.cache_subfolder)
+        if os.path.exists(tmp_cache):
+            shutil.rmtree(tmp_cache)
+
         os.makedirs(self.cache_subfolder, exist_ok=True)
+        os.makedirs(tmp_cache, exist_ok=True)
 
-        _ = pdf2image.convert_from_path(self.pdf_path, output_folder=self.cache_subfolder, fmt='jpeg', dpi=1000, output_file='')
-        new_md5 = hashlib.md5(open(self.pdf_path, 'rb').read()).hexdigest()
+        _ = pdf2image.convert_from_path(self.pdf_path, output_folder=tmp_cache, fmt='jpeg', dpi=1000, output_file='')
+        os.rename(tmp_cache, self.cache_subfolder) # Just to make shure all information is there
 
-        with open(self.cache_validation_file, 'w') as f:
-            f.write(new_md5)
+    def __get_data_from_image(self, image_path:str):
+        image_base_path = os.path.splitext(image_path)[0]
+        image_data_path = f'{image_base_path}.csv'
+
+        if os.path.exists(image_data_path):
+            data = pd.read_csv(image_data_path, sep=',')
+        else:
+            data = pytesseract.image_to_data(Image.open(image_path), lang='spa', output_type=pytesseract.Output.DATAFRAME)
+            data.to_csv(image_data_path, sep=',', index=False)
+
+        return data
