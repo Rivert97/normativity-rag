@@ -5,6 +5,7 @@ import glob
 import sys
 
 from utils.logger import AppLogger
+from utils.exceptions import CLIException
 from document_loaders.representations import PdfDocumentData
 from document_splitters.hierarchical import TreeSplitter, DataTreeSplitter, TextTreeSplitter
 from embeddings.embedders import STEmbedder
@@ -14,10 +15,6 @@ dotenv.load_dotenv()
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
-
-class CLIException(Exception):
-    def __init__(self, message):
-        super().__init__(f"{PROGRAM_NAME} ERROR: {message}")
 
 class CLIController():
     """This class controls the execution of the program when using

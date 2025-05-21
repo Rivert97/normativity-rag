@@ -286,6 +286,13 @@ class OcrPage():
         self.image = image
         self.cache_file = cache_file
 
+        self.boundaries = {
+            'left': 0.05,
+            'top': 0.1,
+            'right': 0.95,
+            'bottom': 0.95,
+        }
+
         self.data = self.__get_data_from_image()
         self.width = self.data.loc[0, 'width']
         self.height = self.data.loc[0, 'height']
@@ -294,8 +301,11 @@ class OcrPage():
         reconstructor = DataReconstructor(self.data)
         self.data = reconstructor.get_reconstructed()
 
-    def get_text(self) -> str:
-        return '\n'.join(self.data.sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
+    def get_text(self, remove_headers: bool=False) -> str:
+        if remove_headers:
+            return '\n'.join(self.data[(self.data['left'] > self.boundaries['left']) & (self.data['top'] > self.boundaries['top']) & (self.data['right'] < self.boundaries['right']) & (self.data['bottom'] < self.boundaries['bottom'])].sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
+        else:
+            return '\n'.join(self.data.sort_values(['line', 'left']).groupby(['group', 'col_position', 'line'])['text'].apply(' '.join).groupby(['group', 'col_position']).apply('\n'.join).groupby('group').apply('\n'.join))
 
     def get_indices(self) -> list[int]:
         return list(self.data.sort_values(['line', 'left']).reset_index().groupby(['group', 'col_position', 'line'])['index'].agg(list).groupby(['group', 'col_position']).sum().groupby('group').sum().sum())
@@ -386,24 +396,15 @@ class OcrPdfParser():
 
         if not self.__cache_is_valid():
             self.__create_cache()
-        #TODO: Guardar arreglos numpy de datos en lugar de imagenes (?)
 
     def __del__(self):
         if not self.keep_cache:
             self.clear_cache()
 
-    def get_text(self, page_separator: str = '\n') -> str:
-        """Return text detected in PDF as Tesseract detects it.
-
-        :return: String of text contained in the file
-        :rtype: str
-        """
-        pages_path = glob.glob(f'{self.cache_subfolder}/0001-*.jpg')
-        # TODO: Verificar ordenamiento
+    def get_text(self, page_separator: str = '\n', remove_headers:bool = False) -> str:
         text = ""
-        for page_path in sorted(pages_path):
-            data = self.__get_data_from_image(page_path)
-            text += '\n'.join(data.dropna().groupby(['block_num', 'par_num', 'line_num'])['text'].apply(' '.join).groupby(['block_num', 'par_num']).apply('\n'.join).groupby('block_num').apply('\n'.join)) + page_separator
+        for page in self.get_pages():
+            text += page.get_text(remove_headers) + page_separator
 
         return text
 

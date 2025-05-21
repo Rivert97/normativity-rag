@@ -90,10 +90,10 @@ to load PDF file and combine plain text and OCR information to get the embedding
     from embeddings.embedders import AllMiniLM
     from embeddings.storage import ChromaDBStorage
 
-    pdf_loader = PyPDFMixedLoader("/path/to/file.pdf")
+    pdf_loader = PyPDFMixedLoader()
 
     # Load file and merge all information
-    pdf_loader.load(filename)
+    pdf_loader.load("/path/to/file.pdf")
 
     # Get document data as PdfDocumentData
     data = pdf_loader.get_document_data()

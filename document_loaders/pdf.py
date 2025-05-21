@@ -304,11 +304,18 @@ class OCRLoader():
         self.parser = OcrPdfParser(file_path, cache_dir, keep_cache)
 
     def get_text(self):
-        return self.parser.get_text()
+        return self.parser.get_text(remove_headers=True)
 
     def get_page_text(self, page_num: int):
         page = self.parser.get_page(page_num)
         return page.get_raw_text()
+
+    def get_document_data(self):
+        documentData = PdfDocumentData()
+        for page in self.parser.get_pages():
+            documentData.add_page(page.get_data())
+
+        return documentData
 
     def clear_cache(self):
         self.parser.clear_cache()
