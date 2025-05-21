@@ -123,7 +123,6 @@ class CLIController():
         self._logger.info('Obtaining file structure')
         splitter.analyze()
         sentences, metadatas = self.__extract_info(splitter)
-        import pdb; pdb.set_trace()
 
         self._logger.info('Storing file info into Chromadb')
         storage = ChromaDBStorage(embedder, database_dir)
