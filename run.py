@@ -106,17 +106,18 @@ class CLIController():
     def __process_file(self, filename: str, loader: str, cache_dir: str, keep_cache: str, extraction_type: str, embedder: str, database_dir: str, collection:str):
         self._logger.info(f'Processing file {filename}')
 
+        basename = os.path.splitext(os.path.split(filename)[-1])[0]
         pdf_loader = self.__get_loader(filename, loader, cache_dir, keep_cache)
         if extraction_type == 'text':
             self._logger.info('Extracting text from file')
 
             text = pdf_loader.get_text()
-            splitter = TextTreeSplitter(text, filename)
+            splitter = TextTreeSplitter(text, basename)
         elif extraction_type == 'data':
             self._logger.info('Extracting data from file')
 
             data = pdf_loader.get_document_data()
-            splitter = DataTreeSplitter(data.get_data(remove_headers=True), filename)
+            splitter = DataTreeSplitter(data.get_data(remove_headers=True), basename)
         else:
             raise CLIException(f"Invalid extraction type '{extraction_type}'")
 

@@ -176,22 +176,24 @@ class CLIController():
 
         document_data = PdfDocumentData()
         document_data.load_data(filename)
+        basename = os.path.splitext(os.path.split(filename)[-1])[0]
         if self._args.page != None:
-            splitter = DataTreeSplitter(document_data.get_page_data(self._args.page, remove_headers=True), filename)
+            splitter = DataTreeSplitter(document_data.get_page_data(self._args.page, remove_headers=True), basename)
         else:
-            splitter = DataTreeSplitter(document_data.get_data(remove_headers=True), filename)
+            splitter = DataTreeSplitter(document_data.get_data(remove_headers=True), basename)
 
         splitter.analyze()
 
         return splitter
 
     def __load_and_split_txt(self, filename:str) -> TextTreeSplitter:
-        self._logger.inf('Loading text data')
+        self._logger.info('Loading text data')
 
+        basename = os.path.splitext(os.path.split(filename)[-1])[0]
         with open(filename, 'r') as f:
             file_content = f.read()
 
-        splitter = TextTreeSplitter(file_content, filename)
+        splitter = TextTreeSplitter(file_content, basename)
         splitter.analyze()
 
         return splitter
