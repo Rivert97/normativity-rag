@@ -18,4 +18,3 @@ db:
       extraction_type: text
       inner_splitter: section
       loader: mixed
-
