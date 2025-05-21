@@ -44,9 +44,9 @@ class CLIController():
 
     def run(self):
         if self._args.file != '':
-            self.__process_file(self._args.file)
+            self.__process_file(self._args.file, self._args.loader, self._args.cache_dir, self._args.keep_cache, self._args.extraction_type, self._args.embedder, self._args.database_dir, self._args.collection)
         elif self._args.directory != '':
-            self.__process_directory(self._args.directory)
+            self.__process_directory(self._args.directory, self._args.loader, self._args.cache_dir, self._args.keep_cache, self._args.extraction_type, self._args.embedder, self._args.database_dir, self._args.collection)
         elif self._args.settings_file != '':
             self.__process_yaml(self._args.settings_file)
         else:
@@ -74,6 +74,10 @@ class CLIController():
 
         args = parser.parse_args()
 
+        # If a settings file is used, all arguments are ignored
+        if args.settings_file != '':
+            return args
+
         if args.file != '' and not os.path.exists(args.file):
             raise CLIException(f"Input file '{args.file}' not found")
 
@@ -99,63 +103,66 @@ class CLIController():
 
         return args
 
-    def __process_file(self, filename: str):
+    def __process_file(self, filename: str, loader: str, cache_dir: str, keep_cache: str, extraction_type: str, embedder: str, database_dir: str, collection:str):
         self._logger.info(f'Processing file {filename}')
 
-        pdf_loader = self.__get_loader(filename)
-        if self._args.extraction_type == 'text':
+        pdf_loader = self.__get_loader(filename, loader, cache_dir, keep_cache)
+        if extraction_type == 'text':
             self._logger.info('Extracting text from file')
 
             text = pdf_loader.get_text()
             splitter = TextTreeSplitter(text, filename)
-        elif self._args.extraction_type == 'data':
+        elif extraction_type == 'data':
             self._logger.info('Extracting data from file')
 
             data = pdf_loader.get_document_data()
             splitter = DataTreeSplitter(data.get_data(remove_headers=True), filename)
         else:
-            raise CLIException(f"Invalid extraction type '{self._args.extraction_type}'")
+            raise CLIException(f"Invalid extraction type '{extraction_type}'")
 
         self._logger.info('Obtaining file structure')
         splitter.analyze()
         sentences, metadatas = self.__extract_info(splitter)
 
         self._logger.info('Storing file info into Chromadb')
-        storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
-        storage.save_info(self._args.collection, sentences, metadatas)
+        storage = ChromaDBStorage(embedder, database_dir)
+        storage.save_info(collection, sentences, metadatas)
 
         self._logger.info(f'File {filename} processed')
 
-    def __process_directory(self, directory:str):
+    def __process_directory(self, directory:str, loader:str, cache_dir:str, keep_cache:str, extraction_type:str, embedder:str, database_dir:str, collection:str):
         self._logger.info(f'Processing directory {directory}')
         for file in glob.glob(os.path.join(directory, '*.pdf')):
-            self.__process_file(file)
+            self.__process_file(file, loader, cache_dir, keep_cache, extraction_type, embedder, database_dir, collection)
 
     def __process_yaml(self, yaml_file:str):
-        pass
+        yaml_settings = self.__load_settings(yaml_file)
+        self.__validate_and_fill_settings(yaml_settings)
 
-    def __get_loader(self, filename:str):
-        self._logger.info(f'Using "{self._args.loader}" loader')
+        settings = yaml_settings['db']['settings']
+        if 'directory' in yaml_settings['db']:
+            for collection, params in yaml_settings['db']['collections'].items():
+                self.__process_directory(yaml_settings['db']['directory'], params['loader'], settings['cache_dir'], settings['keep_cache'], params['extraction_type'], params['embedder'], settings['database_dir'], collection)
+        elif 'file' in yaml_settings['db']:
+            for collection, params in yaml_settings['db']['collections'].items():
+                self.__process_file(yaml_settings['db']['file'], params['loader'], settings['cache_dir'], settings['keep_cache'], params['extraction_type'], params['embedder'], settings['database_dir'], collection)
+        else:
+            raise CLIException("No file or directory to process was specified in settings file")
 
-        if self._args.loader == 'mixed':
-            pdf_loader = PyPDFMixedLoader(self._args.cache_dir, self._args.keep_cache)
+    def __get_loader(self, filename:str, loader:str, cache_dir:str, keep_cache:bool):
+        self._logger.info(f'Using "{loader}" loader')
+
+        if loader == 'mixed':
+            pdf_loader = PyPDFMixedLoader(cache_dir, keep_cache)
             pdf_loader.load(filename)
-        elif self._args.loader == 'text':
+        elif loader == 'text':
             pdf_loader = PyPDFLoader(filename)
-        elif self._args.loader == 'ocr':
-            pdf_loader = OCRLoader(filename, self._args.cache_dir, self._args.keep_cache)
+        elif loader == 'ocr':
+            pdf_loader = OCRLoader(filename, cache_dir, keep_cache)
         else:
             raise CLIException("Invalid type of loader")
 
         return pdf_loader
-
-    def __get_documents_from_text(self, text:str, name:str):
-        splitter = TextTreeSplitter(text, name)
-        splitter.analyze()
-        sentences, metadatas = self.__extract_info(splitter)
-
-    def __get_documents_from_data(self):
-        pass
 
     def __extract_info(self, splitter:TreeSplitter):
         sentences = []
@@ -167,66 +174,75 @@ class CLIController():
 
         return sentences, metadatas
 
-    def __load_settings(self):
+    def __load_settings(self, settings_file: str):
         try:
-            with open(self._args.settings_file, 'r') as f:
+            with open(settings_file, 'r') as f:
                 settings = yaml.safe_load(f)
         except yaml.scanner.ScannerError as e:
             self._logger.error(e)
-            raise CLIException(f'{self._args.settings_file} is not a YAML file')
+            raise CLIException(f'{settings_file} is not a YAML file')
 
         return settings
 
-    def __validate_settings(self):
+    def __validate_and_fill_settings(self, settings):
         # Validate root node
-        db = self._settings.get('db', None)
+        db = settings.get('db', None)
         if db is None:
-            raise CLIException('"db" root node not found in settings file')
+            raise CLIException("'db' root node not found in settings file")
+
+        # Validate directory or file
+        if 'file' not in db and 'directory' not in db:
+            raise CLIException("No file or directory to process was found in settings file")
+        if 'file' in db and not os.path.exists(db['file']):
+            raise CLIException(f"File '{db['file']}' not found")
+        if 'directory' in db and not os.path.exists(db['directory']):
+            raise CLIException(f"Directory '{db['directory']}' not found")
 
         # Validate settings node
         settings = db.get('settings', None)
         if settings is None:
-            raise CLIException('"settings" node not found in settings file')
+            raise CLIException("'settings' node not found in settings file")
+
+        # Validate cache directory
+        if 'cache_dir' not in settings:
+            settings['cache_dir'] = DEFAULTS['cache_dir']
+        basedir = os.path.split(settings['cache_dir'])[0]
+        if not os.path.exists(basedir):
+            raise CLIException("Cache parent directory should exist")
 
         # Validate database directory
-        if 'db-dir' not in settings:
-            raise CLIException('"db-dir" not found in settings node')
-        basedir = os.path.split(settings['db-dir'])[0]
+        if 'database_dir' not in settings:
+            settings['database_dir'] = DEFAULTS['database_dir']
+        basedir = os.path.split(settings['database_dir'])[0]
         if not os.path.exists(basedir):
-            raise CLIException('Database parent directory should exist')
+            raise CLIException("Database parent directory should exist")
 
-        # Validate source directory
-        if 'directory' not in settings:
-            raise CLIException('"directory" not found in settings node')
-        if not os.path.exists(settings['directory']):
-            raise CLIException(f'Direcotry {settings['directory']} not found')
+        # Validate keep cache flag
+        if 'keep_cache' not in settings:
+            settings['keep_cache'] = DEFAULTS['keep_cache']
 
         # Validating each collection node
         collections = db.get('collections', None)
         if collections is None:
-            raise CLIException('No collections specified')
+            raise CLIException("No collections were specified")
         for collection, params in collections.items():
-            loader = params.get('loader', None)
-            if loader is None:
-                raise CLIException(f'No loader specified in collection "{collection}"')
-            if loader not in LOADERS:
-                raise CLIException(f'Invalid loader "{loader}" in collection "{collection}"')
+            if 'embedder' not in params:
+                params['embedder'] = DEFAULTS['embedder']
 
-            inner_splitter = params.get('inner-splitter', None)
-            if inner_splitter is None:
-                raise CLIException(f'No inner-splitter specified in collection "{collection}"')
-            if inner_splitter not in INNER_SPLITTERS:
-                raise CLIException(f'Invalid inner-splitter "{inner_splitter}" in colleciton "{collection}"')
+            if 'extraction_type' not in params:
+                params['extraction_type'] = DEFAULTS['extraction_type']
+            if params['extraction_type'] not in EXTRACTION_TYPES:
+                raise CLIException(f"Invalid extraction_type '{params['extraction_type']}'")
 
-            model = params.get('model', None)
-            if model is None:
-                raise CLIException(f'No model specified in collection "{collection}"')
+            if 'inner_splitter' not in params:
+                params['inner_splitter'] = DEFAULTS['inner_splitter']
+            if params['inner_splitter'] not in INNER_SPLITTERS:
+                raise CLIException(f"Invalid inner_splitter '{params['inner_splitter']}'")
 
-    def __create_collection(self, name:str, parameters:dict[str, str], settings:dict[str, str]):
-        for file in glob.glob(os.path.join(settings['directory'], '*.pdf')):
-            pdf_loader = LOADERS[parameters['loader']]()
-            pdf_loader.load(file)
-
+            if 'loader' not in params:
+                params['loader'] = DEFAULTS['loader']
+            if params['loader'] not in LOADERS:
+                raise CLIException(f"Invalid loader '{params['loader']}'")
 
 if __name__ == "__main__":
     try:
