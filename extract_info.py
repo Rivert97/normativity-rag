@@ -9,23 +9,19 @@ import os
 import glob
 import sys
 
-import dotenv
-
 from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
-from utils.logger import AppLogger
+from utils.controllers import CLI
 from utils.exceptions import CLIException
-
-dotenv.load_dotenv()
 
 PROGRAM_NAME = 'ExtractorCLI'
 VERSION = '1.00.00'
 
-class CLIController():
+class CLIController(CLI):
     """This class controls the execution of the program when using
     CLI.
     """
     def __init__(self):
-        self._logger = AppLogger.get_logger(PROGRAM_NAME)
+        super().__init__(PROGRAM_NAME)
 
         self.print_to_console = True
 
@@ -199,22 +195,9 @@ class CLIController():
 
 if __name__ == "__main__":
     try:
-        AppLogger.setup_root_logger(
-            int(os.getenv('LOG_LEVEL', '20')),
-            os.getenv('LOG_FILE', f"{PROGRAM_NAME}.log"),
-            int(os.getenv('LOG_CONSOLE', '0'))
-        )
-    except ValueError as e:
-        print(f"Environment variables file is corrupted: {e}")
-        sys.exit(1)
-
-    _logger = AppLogger.get_logger(PROGRAM_NAME)
-    _logger.info(' '.join(sys.argv))
-
-    try:
         controller = CLIController()
         controller.run()
     except CLIException as e:
         print(e)
-        _logger.error(e)
+        controller.get_logger().error(e)
         sys.exit(1)
