@@ -37,7 +37,6 @@ class CLI:
 
     def run(self):
         """Run the script logic."""
-        pass
 
     def get_logger(self):
         """Get the logger handler."""
