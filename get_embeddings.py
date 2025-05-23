@@ -25,7 +25,7 @@ class CLIController(CLI):
 
         Create the logger for the script and process the CLI arguments.
         """
-        super().__init__(PROGRAM_NAME)
+        super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
         self.print_to_console = True
         self.storage = None
@@ -33,9 +33,7 @@ class CLIController(CLI):
 
         self._args = self.__process_args()
 
-        self.__run()
-
-    def __run(self):
+    def run(self):
         """Run the script logic."""
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output, self._args.type)
@@ -55,13 +53,7 @@ class CLIController(CLI):
             self.__process_file(file, out_name, self._args.type)
 
     def __process_args(self) -> argparse.Namespace:
-        parser = argparse.ArgumentParser(
-            prog=PROGRAM_NAME,
-            description=__doc__,
-            epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>',
-            formatter_class=argparse.RawDescriptionHelpFormatter)
-
-        parser.add_argument('-a', '--action',
+        self.parser.add_argument('-a', '--action',
                             default='embeddings',
                             choices=['embeddings', 'structure', 'tree'],
                             type=str,
@@ -72,22 +64,22 @@ class CLIController(CLI):
                                 tree: Show an image of the tree of titles of the file.
                                 Defaults to embeddings
                                 ''')
-        parser.add_argument('-c', '--collection',
+        self.parser.add_argument('-c', '--collection',
                             default='',
                             type=str,
                             help='''
                                 When using embeddings action and storage is not csv,
                                 name of the collection where the embeddings should be stored
                                 ''')
-        parser.add_argument('-d', '--directory',
+        self.parser.add_argument('-d', '--directory',
                             default='',
                             type=str,
                             help='Directory to be processed in directory mode')
-        parser.add_argument('--database-dir',
+        self.parser.add_argument('--database-dir',
                             default='./db',
                             type=str,
                             help='Directory to store the database. Defaults to ./db')
-        parser.add_argument('-e', '--embedder',
+        self.parser.add_argument('-e', '--embedder',
                             default='all-MiniLM-L6-v2',
                             type=str,
                             help='''
@@ -96,32 +88,32 @@ class CLIController(CLI):
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
                                 ). Defaults to all-MiniLM-L6-v2
                                 ''')
-        parser.add_argument('-f', '--file',
+        self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
                             help='Path to file containing the data or text of the document')
-        parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
-        parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
-        parser.add_argument('-s', '--storage',
+        self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
+        self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
+        self.parser.add_argument('-s', '--storage',
                             default='csv',
                             type=str,
                             choices=['csv', 'chromadb'],
                             help='Type of storage to be used for embeddings. Defaults to csv')
-        parser.add_argument('--inner-splitter',
+        self.parser.add_argument('--inner-splitter',
                             default='paragraph',
                             choices=['paragraph', 'section'],
                             help='''
                                 Once sections are detected by the splitter, indicates how the
                                 sections should be subdivided. Defaults to paragraph
                                 ''')
-        parser.add_argument('-t', '--type',
+        self.parser.add_argument('-t', '--type',
                             default='csv',
                             choices=['csv', 'txt'],
                             type=str,
                             help='Type of input. Defaults to csv')
-        parser.add_argument('-v', '--version', action='version', version=VERSION)
+        self.parser.add_argument('-v', '--version', action='version', version=VERSION)
 
-        args = parser.parse_args()
+        args = self.parser.parse_args()
 
         if args.file != '' and not os.path.exists(args.file):
             raise CLIException(f"File '{args.file} not found")

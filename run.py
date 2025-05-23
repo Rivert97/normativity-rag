@@ -53,13 +53,11 @@ class CLIController(CLI):
     CLI.
     """
     def __init__(self):
-        super().__init__(PROGRAM_NAME)
+        super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
         self._args = self.__process_args()
 
-        self.__run()
-
-    def __run(self):
+    def run(self):
         """Run the script logic."""
         if self._args.settings_file == '':
             settings = ExecSettings(
@@ -86,35 +84,29 @@ class CLIController(CLI):
             self.__process_yaml(self._args.settings_file)
 
     def __process_args(self) -> argparse.Namespace:
-        parser = argparse.ArgumentParser(
-            prog=PROGRAM_NAME,
-            description=__doc__,
-            epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>',
-            formatter_class=argparse.RawDescriptionHelpFormatter)
-
-        parser.add_argument('-c', '--collection',
+        self.parser.add_argument('-c', '--collection',
                             default='',
                             type=str,
                             help='Name of the collection to be created')
-        parser.add_argument('--cache-dir',
+        self.parser.add_argument('--cache-dir',
                             default=DEFAULTS['cache_dir'],
                             type=str,
                             help=f'''
                                 Directory to be used as cache.
                                 Defaults to {DEFAULTS['cache_dir']}
                                 ''')
-        parser.add_argument('-d', '--directory',
+        self.parser.add_argument('-d', '--directory',
                             default='',
                             type=str,
                             help='Directory to be processed in directory mode')
-        parser.add_argument('--database-dir',
+        self.parser.add_argument('--database-dir',
                             default=DEFAULTS['database_dir'],
                             type=str,
                             help=f'''
                                 Directory to store the database.
                                 Defaults to {DEFAULTS['database_dir']}
                                 ''')
-        parser.add_argument('-e', '--embedder',
+        self.parser.add_argument('-e', '--embedder',
                             default=DEFAULTS['embedder'],
                             type=str,
                             help=f'''Embeddings model to be used. Check SentenceTransformers
@@ -122,16 +114,16 @@ class CLIController(CLI):
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
                                 ). Defaults to {DEFAULTS['embedder']}
                                 ''')
-        parser.add_argument('--extraction-type',
+        self.parser.add_argument('--extraction-type',
                             default=DEFAULTS['extraction_type'],
                             choices=EXTRACTION_TYPES,
                             type=str,
                             help='Type of extraction to be performed. Defaults to text')
-        parser.add_argument('-f', '--file',
+        self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
                             help='File to be processed in single file mode')
-        parser.add_argument('--inner-splitter',
+        self.parser.add_argument('--inner-splitter',
                             default=DEFAULTS['inner_splitter'],
                             choices=INNER_SPLITTERS,
                             help=f'''
@@ -139,25 +131,25 @@ class CLIController(CLI):
                                 sections should be subdivided. Defaults to
                                 {DEFAULTS['inner_splitter']}
                                 ''')
-        parser.add_argument('-k', '--keep-cache',
+        self.parser.add_argument('-k', '--keep-cache',
                             default=DEFAULTS['keep_cache'],
                             action='store_true',
                             help='''
                                 Keep Tesseract cache after processing. Usefull when the same file
                                 is going to be processed multiple times
                                 ''')
-        parser.add_argument('-l', '--loader',
+        self.parser.add_argument('-l', '--loader',
                             default=DEFAULTS['loader'],
                             type=str,
                             choices=LOADERS.keys(),
                             help='Type of loader to use. Defaults to mixed')
-        parser.add_argument('--settings-file',
+        self.parser.add_argument('--settings-file',
                             default='',
                             type=str,
                             help='File with all the options to build a database')
-        parser.add_argument('-v', '--version', action='version', version=VERSION)
+        self.parser.add_argument('-v', '--version', action='version', version=VERSION)
 
-        args = parser.parse_args()
+        args = self.parser.parse_args()
 
         # If a settings file is used, all arguments are ignored
         if args.settings_file != '':

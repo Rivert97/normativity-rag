@@ -20,15 +20,13 @@ class CLIController(CLI):
     CLI.
     """
     def __init__(self):
-        super().__init__(PROGRAM_NAME)
+        super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
         self.print_to_console = True
 
         self._args = self.__process_args()
 
-        self.__run()
-
-    def __run(self):
+    def run(self):
         """Run the script logic."""
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output)
@@ -38,53 +36,47 @@ class CLIController(CLI):
             raise CLIException("Input not specified")
 
     def __process_args(self) -> argparse.Namespace:
-        parser = argparse.ArgumentParser(
-            prog=PROGRAM_NAME,
-            description=__doc__,
-            epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>',
-            formatter_class=argparse.RawDescriptionHelpFormatter)
-
-        parser.add_argument('--cache-dir',
+        self.parser.add_argument('--cache-dir',
                             default='./.cache',
                             type=str,
                             help='Directory to be used as cache. Defaults to ./.cache')
-        parser.add_argument('-d', '--directory',
+        self.parser.add_argument('-d', '--directory',
                             default='',
                             type=str,
                             help='Directory to be processed in directory mode')
-        parser.add_argument('-f', '--file',
+        self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
                             help='File to be processed in single file mode')
-        parser.add_argument('-k', '--keep-cache',
+        self.parser.add_argument('-k', '--keep-cache',
                             default=False,
                             action='store_true',
                             help='''Keep Tesseract cache after processing. Usefull when the
                                 same file is going to be processed multiple times''')
-        parser.add_argument('-l', '--loader',
+        self.parser.add_argument('-l', '--loader',
                             default='mixed',
                             type=str,
                             choices=['mixed', 'text', 'ocr'],
                             help='Type of loader to use. Defaults to mixed')
-        parser.add_argument('-o', '--output',
+        self.parser.add_argument('-o', '--output',
                             default='',
                             type=str,
                             help='''File or directory to store the output text file(s).
                                 When -d is used, this defaults to ./''')
-        parser.add_argument('-p', '--page',
+        self.parser.add_argument('-p', '--page',
                             type=int,
                             help='Number of page to be processed')
-        parser.add_argument('-t', '--type',
+        self.parser.add_argument('-t', '--type',
                             default='txt',
                             choices=['txt', 'csv'],
                             nargs='+',
                             type=str,
                             help='Type(s) of output(s). Defaults to txt')
-        parser.add_argument('-v', '--version',
+        self.parser.add_argument('-v', '--version',
                             action='version',
                             version=VERSION)
 
-        args = parser.parse_args()
+        args = self.parser.parse_args()
 
         if args.file != '' and not os.path.exists(args.file):
             raise CLIException(f"Input file '{args.file}' not found")

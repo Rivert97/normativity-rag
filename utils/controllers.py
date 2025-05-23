@@ -1,4 +1,6 @@
 """Module to define base clases for various functions."""
+
+import argparse
 import os
 import sys
 
@@ -12,7 +14,7 @@ dotenv.load_dotenv()
 class CLI:
     """Base class for CLI scripts that handle logging."""
 
-    def __init__(self, name:str):
+    def __init__(self, name:str, description:str, version:int):
         try:
             AppLogger.setup_root_logger(
                 int(os.getenv('LOG_LEVEL', '20')),
@@ -26,13 +28,26 @@ class CLI:
         self._logger = AppLogger.get_logger(name)
         self._logger.info(' '.join(sys.argv))
 
+        self.parser = argparse.ArgumentParser(
+            prog=name,
+            description=description,
+            epilog=f'%(prog)s-{version}, Roberto Garcia <r.garciaguzman@ugto.mx>',
+            formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+    def run(self):
+        """Run the script logic."""
+        pass
+
     def get_logger(self):
         """Get the logger handler."""
         return self._logger
 
 def run_cli(cli_class: CLI):
+    """Run a CLI class."""
     try:
         controller = cli_class()
+        controller.run()
     except CLIException as e:
         print(e)
         controller.get_logger().error(e)

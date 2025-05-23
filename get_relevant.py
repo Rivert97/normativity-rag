@@ -18,13 +18,11 @@ class CLIController(CLI):
     CLI.
     """
     def __init__(self):
-        super().__init__(PROGRAM_NAME)
+        super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
         self._args = self.__process_args()
 
-        self.__run()
-
-    def __run(self):
+    def run(self):
         """Run the script logic."""
         self._logger.debug('Loading database')
         storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
@@ -43,38 +41,32 @@ class CLIController(CLI):
             print(f"Embeddings size: {doc['embeddings'].shape}")
 
     def __process_args(self) -> argparse.Namespace:
-        parser = argparse.ArgumentParser(
-            prog=PROGRAM_NAME,
-            description=__doc__,
-            epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>',
-            formatter_class=argparse.RawDescriptionHelpFormatter)
-
-        parser.add_argument('sentence',
+        self.parser.add_argument('sentence',
                             type=str,
                             help='Reference sentence to retrieve similar documents')
 
-        parser.add_argument('-c', '--collection',
+        self.parser.add_argument('-c', '--collection',
                             default='',
                             type=str,
                             help='Name of the collection to search in the database')
-        parser.add_argument('-d', '--database-dir',
+        self.parser.add_argument('-d', '--database-dir',
                             default='./db',
                             type=str,
                             help='Database directory to be used. Defaults to ./db')
-        parser.add_argument('-e', '--embedder',
+        self.parser.add_argument('-e', '--embedder',
                             default='all-MiniLM-L6-v2',
                             type=str,
                             help='''Embeddings model to be used. Check SentenceTransformers doc
                                 for all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
                                 ). Defaults to all-MiniLM-L6-v2''')
-        parser.add_argument('-n', '--number-results',
+        self.parser.add_argument('-n', '--number-results',
                             default=5,
                             type=int,
                             help='Number of relevant documents to retrieve. Defaults to 5')
-        parser.add_argument('-v', '--version', action='version', version=VERSION)
+        self.parser.add_argument('-v', '--version', action='version', version=VERSION)
 
-        args = parser.parse_args()
+        args = self.parser.parse_args()
 
         if args.sentence == '':
             raise CLIException("Please specify a reference sentence")
