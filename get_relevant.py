@@ -73,6 +73,7 @@ class CLIController():
         return args
 
     def run(self):
+        """Run the script logic."""
         self._logger.debug('Loading database')
         storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
 
