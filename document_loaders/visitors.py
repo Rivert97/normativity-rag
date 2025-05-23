@@ -1,4 +1,6 @@
-class PageTextVisitor(object):
+"""Module to define pypdf visitors."""
+
+class PageTextVisitor:
     """Visitor for pypdf.PdfReader.extract_text() function.
 
     Extracts relevant information of the document while reading it.
@@ -17,11 +19,25 @@ class PageTextVisitor(object):
         """
         self.boundaries = (top, left, bottom, right)
 
-    def visitor_text(self, text, cm, tm, font_dict, font_size):
-        x = tm[4]
-        y = tm[5]
-        if not (self.boundaries[1] <= x <= self.boundaries[3] and self.boundaries[0] <= y <= self.boundaries[2]):
-            self.out_of_bounds_text.setdefault(y, []).append(text)
+    def visitor_text(self, *args):
+        """Store in an array all the texts that are out of bounds.
+
+        :param text: Retrieved text
+        :type text: str
+        :param cm: Current transformation matrix
+        :type cm: list
+        :param tm: Text transformation matrix
+        :type tm: list
+        :param font_dict: Specification of font types
+        :type font_dict: dict
+        :param font_size: Specification of font sizes
+        :type font_size: dict
+        """
+        x = args[2][4]
+        y = args[2][5]
+        if not (self.boundaries[1] <= x <= self.boundaries[3] and
+                self.boundaries[0] <= y <= self.boundaries[2]):
+            self.out_of_bounds_text.setdefault(y, []).append(args[0])
 
     def get_out_of_bounds_text(self):
         """Return an array of lines of text detected as out of boundaries by the visitor."""

@@ -1,10 +1,17 @@
+"""Module to handle logging gracefully."""
+
 import logging
 import sys
 
 class AppLogger():
+    """Class to handle the application logger."""
 
     @classmethod
     def setup_root_logger(cls, level:int|str=logging.INFO, log_file:str=None, log_console:int=0):
+        """Setup the root logger with the desired parameters.
+
+        This settings affect all children loggers.
+        """
         formatter = logging.Formatter(
             "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
             "%Y-%m-%d %H:%M:%S"
@@ -25,5 +32,6 @@ class AppLogger():
 
     @classmethod
     def get_logger(cls, name:str=__name__) -> logging.Logger:
+        """Get a logger by its name."""
         logger = logging.getLogger(name)
         return logger
