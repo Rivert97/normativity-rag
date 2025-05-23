@@ -7,10 +7,9 @@ get_embeddings.py to obtain further information of the file.
 import argparse
 import os
 import glob
-import sys
 
 from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
-from utils.controllers import CLI
+from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 
 PROGRAM_NAME = 'ExtractorCLI'
@@ -27,7 +26,9 @@ class CLIController(CLI):
 
         self._args = self.__process_args()
 
-    def run(self):
+        self.__run()
+
+    def __run(self):
         """Run the script logic."""
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output)
@@ -194,10 +195,4 @@ class CLIController(CLI):
             raise CLIException("Output directory not found") from e
 
 if __name__ == "__main__":
-    try:
-        controller = CLIController()
-        controller.run()
-    except CLIException as e:
-        print(e)
-        controller.get_logger().error(e)
-        sys.exit(1)
+    run_cli(CLIController)

@@ -5,9 +5,8 @@ This script requires a database previously created with get_embeddings.py script
 """
 import argparse
 import os
-import sys
 
-from utils.controllers import CLI
+from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from embeddings.storage import ChromaDBStorage
 
@@ -23,7 +22,9 @@ class CLIController(CLI):
 
         self._args = self.__process_args()
 
-    def run(self):
+        self.__run()
+
+    def __run(self):
         """Run the script logic."""
         self._logger.debug('Loading database')
         storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
@@ -87,10 +88,4 @@ class CLIController(CLI):
         return args
 
 if __name__ == "__main__":
-    try:
-        controller = CLIController()
-        controller.run()
-    except CLIException as e:
-        print(e)
-        controller.get_logger().error(e)
-        sys.exit(1)
+    run_cli(CLIController)

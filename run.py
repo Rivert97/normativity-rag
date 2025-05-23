@@ -2,13 +2,12 @@
 
 from dataclasses import dataclass
 import argparse
-import sys
 import os
 import glob
 
 import yaml
 
-from utils.controllers import CLI
+from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
 from document_splitters.hierarchical import TextTreeSplitter, DataTreeSplitter, TreeSplitter
@@ -58,7 +57,9 @@ class CLIController(CLI):
 
         self._args = self.__process_args()
 
-    def run(self):
+        self.__run()
+
+    def __run(self):
         """Run the script logic."""
         if self._args.settings_file == '':
             settings = ExecSettings(
@@ -346,10 +347,4 @@ class CLIController(CLI):
 
 
 if __name__ == "__main__":
-    try:
-        controller = CLIController()
-        controller.run()
-    except CLIException as e:
-        print(e)
-        controller.get_logger().error(e)
-        sys.exit(1)
+    run_cli(CLIController)

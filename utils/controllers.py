@@ -5,6 +5,7 @@ import sys
 import dotenv
 
 from .logger import AppLogger
+from .exceptions import CLIException
 
 dotenv.load_dotenv()
 
@@ -28,3 +29,11 @@ class CLI:
     def get_logger(self):
         """Get the logger handler."""
         return self._logger
+
+def run_cli(cli_class: CLI):
+    try:
+        controller = cli_class()
+    except CLIException as e:
+        print(e)
+        controller.get_logger().error(e)
+        sys.exit(1)

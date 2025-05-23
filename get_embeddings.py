@@ -6,9 +6,8 @@ or alogside extract_info.py when using PDF files to generate a txt or csv file.
 import argparse
 import os
 import glob
-import sys
 
-from utils.controllers import CLI
+from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from document_loaders.representations import PdfDocumentData
 from document_splitters.hierarchical import TreeSplitter, DataTreeSplitter, TextTreeSplitter
@@ -34,7 +33,9 @@ class CLIController(CLI):
 
         self._args = self.__process_args()
 
-    def run(self):
+        self.__run()
+
+    def __run(self):
         """Run the script logic."""
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output, self._args.type)
@@ -268,10 +269,4 @@ class CLIController(CLI):
         return sentences, metadatas
 
 if __name__ == "__main__":
-    try:
-        controller = CLIController()
-        controller.run()
-    except CLIException as e:
-        print(e)
-        controller.get_logger().error(e)
-        sys.exit(1)
+    run_cli(CLIController)
