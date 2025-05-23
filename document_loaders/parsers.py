@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from .visitors import PageTextVisitor
+from .processors import get_data_inside_boundaries
 
 @dataclass
 class GroupState:
@@ -322,13 +323,6 @@ class OcrPage():
         self.image = image
         self.cache_file = cache_file
 
-        self.boundaries = {
-            'left': 0.05,
-            'top': 0.1,
-            'right': 0.95,
-            'bottom': 0.95,
-        }
-
         self.data = self.__get_data_from_image()
         self.width = self.data.loc[0, 'width']
         self.height = self.data.loc[0, 'height']
@@ -340,11 +334,7 @@ class OcrPage():
     def get_text(self, remove_headers: bool=False) -> str:
         """Return the reconstructed text of the page (without Tesseract errors)."""
         if remove_headers:
-            data = self.data[
-                (self.data['left'] > self.boundaries['left']) &
-                (self.data['top'] > self.boundaries['top']) &
-                (self.data['right'] < self.boundaries['right']) &
-                (self.data['bottom'] < self.boundaries['bottom'])]
+            data = get_data_inside_boundaries(self.data)
         else:
             data = self.data
         data = data.sort_values(['line', 'left'])

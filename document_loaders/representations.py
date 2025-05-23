@@ -1,6 +1,8 @@
 """Module to provide classes to store data from PDF files read by Tesseract."""
 import pandas as pd
 
+from .processors import get_data_inside_boundaries
+
 class PdfDocumentData():
     """Class to store relevant data of the OCR text."""
 
@@ -13,12 +15,6 @@ class PdfDocumentData():
         self.page_counter = 0
         self.line_counter = 0
         self.group_counter = 0
-        self.boundaries = {
-            'left': 0.05,
-            'top': 0.1,
-            'right': 0.95,
-            'bottom': 0.95,
-        }
 
     def add_page(self, data: pd.DataFrame, merged_text: pd.DataFrame=None, page_num: int=None):
         """Append a new page to the document.
@@ -53,11 +49,7 @@ class PdfDocumentData():
     def get_text(self, remove_headers: bool=False):
         """Get text from all the document."""
         if remove_headers:
-            data = self.data[
-                (self.data['left'] > self.boundaries['left']) &
-                (self.data['top'] > self.boundaries['top']) &
-                (self.data['right'] < self.boundaries['right']) &
-                (self.data['bottom'] < self.boundaries['bottom'])]
+            data = get_data_inside_boundaries(self.data)
         else:
             data = self.data
 
@@ -77,12 +69,8 @@ class PdfDocumentData():
     def get_page_text(self, page_num: int, remove_headers: bool=False) -> str:
         """Get text of certain page of the document."""
         if remove_headers:
-            data = self.data[
-                (self.data['page'] == page_num) &
-                (self.data['left'] > self.boundaries['left']) &
-                (self.data['top'] > self.boundaries['top']) &
-                (self.data['right'] < self.boundaries['right']) &
-                (self.data['bottom'] < self.boundaries['bottom'])]
+            data = self.data[self.data['page'] == page_num]
+            data = get_data_inside_boundaries(self.data)
         else:
             data = self.data[self.data['page'] == page_num]
 
@@ -96,23 +84,14 @@ class PdfDocumentData():
     def get_data(self, remove_headers: bool=False):
         """Get data of all the documet."""
         if remove_headers:
-            return self.data[
-                (self.data['left'] > self.boundaries['left']) &
-                (self.data['top'] > self.boundaries['top']) &
-                (self.data['right'] < self.boundaries['right']) &
-                (self.data['bottom'] < self.boundaries['bottom'])]
-
+            return get_data_inside_boundaries(self.data)
         return self.data
 
     def get_page_data(self, page_num: int, remove_headers: bool=False):
         """Get data of certain page of the document."""
         if remove_headers:
-            return self.data[
-                (self.data['page'] == page_num) &
-                (self.data['left'] > self.boundaries['left']) &
-                (self.data['top'] > self.boundaries['top']) &
-                (self.data['right'] < self.boundaries['right']) &
-                (self.data['bottom'] < self.boundaries['bottom'])]
+            data = self.data[self.data['page'] == page_num]
+            return get_data_inside_boundaries(data)
 
         return self.data[self.data['page'] == page_num]
 

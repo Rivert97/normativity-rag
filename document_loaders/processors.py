@@ -1,5 +1,9 @@
-"""Module to process strings of text comming from pdf parsers."""
+"""Module to process information from pdf parsers to apply filters or
+clean the data.
+"""
 import re
+
+import pandas as pd
 
 def remove_hyphens(text: str) -> str:
     """
@@ -30,6 +34,39 @@ def remove_hyphens(text: str) -> str:
 
     return "\n".join(lines)
 
+def replace_ligatures(text: str) -> str:
+    """Replace special characters present in PDF files (ligatures) with the
+    corresponding utf-8 characters."""
+    ligatures = {
+        "ﬀ": "ff",
+        "ﬁ": "fi",
+        "ﬂ": "fl",
+        "ﬃ": "ffi",
+        "ﬄ": "ffl",
+        "ﬅ": "ft",
+        "ﬆ": "st",
+        # "Ꜳ": "AA",
+        # "Æ": "AE",
+        "ꜳ": "aa",
+    }
+    for search, replace in ligatures.items():
+        text = text.replace(search, replace)
+
+    return text
+
+def get_data_inside_boundaries(data: pd.DataFrame):
+    """Filter the data and return only the data that is inside the boundaries."""
+    boundaries = {
+        'left': 0.05,
+        'top': 0.1,
+        'right': 0.95,
+        'bottom': 0.95,
+    }
+    return data[
+        (data['left'] > boundaries['left']) &
+        (data['top'] > boundaries['top']) &
+        (data['right'] < boundaries['right']) &
+        (data['bottom'] < boundaries['bottom'])]
 
 def __dehyphenate_end(lines: list[str], line_no: int) -> list[str]:
     next_line = lines[line_no + 1]
@@ -53,23 +90,3 @@ def __dehyphenate_start(lines: list[str], line_no: int) -> list[str]:
     lines[line_no] = lines[line_no][len(word_suffix) + suffix_offset:]
     lines[line_no - 1] = lines[line_no - 1] + word_suffix
     return lines
-
-def replace_ligatures(text: str) -> str:
-    """Replace special characters present in PDF files (ligatures) with the
-    corresponding utf-8 characters."""
-    ligatures = {
-        "ﬀ": "ff",
-        "ﬁ": "fi",
-        "ﬂ": "fl",
-        "ﬃ": "ffi",
-        "ﬄ": "ffl",
-        "ﬅ": "ft",
-        "ﬆ": "st",
-        # "Ꜳ": "AA",
-        # "Æ": "AE",
-        "ꜳ": "aa",
-    }
-    for search, replace in ligatures.items():
-        text = text.replace(search, replace)
-
-    return text
