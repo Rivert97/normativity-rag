@@ -1,3 +1,4 @@
+"""Module to process strings of text comming from pdf parsers."""
 import re
 
 def remove_hyphens(text: str) -> str:
@@ -9,7 +10,6 @@ def remove_hyphens(text: str) -> str:
     * Trailing math operands: 2 - 4
     * Names: Lopez-Ferreras, VGG-19, CIFAR-100
     """
-    # TODO: Esto lo puede hacer una expresion regular
     lines = [line.strip() for line in text.split("\n")]
 
     # Find dashes
@@ -24,14 +24,14 @@ def remove_hyphens(text: str) -> str:
 
     # Replace
     for line_no in line_numbers_end:
-        lines = dehyphenate_end(lines, line_no)
+        lines = __dehyphenate_end(lines, line_no)
     for line_no in line_numbers_start:
-        lines = dehyphenate_start(lines, line_no)
+        lines = __dehyphenate_start(lines, line_no)
 
     return "\n".join(lines)
 
 
-def dehyphenate_end(lines: list[str], line_no: int) -> list[str]:
+def __dehyphenate_end(lines: list[str], line_no: int) -> list[str]:
     next_line = lines[line_no + 1]
     word_suffix = next_line.split(" ")[0]
 
@@ -42,7 +42,7 @@ def dehyphenate_end(lines: list[str], line_no: int) -> list[str]:
     lines[line_no + 1] = lines[line_no + 1][len(word_suffix) + 1:]
     return lines
 
-def dehyphenate_start(lines: list[str], line_no: int) -> list[str]:
+def __dehyphenate_start(lines: list[str], line_no: int) -> list[str]:
     if lines[line_no].startswith("- "):
         word_suffix = lines[line_no].split(" ")[1]
         suffix_offset = 3
@@ -55,6 +55,8 @@ def dehyphenate_start(lines: list[str], line_no: int) -> list[str]:
     return lines
 
 def replace_ligatures(text: str) -> str:
+    """Replace special characters present in PDF files (ligatures) with the
+    corresponding utf-8 characters."""
     ligatures = {
         "ﬀ": "ff",
         "ﬁ": "fi",

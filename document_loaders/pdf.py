@@ -1,11 +1,26 @@
+"""Module to load PDF files and extract it's text or data."""
+from dataclasses import dataclass
 import difflib
 import re
-import pandas as pd
 import math
+
+import pandas as pd
 
 from .parsers import PypdfParser, OcrPdfParser, PypdfPage, OcrPage
 from .representations import PdfDocumentData
 from .processors import remove_hyphens, replace_ligatures
+
+@dataclass
+class DifferenceState:
+    """Store state when making matches between differences from the text."""
+
+    merged: list
+    added_words: list
+    removed_words: list
+    missing_additions: list
+    missing_removals: list
+    ocr_idx: int
+    status_tracker: list
 
 class PyPDFMixedLoader():
     """Loads the information of a PDF document applying multiple verifications.
@@ -17,59 +32,71 @@ class PyPDFMixedLoader():
     """
 
     def __init__(self, cache_dir: str = './.cache', keep_cache: bool=False):
+        """Mixed loader that combines text and OCR information to produce text or location data."""
         self.cache_dir = cache_dir
         self.keep_cache = keep_cache
 
-        self.documentData = PdfDocumentData()
+        self.document_data = PdfDocumentData()
 
     def load(self, pdf_path: str):
-        self.text_parser = PypdfParser(pdf_path)
-        self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
+        """Load a full PDF document."""
+        text_parser = PypdfParser(pdf_path)
+        ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
 
-        for pypdf_page, ocr_page in zip(self.text_parser.get_pages(), self.ocr_parser.get_pages()):
+        for pypdf_page, ocr_page in zip(text_parser.get_pages(), ocr_parser.get_pages()):
             self.__merge_pages(pypdf_page, ocr_page)
 
     def load_page(self, pdf_path:str, page_num: int):
-        self.text_parser = PypdfParser(pdf_path)
-        self.ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
+        """Load a single page of a PDF document."""
+        text_parser = PypdfParser(pdf_path)
+        ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
 
-        pypdf_page = self.text_parser.get_page(page_num)
-        ocr_page = self.ocr_parser.get_page(page_num)
+        pypdf_page = text_parser.get_page(page_num)
+        ocr_page = ocr_parser.get_page(page_num)
 
         self.__merge_pages(pypdf_page, ocr_page, page_num)
 
-    def get_text(self):
-        if self.documentData.is_empty():
+    def get_text(self) -> str:
+        """Get the text string of the PDF document.
+
+        Headers are removed, ligatures are replaced an hypens are fixed.
+        """
+        if self.document_data.is_empty():
             return ''
 
-        text = self.documentData.get_text(remove_headers=True)
+        text = self.document_data.get_text(remove_headers=True)
         text = replace_ligatures(text)
         text = remove_hyphens(text)
 
         return text
 
     def get_page_text(self, page_num: int):
-        if self.documentData.is_empty():
+        """Get the text string of a single page of the PDF document.
+
+        Headers are removed, ligatures are replaced an hypens are fixed.
+        """
+        if self.document_data.is_empty():
             return ''
 
-        page_text = self.documentData.get_page_text(page_num, remove_headers=True)
+        page_text = self.document_data.get_page_text(page_num, remove_headers=True)
         page_text = replace_ligatures(page_text)
         page_text = remove_hyphens(page_text)
 
         return page_text
 
     def get_document_data(self):
-        return self.documentData
-
-    def clear_cache(self):
-        self.ocr_parser.clear_cache()
+        """Return the relevant OCR data of the hole document."""
+        return self.document_data
 
     def __merge_pages(self, pypdf_page: PypdfPage, ocr_page: OcrPage, page_num: int = None):
         txt_words = pypdf_page.get_words(suffix='\n')
         ocr_words = ocr_page.get_words(suffix='\n')
 
-        differences = list(difflib.Differ().compare(list(txt_words['word']), list(ocr_words['word'])))
-        merged, missing_additions, missing_removals = self.__process_differences(differences, ocr_words)
+        differences = list(
+            difflib.Differ().compare(
+                list(txt_words['word']),
+                list(ocr_words['word'])))
+        merged, missing_additions, missing_removals = self.__process_differences(differences)
 
         if missing_additions and missing_removals:
             merged.extend(self.__reconcile_missing(missing_additions, missing_removals))
@@ -78,88 +105,73 @@ class PyPDFMixedLoader():
             (word for _, word in merged),
             index=(ocr_words.iloc[idx].name for idx, _ in merged)
         )
-        self.documentData.add_page(ocr_page.get_data(), df_merged_text, page_num)
+        self.document_data.add_page(ocr_page.get_data(), df_merged_text, page_num)
 
-    def __process_differences(self, differences, ocr_words):
-        merged = [] # List of: (idx, word)
-        added_words = []
-        removed_words = []
-        missing_additions = []
-        missing_removals = []
-        ocr_idx = -1
+    def __process_differences(self, differences):
+        #merged = [] # List of: (idx, word)
+        #added_words = []
+        #removed_words = []
+        #missing_additions = []
+        #missing_removals = []
+        #ocr_idx = -1
+        #status_tracker = [0, 0, 0] # curr, prev, prev_prev
+
+        state = DifferenceState(
+            merged=[], # List of: (idx, word)
+            added_words=[],
+            removed_words=[],
+            missing_additions=[],
+            missing_removals=[],
+            ocr_idx = -1,
+            status_tracker=[0, 0, 0] # curr, prev, prev_prev
+        )
+
         skip = False
-        status_tracker = [0, 0, 0] # curr, prev, prev_prev
-
         for i, diff in enumerate(differences):
             curr_status = self.__get_difference_type(diff)
             if skip:
                 if curr_status in (0, 1): # Don't loose count of index
-                    ocr_idx += 1
+                    state.ocr_idx += 1
                 skip = False
                 continue
 
             if curr_status == -1:
                 continue
 
-            status_tracker = [curr_status, *status_tracker[:2]]
+            state.status_tracker = [curr_status, *state.status_tracker[:2]]
 
             if curr_status == 0:
-                ocr_idx += 1
-                single_removal = False
-                if status_tracker[1] in [1, 2]:
-                    merged.extend(self.__merge_words(added_words, removed_words))
-                    if not added_words:
-                        if len(removed_words) == 1 and i > 1:
-                            single_removal = True
-                        else:
-                            missing_removals.extend(removed_words)
-                    elif not removed_words:
-                        missing_additions.extend(added_words)
-                if single_removal:
-                    merged.append((ocr_idx, removed_words[0] + ' ' + diff[2:-1]))
-                else:
-                    merged.append((ocr_idx, diff[2:-1]))
-                removed_words = []
-                added_words = []
+                state.ocr_idx += 1
+                self.__handle_equal(state, diff, i)
+                state.removed_words = []
+                state.added_words = []
 
             elif curr_status == 1: # Addition
-                ocr_idx += 1
-                added_words.append((ocr_idx, diff[2:-1]))
+                state.ocr_idx += 1
+                state.added_words.append((state.ocr_idx, diff[2:-1]))
 
             elif curr_status == 2: # Removal
-                if status_tracker[1] == 1 and status_tracker[2] == 2:
-                    merged.extend(self.__merge_words(added_words, removed_words))
-                    if not added_words:
-                        missing_removals.extend(removed_words)
-                    elif not removed_words:
-                        missing_additions.extend(added_words)
-                    removed_words = []
-                    added_words = []
-                removed_words.append(diff[2:-1])
+                self.__handle_removal(state, diff)
 
             elif curr_status == 3: # Annotation
-                skip = self.__handle_annotation(
-                    i, differences, added_words, removed_words,
-                    merged, missing_additions, missing_removals, ocr_idx
-                )
-                added_words = []
-                removed_words = []
-                status_tracker[0] = 0
+                skip = self.__handle_annotation(state, differences, i)
+                state.added_words = []
+                state.removed_words = []
+                state.status_tracker[0] = 0
 
-        merged.extend(self.__merge_words(added_words, removed_words))
-        if not added_words:
-            if len(removed_words) == 1:
-                merged[-1] = (merged[-1][0], merged[-1][1] + removed_words[0])
+        state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
+        if not state.added_words:
+            if len(state.removed_words) == 1:
+                state.merged[-1] = (state.merged[-1][0],
+                                    state.merged[-1][1] + state.removed_words[0])
             else:
-                missing_removals.extend(removed_words)
-        elif not removed_words:
-            missing_additions.extend(added_words)
+                state.missing_removals.extend(state.removed_words)
+        elif not state.removed_words:
+            state.missing_additions.extend(state.added_words)
 
-        return merged, missing_additions, missing_removals
+        return state.merged, state.missing_additions, state.missing_removals
 
     def __reconcile_missing(self, additions, removals):
-        # TODO: Analizar casos en los que hay más adiciones que remociones
-        #TODO: Esto tendia que ser por bloque
         additions_len = len(additions)
         removals_len = len(removals)
         multi_removals = list(removals)
@@ -193,18 +205,45 @@ class PyPDFMixedLoader():
 
         return status
 
-    def __handle_annotation(self, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx):
+    def __handle_equal(self, state, diff, iteration):
+        single_removal = False
+        if state.status_tracker[1] in [1, 2]:
+            state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
+            if not state.added_words:
+                if len(state.removed_words) == 1 and iteration > 1:
+                    single_removal = True
+                else:
+                    state.missing_removals.extend(state.removed_words)
+            elif not state.removed_words:
+                state.missing_additions.extend(state.added_words)
+        if single_removal:
+            state.merged.append((state.ocr_idx, state.removed_words[0] + ' ' + diff[2:-1]))
+        else:
+            state.merged.append((state.ocr_idx, diff[2:-1]))
+
+    def __handle_removal(self, state, diff):
+        if state.status_tracker[1] == 1 and state.status_tracker[2] == 2:
+            state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
+            if not state.added_words:
+                state.missing_removals.extend(state.removed_words)
+            elif not state.removed_words:
+                state.missing_additions.extend(state.added_words)
+            state.removed_words = []
+            state.added_words = []
+        state.removed_words.append(diff[2:-1])
+
+    def __handle_annotation(self, state:DifferenceState, diffs:list, i:int) -> bool:
         annotation = diffs[i][2:-1]
         match_add = re.search(r'[+]+$', annotation)
         match_rem = re.search(r'[-]+$', annotation)
         if match_add:
-            return self.__handle_annotation_addition(match_add, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx)
-        elif match_rem:
-            return self.__handle_annotation_removal(match_rem, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx)
-        else:
-            return False
+            return self.__handle_annotation_addition(state, match_add, i, diffs)
+        if match_rem:
+            return self.__handle_annotation_removal(state, match_rem, i, diffs)
 
-    def __handle_annotation_addition(self, match, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx):
+        return False
+
+    def __handle_annotation_addition(self, state:DifferenceState, match:list, i:int, diffs:list):
         if (i + 1) >= len(diffs):
             return False  # No next_diff available
 
@@ -213,55 +252,56 @@ class PyPDFMixedLoader():
         pre_pre_prev = diffs[i - 3] if i > 2 and diffs[i - 3] != '- -\n' else None
 
         if pre_pre_prev is not None and match.start() == 0:
-            combined = pre_pre_prev[2:-1] + removed[-1]
-            if len(combined) == len(added[-1][1]):
-                merged.extend(self.__merge_words(added[:-1], removed[:-2]))
-                if not added[:-1]:
-                    miss_rem.extend(removed[:-2])
-                elif not removed[:-2]:
-                    miss_add.extend(added[:-1])
-                merged.append((ocr_idx, combined))
-                added.clear()
-                removed.clear()
+            combined = pre_pre_prev[2:-1] + state.removed_words[-1]
+            if len(combined) == len(state.added_words[-1][1]):
+                state.merged.extend(self.__merge_words(state.added_words[:-1],
+                                                       state.removed_words[:-2]))
+                if not state.added_words[:-1]:
+                    state.missing_removals.extend(state.removed_words[:-2])
+                elif not state.removed_words[:-2]:
+                    state.missing_additions.extend(state.added_words[:-1])
+                state.merged.append((state.ocr_idx, combined))
+                state.added_words.clear()
+                state.removed_words.clear()
                 return False
 
-        merged.extend(self.__merge_words(added[:-1], removed[:-1]))
-        if not added[:-1]:
-            miss_rem.extend(removed[:-1])
-        elif not removed[:-1]:
-            miss_add.extend(added[:-1])
+        state.merged.extend(self.__merge_words(state.added_words[:-1], state.removed_words[:-1]))
+        if not state.added_words[:-1]:
+            state.missing_removals.extend(state.removed_words[:-1])
+        elif not state.removed_words[:-1]:
+            state.missing_additions.extend(state.added_words[:-1])
 
-        if next_diff[2:-1] == added[-1][1][match.start():match.end()]:
-            merged.append((ocr_idx, added[-1][1]))
-            added.clear()
-            removed.clear()
+        if next_diff[2:-1] == state.added_words[-1][1][match.start():match.end()]:
+            state.merged.append((state.ocr_idx, state.added_words[-1][1]))
+            state.added_words.clear()
+            state.removed_words.clear()
             return True # Skip next iteration
-        else:
-            merged.append((ocr_idx, removed[-1]))
-            added.clear()
-            removed.clear()
-            return False
 
-    def __handle_annotation_removal(self, match, i, diffs, added, removed, merged, miss_add, miss_rem, ocr_idx):
+        state.merged.append((state.ocr_idx, state.removed_words[-1]))
+        state.added_words.clear()
+        state.removed_words.clear()
+        return False
+
+    def __handle_annotation_removal(self, state:DifferenceState, match:list, i:int, diffs:list):
         if (i + 1) >= len(diffs):
             return False  # No next_diff available
 
-        merged.extend(self.__merge_words(added, removed[:-1]))
-        if not added:
-            miss_rem.extend(removed[:-1])
-        elif not removed[:-1]:
-            miss_add.extend(added)
+        state.merged.extend(self.__merge_words(state.added_words, state.removed_words[:-1]))
+        if not state.added_words:
+            state.missing_removals.extend(state.removed_words[:-1])
+        elif not state.removed_words[:-1]:
+            state.missing_additions.extend(state.added_words)
 
         next_diff = diffs[i + 1]
-        combined = removed[-1][:match.start()] + removed[-1][match.end():]
+        combined = state.removed_words[-1][:match.start()] + state.removed_words[-1][match.end():]
 
         if combined == next_diff[2:-1]:
-            merged.append((ocr_idx + 1, removed[-1]))
-            added.clear()
-            removed.clear()
+            state.merged.append((state.ocr_idx + 1, state.removed_words[-1]))
+            state.added_words.clear()
+            state.removed_words.clear()
             return True
-        else:
-            return False
+
+        return False
 
     def __calculate_similarity(self, a, b):
         total = len(a)
@@ -280,42 +320,48 @@ class PyPDFMixedLoader():
         for i in range(num_iter - 1):
             merged.append((added_words[i][0], removed_words[0]))
             removed_words = removed_words[1:]
-        else:
-            merged.append((added_words[num_iter - 1][0], ''.join(removed_words)))
+
+        merged.append((added_words[num_iter - 1][0], ''.join(removed_words)))
 
         return merged
 
 class PyPDFLoader():
+    """Class to load a PDF file using pypdf library.
+
+    This class was created only for compatibility with the extraction script.
+    """
     def __init__(self, file_path:str):
+        """Open the document."""
         self.parser = PypdfParser(file_path)
 
     def get_text(self):
+        """Return the full text of the PDF file."""
         return self.parser.get_text()
 
     def get_page_text(self, page_num: int):
+        """Return the text of a single page of the PDF file."""
         page = self.parser.get_page(page_num)
         return page.get_text()
 
-    def clear_cache(self):
-        pass
-
 class OCRLoader():
+    """Class to load a PDF file using pytesseract to extract the text through OCR."""
     def __init__(self, file_path:str, cache_dir: str='./.cache', keep_cache: bool = False):
+        """Open the document."""
         self.parser = OcrPdfParser(file_path, cache_dir, keep_cache)
 
     def get_text(self):
+        """Return the full text of the PDF file."""
         return self.parser.get_text(remove_headers=True)
 
     def get_page_text(self, page_num: int):
+        """Return the text of a single page of the PDF file."""
         page = self.parser.get_page(page_num)
         return page.get_raw_text()
 
     def get_document_data(self):
-        documentData = PdfDocumentData()
+        """Return the relevant OCR data of the hole document."""
+        document_data = PdfDocumentData()
         for page in self.parser.get_pages():
-            documentData.add_page(page.get_data())
+            document_data.add_page(page.get_data())
 
-        return documentData
-
-    def clear_cache(self):
-        self.parser.clear_cache()
+        return document_data

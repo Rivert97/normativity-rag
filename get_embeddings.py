@@ -1,9 +1,14 @@
+"""Scritp to get embeddings from a text file or a csv data file from a PDF.
+
+This script is intended to be used by it's own when processing simple text files
+or alogside extract_info.py when using PDF files to generate a txt or csv file.
+"""
 import argparse
 import os
-import dotenv
 import glob
 import sys
 
+import dotenv
 from utils.logger import AppLogger
 from utils.exceptions import CLIException
 from document_loaders.representations import PdfDocumentData
@@ -17,18 +22,23 @@ PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
 
 class CLIController():
-    """This class controls the execution of the program when using
-    CLI.
-    """
+    """Class to control the execution of the program when usied as CLI."""
+
     def __init__(self):
+        """Initialize the controller.
+
+        Create the logger for the script and process the CLI arguments.
+        """
         self._logger = AppLogger.get_logger(PROGRAM_NAME)
 
         self.print_to_console = True
         self.storage = None
+        self.embedder = None
 
         self._args = self.__process_args()
 
     def run(self):
+        """Run the script logic."""
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output, self._args.type)
         elif self._args.directory != '':
@@ -39,31 +49,78 @@ class CLIController():
     def __process_directory(self, directory: str):
         for file in glob.glob(f'{directory}/*.{self._args.type}'):
             basename = ''.join(os.path.basename(file).split('.')[:-1])
-            if self._args.page != None:
-                out_name = os.path.join(self._args.output, f"{basename}_{self._args.page}")
-            else:
+            if self._args.page is None:
                 out_name = os.path.join(self._args.output, f"{basename}")
+            else:
+                out_name = os.path.join(self._args.output, f"{basename}_{self._args.page}")
 
             self.__process_file(file, out_name, self._args.type)
 
     def __process_args(self) -> argparse.Namespace:
         parser = argparse.ArgumentParser(
             prog=PROGRAM_NAME,
-            description='Creates a vectorized database of data extracted from PDF files',
-            epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>'
-        )
+            description=__doc__,
+            epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>',
+            formatter_class=argparse.RawDescriptionHelpFormatter)
 
-        parser.add_argument('-a', '--action', default='embeddings', choices=['embeddings', 'structure', 'tree'], type=str, help='Action to perform: "embeddings" to split the file and get the embeddings, "structure" to show file structure in console. "tree" to show an image of the tree of titles of the file. Default to embeddings')
-        parser.add_argument('-c', '--collection', default='', type=str, help='In embeddings mode and storage is not csv, name of the collection where the embeddings should be stored')
-        parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
-        parser.add_argument('--database-dir', default='./db', type=str, help='Directory to store the database. Defaults to ./db')
-        parser.add_argument('-e', '--embedder', default='all-MiniLM-L6-v2', type=str, help='Embeddings model to be used. Check SentenceTransformers doc for all the options (https://sbert.net/docs/sentence_transformer/pretrained_models.html). Defaults to all-MiniLM-L6-v2')
-        parser.add_argument('-f', '--file', default='', type=str, help='Path to file containing the data or text of the document')
+        parser.add_argument('-a', '--action',
+                            default='embeddings',
+                            choices=['embeddings', 'structure', 'tree'],
+                            type=str,
+                            help='''
+                                Action to perform.
+                                embeddings: Split the file and get the embeddings.
+                                structure: Show file structure in console.
+                                tree: Show an image of the tree of titles of the file.
+                                Defaults to embeddings
+                                ''')
+        parser.add_argument('-c', '--collection',
+                            default='',
+                            type=str,
+                            help='''
+                                When using embeddings action and storage is not csv,
+                                name of the collection where the embeddings should be stored
+                                ''')
+        parser.add_argument('-d', '--directory',
+                            default='',
+                            type=str,
+                            help='Directory to be processed in directory mode')
+        parser.add_argument('--database-dir',
+                            default='./db',
+                            type=str,
+                            help='Directory to store the database. Defaults to ./db')
+        parser.add_argument('-e', '--embedder',
+                            default='all-MiniLM-L6-v2',
+                            type=str,
+                            help='''
+                                Embeddings model to be used. Check SentenceTransformers doc for
+                                all the options (
+                                https://sbert.net/docs/sentence_transformer/pretrained_models.html
+                                ). Defaults to all-MiniLM-L6-v2
+                                ''')
+        parser.add_argument('-f', '--file',
+                            default='',
+                            type=str,
+                            help='Path to file containing the data or text of the document')
         parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
-        parser.add_argument('-s', '--storage', default='csv', type=str, choices=['csv', 'chromadb'], help='Type of storage to be used for embeddings. Defaults to csv')
-        parser.add_argument('--inner-splitter', default='paragraph', choices=['paragraph', 'section'], help='Once sections are detected by the splitter, indicates how the sections should be subdivided. Defaults to paragraph')
-        parser.add_argument('-t', '--type', default='csv', choices=['csv', 'txt'], type=str, help='Type of input. Defaults to csv')
+        parser.add_argument('-s', '--storage',
+                            default='csv',
+                            type=str,
+                            choices=['csv', 'chromadb'],
+                            help='Type of storage to be used for embeddings. Defaults to csv')
+        parser.add_argument('--inner-splitter',
+                            default='paragraph',
+                            choices=['paragraph', 'section'],
+                            help='''
+                                Once sections are detected by the splitter, indicates how the
+                                sections should be subdivided. Defaults to paragraph
+                                ''')
+        parser.add_argument('-t', '--type',
+                            default='csv',
+                            choices=['csv', 'txt'],
+                            type=str,
+                            help='Type of input. Defaults to csv')
         parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = parser.parse_args()
@@ -74,13 +131,12 @@ class CLIController():
         if args.directory != '' and not os.path.exists(args.directory):
             raise CLIException(f"Input directory '{args.directory}' not found")
 
-        if args.output != '':
-            basedir = os.path.dirname(args.output)
-            if basedir != '' and not os.path.exists(basedir):
-                raise CLIException(f"Output path '{args.output}' does not exist")
+        basedir = os.path.dirname(args.output)
+        if args.output != '' and basedir != '' and not os.path.exists(basedir):
+            raise CLIException(f"Output path '{args.output}' does not exist")
 
         if args.file == '' and args.directory == '':
-            raise CLIException(f"Please specify an input file or directory")
+            raise CLIException("Please specify an input file or directory")
 
         if args.directory != '':
             if args.output == '':
@@ -103,15 +159,15 @@ class CLIController():
 
         return args
 
-    def __process_file(self, filename: str, output: str, type: str):
-        self._logger.info(f'Processing file {filename}')
+    def __process_file(self, filename: str, output: str, input_type: str):
+        self._logger.info('Processing file %s', filename)
 
-        if type == 'csv':
+        if input_type == 'csv':
             splitter = self.__load_and_split_doc(filename)
-        elif type == 'txt':
+        elif input_type == 'txt':
             splitter = self.__load_and_split_txt(filename)
         else:
-            raise CLIException(f"Invalid type of file: '{type}'")
+            raise CLIException(f"Invalid type of file: '{input_type}'")
 
         if self._args.action == 'embeddings':
             self.__action_embeddings(splitter, output)
@@ -131,7 +187,7 @@ class CLIController():
             try:
                 self.embedder = STEmbedder(self._args.embedder)
             except OSError as e:
-                raise CLIException(f"Invalid embedder '{self._args.embedder}'")
+                raise CLIException(f"Invalid embedder '{self._args.embedder}'") from e
 
             embeddings = self.embedder.get_embeddings(sentences)
         else:
@@ -148,7 +204,7 @@ class CLIController():
                 name = self._args.collection
 
             self.storage.save_info(name, sentences, metadatas, embeddings)
-            self._logger.info(f'Embeddings saved to "{name}"')
+            self._logger.info("Embeddings saved to '%s'", name)
 
     def __action_structure(self, splitter:TreeSplitter, output:str):
         self._logger.info('Loading file structure')
@@ -159,7 +215,7 @@ class CLIController():
             base_filename = os.path.splitext(output)[0]
             structure = splitter.get_file_structure()
             self.__save_txt_file(base_filename + '-structure.txt', structure)
-            self._logger.info(f'File structure save to {base_filename}-structure.txt')
+            self._logger.info('File structure save to %s-structure.txt', base_filename)
 
     def __action_tree(self, splitter:TreeSplitter, output:str):
         self._logger.info('Loading file tree')
@@ -169,7 +225,7 @@ class CLIController():
         else:
             base_filename = os.path.splitext(output)[0]
             splitter.save_tree(base_filename + '-tree.png')
-            self._logger.info(f'File tree saved to {base_filename}-tree.png')
+            self._logger.info('File tree saved to %s-tree.png', base_filename)
 
     def __load_and_split_doc(self, filename:str) -> DataTreeSplitter:
         self._logger.info('Loading document data')
@@ -177,8 +233,10 @@ class CLIController():
         document_data = PdfDocumentData()
         document_data.load_data(filename)
         basename = os.path.splitext(os.path.split(filename)[-1])[0]
-        if self._args.page != None:
-            splitter = DataTreeSplitter(document_data.get_page_data(self._args.page, remove_headers=True), basename)
+        if self._args.page is not None:
+            splitter = DataTreeSplitter(
+                    document_data.get_page_data(self._args.page, remove_headers=True),
+                    basename)
         else:
             splitter = DataTreeSplitter(document_data.get_data(remove_headers=True), basename)
 
@@ -190,7 +248,7 @@ class CLIController():
         self._logger.info('Loading text data')
 
         basename = os.path.splitext(os.path.split(filename)[-1])[0]
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             file_content = f.read()
 
         splitter = TextTreeSplitter(file_content, basename)
@@ -199,7 +257,7 @@ class CLIController():
         return splitter
 
     def __save_txt_file(self, filename:str, content:str):
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
 
     def __extract_info(self, splitter:TreeSplitter):
@@ -221,7 +279,7 @@ if __name__ == "__main__":
         )
     except ValueError as e:
         print(f"Environment variables file is corrupted: {e}")
-        exit(1)
+        sys.exit(1)
 
     _logger = AppLogger.get_logger(PROGRAM_NAME)
     _logger.info(' '.join(sys.argv))
@@ -232,4 +290,4 @@ if __name__ == "__main__":
     except CLIException as e:
         print(e)
         _logger.error(e)
-        exit(1)
+        sys.exit(1)

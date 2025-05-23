@@ -1,8 +1,15 @@
+"""Script to load a PDF file and converts it to plain text or csv data with the
+position information of each word.
+
+When used to extract csv data, this script is intended to be used alogside
+get_embeddings.py to obtain further information of the file.
+"""
 import argparse
 import os
 import glob
-import dotenv
 import sys
+
+import dotenv
 
 from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
 from utils.logger import AppLogger
@@ -25,6 +32,7 @@ class CLIController():
         self._args = self.__process_args()
 
     def run(self):
+        """Run the script logic."""
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output)
         elif self._args.directory != '':
@@ -35,19 +43,49 @@ class CLIController():
     def __process_args(self) -> argparse.Namespace:
         parser = argparse.ArgumentParser(
             prog=PROGRAM_NAME,
-            description='Loads a PDF file and converts it to plain text and retrieves the position data of each word',
-            epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>'
-        )
+            description=__doc__,
+            epilog=f'%(prog)s-{VERSION}, Roberto Garcia <r.garciaguzman@ugto.mx>',
+            formatter_class=argparse.RawDescriptionHelpFormatter)
 
-        parser.add_argument('--cache-dir', default='./.cache', type=str, help='Directory to be used as cache. Defaults to ./.cache')
-        parser.add_argument('-d', '--directory', default='', type=str, help='Directory to be processed in directory mode')
-        parser.add_argument('-f', '--file', default='', type=str, help='File to be processed in single file mode')
-        parser.add_argument('-k', '--keep-cache', default=False, action='store_true', help='Keep Tesseract cache after processing. Usefull when the same file is going to be processed multiple times')
-        parser.add_argument('-l', '--loader', default='mixed', type=str, choices=['mixed', 'text', 'ocr'], help='Type of loader to use. Defaults to mixed')
-        parser.add_argument('-o', '--output', default='', type=str, help='File or directory to store the output text file(s). When -d is used, this defaults to ./')
-        parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
-        parser.add_argument('-t', '--type', default='txt', choices=['txt', 'csv'], nargs='+', type=str, help='Type(s) of output(s). Defaults to txt')
-        parser.add_argument('-v', '--version', action='version', version=VERSION)
+        parser.add_argument('--cache-dir',
+                            default='./.cache',
+                            type=str,
+                            help='Directory to be used as cache. Defaults to ./.cache')
+        parser.add_argument('-d', '--directory',
+                            default='',
+                            type=str,
+                            help='Directory to be processed in directory mode')
+        parser.add_argument('-f', '--file',
+                            default='',
+                            type=str,
+                            help='File to be processed in single file mode')
+        parser.add_argument('-k', '--keep-cache',
+                            default=False,
+                            action='store_true',
+                            help='''Keep Tesseract cache after processing. Usefull when the
+                                same file is going to be processed multiple times''')
+        parser.add_argument('-l', '--loader',
+                            default='mixed',
+                            type=str,
+                            choices=['mixed', 'text', 'ocr'],
+                            help='Type of loader to use. Defaults to mixed')
+        parser.add_argument('-o', '--output',
+                            default='',
+                            type=str,
+                            help='''File or directory to store the output text file(s).
+                                When -d is used, this defaults to ./''')
+        parser.add_argument('-p', '--page',
+                            type=int,
+                            help='Number of page to be processed')
+        parser.add_argument('-t', '--type',
+                            default='txt',
+                            choices=['txt', 'csv'],
+                            nargs='+',
+                            type=str,
+                            help='Type(s) of output(s). Defaults to txt')
+        parser.add_argument('-v', '--version',
+                            action='version',
+                            version=VERSION)
 
         args = parser.parse_args()
 
@@ -84,18 +122,15 @@ class CLIController():
         return args
 
     def __process_file(self, filename: str, output: str = None):
-        self._logger.info(f'Processing file {filename}')
+        self._logger.info('Processing file %s', filename)
 
         pdf_loader = self.__get_loader(filename)
         self.__make_output(pdf_loader, output)
 
-        if not self._args.keep_cache:
-            pdf_loader.clear_cache()
-
     def __process_directory(self):
         for file in glob.glob(f'{self._args.directory}/*.pdf'):
             basename = ''.join(os.path.basename(file).split('.')[:-1])
-            if self._args.page != None:
+            if self._args.page is not None:
                 out_name = f"{self._args.output}/{basename}_{self._args.page}"
             else:
                 out_name = f"{self._args.output}/{basename}"
@@ -103,12 +138,12 @@ class CLIController():
             self.__process_file(file, out_name)
 
     def __get_loader(self, filename:str):
-        self._logger.info(f'Using "{self._args.loader}" loader')
+        self._logger.info("Using '%s' loader", self._args.loader)
 
         if self._args.loader == 'mixed':
-            loader = PyPDFMixedLoader(self._args.cache_dir)
-            if self._args.page != None:
-                self._logger.info(f'Processing page {self._args.page}')
+            loader = PyPDFMixedLoader(self._args.cache_dir, self._args.keep_cache)
+            if self._args.page is not None:
+                self._logger.info('Processing page %s', self._args.page)
 
                 loader.load_page(filename, self._args.page)
             else:
@@ -116,7 +151,7 @@ class CLIController():
         elif self._args.loader == 'text':
             loader = PyPDFLoader(filename)
         elif self._args.loader == 'ocr':
-            loader = OCRLoader(filename, self._args.cache_dir)
+            loader = OCRLoader(filename, self._args.cache_dir, self._args.keep_cache)
         else:
             raise CLIException("Invalid type of loader")
 
@@ -136,7 +171,7 @@ class CLIController():
                 print(text)
             else:
                 self.__save_text(text, base_filename + '.txt')
-                self._logger.info(f'Text output saved to {base_filename}.txt')
+                self._logger.info('Text output saved to %s.txt', base_filename)
 
         if 'csv' in self._args.type:
             self._logger.debug('Generating csv output')
@@ -153,14 +188,14 @@ class CLIController():
                     data.save_page_data(self._args.page, base_filename + '.csv')
                 else:
                     data.save_data(base_filename + '.csv')
-                    self._logger.info(f'csv output saved to {base_filename}.csv')
+                    self._logger.info('csv output saved to %s.csv', base_filename)
 
     def __save_text(self, text:str, filename: str):
         try:
-            with open(filename, 'w') as f:
+            with open(filename, 'w', encoding='utf-8') as f:
                 f.write(text)
         except FileNotFoundError as e:
-            raise CLIException("Output directory not found")
+            raise CLIException("Output directory not found") from e
 
 if __name__ == "__main__":
     try:
@@ -171,7 +206,7 @@ if __name__ == "__main__":
         )
     except ValueError as e:
         print(f"Environment variables file is corrupted: {e}")
-        exit(1)
+        sys.exit(1)
 
     _logger = AppLogger.get_logger(PROGRAM_NAME)
     _logger.info(' '.join(sys.argv))
@@ -182,4 +217,4 @@ if __name__ == "__main__":
     except CLIException as e:
         print(e)
         _logger.error(e)
-        exit(1)
+        sys.exit(1)
