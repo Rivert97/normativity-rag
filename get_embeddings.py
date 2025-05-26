@@ -31,8 +31,6 @@ class CLIController(CLI):
         self.storage = None
         self.embedder = None
 
-        self._args = self.__process_args()
-
     def run(self):
         """Run the script logic."""
         if self._args.file != '':
@@ -52,7 +50,9 @@ class CLIController(CLI):
 
             self.__process_file(file, out_name, self._args.type)
 
-    def __process_args(self) -> argparse.Namespace:
+    def process_args(self) -> argparse.Namespace:
+        super().process_args()
+
         self.parser.add_argument('-a', '--action',
                             default='embeddings',
                             choices=['embeddings', 'structure', 'tree'],
@@ -111,7 +111,6 @@ class CLIController(CLI):
                             choices=['csv', 'txt'],
                             type=str,
                             help='Type of input. Defaults to csv')
-        self.parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = self.parser.parse_args()
 
@@ -147,7 +146,7 @@ class CLIController(CLI):
         if args.action == 'embeddings' and args.storage != 'csv' and args.collection == '':
             raise CLIException("Please specify a name for the collection")
 
-        return args
+        self._args = args
 
     def __process_file(self, filename: str, output: str, input_type: str):
         self._logger.info('Processing file %s', filename)

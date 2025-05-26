@@ -55,8 +55,6 @@ class CLIController(CLI):
     def __init__(self):
         super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
-        self._args = self.__process_args()
-
     def run(self):
         """Run the script logic."""
         if self._args.settings_file == '':
@@ -83,7 +81,9 @@ class CLIController(CLI):
         else:
             self.__process_yaml(self._args.settings_file)
 
-    def __process_args(self) -> argparse.Namespace:
+    def process_args(self) -> argparse.Namespace:
+        super().process_args()
+
         self.parser.add_argument('-c', '--collection',
                             default='',
                             type=str,
@@ -147,7 +147,6 @@ class CLIController(CLI):
                             default='',
                             type=str,
                             help='File with all the options to build a database')
-        self.parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = self.parser.parse_args()
 
@@ -179,7 +178,7 @@ class CLIController(CLI):
         if args.collection == '':
             raise CLIException("Please specify a collection name")
 
-        return args
+        self._args = args
 
     def __process_file(self, filename: str, collection:str, settings:ExecSettings,
                        params:CollectionParams):

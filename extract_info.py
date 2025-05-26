@@ -24,8 +24,6 @@ class CLIController(CLI):
 
         self.print_to_console = True
 
-        self._args = self.__process_args()
-
     def run(self):
         """Run the script logic."""
         if self._args.file != '':
@@ -35,7 +33,9 @@ class CLIController(CLI):
         else:
             raise CLIException("Input not specified")
 
-    def __process_args(self) -> argparse.Namespace:
+    def process_args(self) -> argparse.Namespace:
+        super().process_args()
+
         self.parser.add_argument('--cache-dir',
                             default='./.cache',
                             type=str,
@@ -72,9 +72,6 @@ class CLIController(CLI):
                             nargs='+',
                             type=str,
                             help='Type(s) of output(s). Defaults to txt')
-        self.parser.add_argument('-v', '--version',
-                            action='version',
-                            version=VERSION)
 
         args = self.parser.parse_args()
 
@@ -108,7 +105,7 @@ class CLIController(CLI):
         if args.output != '':
             self.print_to_console = False
 
-        return args
+        self._args = args
 
     def __process_file(self, filename: str, output: str = None):
         self._logger.info('Processing file %s', filename)
