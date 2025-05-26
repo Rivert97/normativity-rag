@@ -8,7 +8,7 @@ import os
 
 from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
-from embeddings.storage import ChromaDBStorage
+from llms.storage import ChromaDBStorage
 
 PROGRAM_NAME = 'GetRelevantCLI'
 VERSION = '1.00.00'

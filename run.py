@@ -11,7 +11,7 @@ from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
 from document_splitters.hierarchical import TextTreeSplitter, DataTreeSplitter, TreeSplitter
-from embeddings.storage import ChromaDBStorage
+from llms.storage import ChromaDBStorage
 
 PROGRAM_NAME = 'Runner'
 VERSION = '1.00.00'

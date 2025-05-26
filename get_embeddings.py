@@ -11,8 +11,8 @@ from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from document_loaders.representations import PdfDocumentData
 from document_splitters.hierarchical import TreeSplitter, DataTreeSplitter, TextTreeSplitter
-from embeddings.embedders import STEmbedder
-from embeddings.storage import CSVStorage, ChromaDBStorage
+from llms.embedders import STEmbedder
+from llms.storage import CSVStorage, ChromaDBStorage
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
