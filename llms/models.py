@@ -34,6 +34,7 @@ class Qwen(LLMModel):
         )
 
     def query(self, query:str):
+        """Query an answer based on a question."""
         messages = [
             {"role": "user", "content": query}
         ]
@@ -41,7 +42,7 @@ class Qwen(LLMModel):
             messages,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=True # Switches between thinking and non-thinking modes. Default is True.
+            enable_thinking=True # Switches between thinking and non-thinking modes. Default is True
         )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
 
@@ -59,16 +60,14 @@ class Qwen(LLMModel):
         except ValueError:
             index = 0
 
-        #thinking_content = self.tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
+        #thinking_content =
+        #    self.tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
         content = self.tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
 
         return content
 
     def query_with_documents(self, query, documents):
-        return super().query_with_documents(query, documents)
-
-    def query_with_documents(self, query, documents):
-        return super().query_with_documents(query, documents)
+        """Query an answer based on a question and some documents passed as context."""
 
 class LLama(LLMModel):
     """Class to load Meta Llama model."""
@@ -82,7 +81,7 @@ class LLama(LLMModel):
         )
 
     def query(self, query:str) -> str:
-        return self.pipeline(query)
+        """Query an answer based on a question."""
 
     def query_with_documents(self, query, documents):
-        return super().query_with_documents(query, documents)
+        """Query an answer based on a question and some documents passed as context."""

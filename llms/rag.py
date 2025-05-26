@@ -31,5 +31,3 @@ class RAG:
             documents.append(doc)
 
         return documents
-
-

@@ -30,6 +30,7 @@ class CLIController(CLI):
         self.print_to_console = True
         self.storage = None
         self.embedder = None
+        self._args = None
 
     def run(self):
         """Run the script logic."""

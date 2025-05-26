@@ -55,6 +55,8 @@ class CLIController(CLI):
     def __init__(self):
         super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
+        self._args = None
+
     def run(self):
         """Run the script logic."""
         if self._args.settings_file == '':
@@ -152,7 +154,8 @@ class CLIController(CLI):
 
         # If a settings file is used, all arguments are ignored
         if args.settings_file != '':
-            return args
+            self._args = args
+            return
 
         if args.file != '' and not os.path.exists(args.file):
             raise CLIException(f"Input file '{args.file}' not found")

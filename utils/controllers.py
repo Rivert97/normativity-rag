@@ -39,6 +39,7 @@ class CLI:
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
     def process_args(self):
+        """Add and process the arguments of the script."""
         self.parser.add_argument('-v', '--version', action='version', version=self.version)
 
     def run(self):

@@ -23,6 +23,7 @@ class CLIController(CLI):
         super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
         self.print_to_console = True
+        self._args = None
 
     def run(self):
         """Run the script logic."""
