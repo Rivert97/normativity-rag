@@ -8,7 +8,7 @@ import os
 
 from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
-from embeddings.storage import ChromaDBStorage
+from llms.storage import ChromaDBStorage
 
 PROGRAM_NAME = 'GetRelevantCLI'
 VERSION = '1.00.00'
@@ -20,7 +20,7 @@ class CLIController(CLI):
     def __init__(self):
         super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
-        self._args = self.__process_args()
+        self._args = None
 
     def run(self):
         """Run the script logic."""
@@ -40,7 +40,9 @@ class CLIController(CLI):
             print(f"Path: {doc['metadata']['path']}")
             print(f"Embeddings size: {doc['embeddings'].shape}")
 
-    def __process_args(self) -> argparse.Namespace:
+    def process_args(self) -> argparse.Namespace:
+        super().process_args()
+
         self.parser.add_argument('sentence',
                             type=str,
                             help='Reference sentence to retrieve similar documents')
@@ -64,7 +66,6 @@ class CLIController(CLI):
                             default=5,
                             type=int,
                             help='Number of relevant documents to retrieve. Defaults to 5')
-        self.parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = self.parser.parse_args()
 
@@ -77,7 +78,7 @@ class CLIController(CLI):
         if not os.path.exists(args.database_dir):
             raise CLIException(f"Database folder '{args.database_dir}' not found")
 
-        return args
+        self._args = args
 
 if __name__ == "__main__":
     run_cli(CLIController)

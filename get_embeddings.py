@@ -11,8 +11,8 @@ from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from document_loaders.representations import PdfDocumentData
 from document_splitters.hierarchical import TreeSplitter, DataTreeSplitter, TextTreeSplitter
-from embeddings.embedders import STEmbedder
-from embeddings.storage import CSVStorage, ChromaDBStorage
+from llms.embedders import STEmbedder
+from llms.storage import CSVStorage, ChromaDBStorage
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
@@ -30,8 +30,7 @@ class CLIController(CLI):
         self.print_to_console = True
         self.storage = None
         self.embedder = None
-
-        self._args = self.__process_args()
+        self._args = None
 
     def run(self):
         """Run the script logic."""
@@ -52,7 +51,9 @@ class CLIController(CLI):
 
             self.__process_file(file, out_name, self._args.type)
 
-    def __process_args(self) -> argparse.Namespace:
+    def process_args(self) -> argparse.Namespace:
+        super().process_args()
+
         self.parser.add_argument('-a', '--action',
                             default='embeddings',
                             choices=['embeddings', 'structure', 'tree'],
@@ -111,7 +112,6 @@ class CLIController(CLI):
                             choices=['csv', 'txt'],
                             type=str,
                             help='Type of input. Defaults to csv')
-        self.parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = self.parser.parse_args()
 
@@ -147,7 +147,7 @@ class CLIController(CLI):
         if args.action == 'embeddings' and args.storage != 'csv' and args.collection == '':
             raise CLIException("Please specify a name for the collection")
 
-        return args
+        self._args = args
 
     def __process_file(self, filename: str, output: str, input_type: str):
         self._logger.info('Processing file %s', filename)

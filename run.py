@@ -11,7 +11,7 @@ from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
 from document_splitters.hierarchical import TextTreeSplitter, DataTreeSplitter, TreeSplitter
-from embeddings.storage import ChromaDBStorage
+from llms.storage import ChromaDBStorage
 
 PROGRAM_NAME = 'Runner'
 VERSION = '1.00.00'
@@ -55,7 +55,7 @@ class CLIController(CLI):
     def __init__(self):
         super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
-        self._args = self.__process_args()
+        self._args = None
 
     def run(self):
         """Run the script logic."""
@@ -83,7 +83,9 @@ class CLIController(CLI):
         else:
             self.__process_yaml(self._args.settings_file)
 
-    def __process_args(self) -> argparse.Namespace:
+    def process_args(self) -> argparse.Namespace:
+        super().process_args()
+
         self.parser.add_argument('-c', '--collection',
                             default='',
                             type=str,
@@ -147,13 +149,13 @@ class CLIController(CLI):
                             default='',
                             type=str,
                             help='File with all the options to build a database')
-        self.parser.add_argument('-v', '--version', action='version', version=VERSION)
 
         args = self.parser.parse_args()
 
         # If a settings file is used, all arguments are ignored
         if args.settings_file != '':
-            return args
+            self._args = args
+            return
 
         if args.file != '' and not os.path.exists(args.file):
             raise CLIException(f"Input file '{args.file}' not found")
@@ -179,7 +181,7 @@ class CLIController(CLI):
         if args.collection == '':
             raise CLIException("Please specify a collection name")
 
-        return args
+        self._args = args
 
     def __process_file(self, filename: str, collection:str, settings:ExecSettings,
                        params:CollectionParams):
