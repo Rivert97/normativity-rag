@@ -518,12 +518,14 @@ class OcrPdfParser():
         if os.path.exists(tmp_cache):
             shutil.rmtree(tmp_cache)
 
-        os.makedirs(self.cache_subfolder, exist_ok=True)
         os.makedirs(tmp_cache, exist_ok=True)
 
-        _ = pdf2image.convert_from_path(self.pdf_path,
+        images = pdf2image.convert_from_path(self.pdf_path,
                                         output_folder=tmp_cache,
                                         fmt='jpeg',
                                         dpi=1000,
                                         output_file='')
-        os.rename(tmp_cache, self.cache_subfolder) # Just to make shure all information is there
+        for img in images: # Close images to be able to move the directory
+            img.close()
+
+        os.rename(tmp_cache, self.cache_subfolder) # Just to make sure all information is there
