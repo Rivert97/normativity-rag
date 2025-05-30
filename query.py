@@ -10,7 +10,6 @@ from llms.rag import RAG
 from llms.models import Qwen, LLama
 
 DEFAULTS = {
-    'database_dir': './db',
     'embedder': 'all-MiniLM-L6-v2',
     'model': 'qwen',
 }
@@ -32,16 +31,14 @@ class CLIController(CLI):
 
     def run(self):
         """Run the script logic."""
-        storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
         model = MODELS[self._args.model]()
-        rag = RAG(
-            model=model,
-            storage=storage
-        )
 
         if self._args.collection == '':
+            rag = RAG(model=model)
             response = rag.query(self._args.query)
         else:
+            storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
+            rag = RAG(model=model, storage=storage)
             response = rag.query_with_documents(self._args.query, self._args.collection)
 
         print(response)
@@ -59,12 +56,9 @@ class CLIController(CLI):
                                  type=str,
                                  help='Name of the collection to use. Must exist in the database')
         self.parser.add_argument('-d', '--database-dir',
-                                default=DEFAULTS['database_dir'],
+                                default='',
                                 type=str,
-                                help=f'''
-                                    Directory where the database is stored.
-                                    Defaults to {DEFAULTS['database_dir']}
-                                    ''')
+                                help='Directory where the database is stored')
         self.parser.add_argument('-e', '--embedder',
                                  default=DEFAULTS['embedder'],
                                  type=str,
@@ -86,7 +80,7 @@ class CLIController(CLI):
         if args.query == '':
             raise CLIException("Please specify an input query.")
 
-        if not os.path.exists(args.database_dir):
+        if args.database_dir != '' and not os.path.exists(args.database_dir):
             raise CLIException(f"Database directory '{args.database_dir}' not found")
 
         self._args = args

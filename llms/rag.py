@@ -6,7 +6,7 @@ from .storage import Storage
 class RAG:
     """A class to perform basic RAG."""
 
-    def __init__(self, model:LLMModel, storage:Storage):
+    def __init__(self, model:LLMModel, storage:Storage|None=None):
         self.model = model
         self.storage = storage
 
@@ -16,6 +16,9 @@ class RAG:
 
     def query_with_documents(self, query:str, collection:str) -> str:
         """Retrieve an answer by first searching relevant documents in the colleciton."""
+        if self.storage is None:
+            return []
+        
         documents = self.storage.query_sentence(collection, query, 5)
         doc_contents = self.__prepare_documents(documents)
 

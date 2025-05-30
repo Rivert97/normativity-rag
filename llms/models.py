@@ -9,6 +9,10 @@ import torch
 
 dotenv.load_dotenv()
 
+# It's needed to run in the RTX4000
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_flash_sdp(False)
+
 class LLMModel(ABC):
     """Abstract class to define methods for models."""
 
@@ -82,6 +86,7 @@ class LLama(LLMModel):
 
     def query(self, query:str) -> str:
         """Query an answer based on a question."""
+        return self.pipeline(query)
 
     def query_with_documents(self, query, documents):
         """Query an answer based on a question and some documents passed as context."""
