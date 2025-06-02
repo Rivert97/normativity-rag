@@ -7,16 +7,18 @@ from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from llms.storage import ChromaDBStorage
 from llms.rag import RAG
-from llms.models import Qwen, LLama
+from llms.models import GemmaBuilder, LlamaBuilder, QwenBuilder, MistralBuilder
 
 DEFAULTS = {
     'embedder': 'all-MiniLM-L6-v2',
-    'model': 'qwen',
+    'model': 'gemma3',
 }
 
-MODELS = {
-    'qwen': Qwen,
-    'llama': LLama,
+MODEL_BUILDERS = {
+    'gemma': GemmaBuilder,
+    'llama': LlamaBuilder,
+    'qwen': QwenBuilder,
+    'mistral': MistralBuilder,
 }
 
 PROGRAM_NAME = 'RAG'
@@ -31,17 +33,26 @@ class CLIController(CLI):
 
     def run(self):
         """Run the script logic."""
-        model = MODELS[self._args.model]()
+        self._logger.info(f"Loading Model '{self._args.model} ({self._args.variant})'")
+        try:
+            model = MODEL_BUILDERS[self._args.model].build_from_variant(variant=self._args.variant)
+        except (AttributeError, OSError) as e:
+            self._logger.error(e)
+            raise CLIException(f"Invalid variant '{self._args.variant}' for model") from e
 
         if self._args.collection == '':
+            self._logger.info(f"Querying without RAG")
             rag = RAG(model=model)
             response = rag.query(self._args.query)
         else:
+            self._logger.info(f"Using collection '{self._args.collection}'")
             storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
             rag = RAG(model=model, storage=storage)
             response = rag.query_with_documents(self._args.query, self._args.collection)
 
         print(response)
+
+        self._logger.info(f"Response served. Length: {len(response)}")
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()
@@ -69,10 +80,17 @@ class CLIController(CLI):
         self.parser.add_argument('-m', '--model',
                                  default=DEFAULTS['model'],
                                  type=str,
-                                 choices=MODELS.keys(),
+                                 choices=MODEL_BUILDERS.keys(),
                                  help=f'''
-                                    Model to use as a conversational agent.
+                                    Base model to use as a conversational agent.
                                     Defaults to {DEFAULTS['model']}
+                                    ''')
+        self.parser.add_argument('--variant',
+                                 default='',
+                                 type=str,
+                                 help='''
+                                    Variant of model. See HuggingFace list of models
+                                    (https://huggingface.co/models). Ej: 4b-it
                                     ''')
 
         args = self.parser.parse_args()

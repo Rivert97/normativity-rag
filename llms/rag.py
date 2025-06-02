@@ -1,12 +1,12 @@
 """Module to define clases that apply different types of rag."""
 
-from .models import LLMModel
+from .models import HFModel
 from .storage import Storage
 
 class RAG:
     """A class to perform basic RAG."""
 
-    def __init__(self, model:LLMModel, storage:Storage|None=None):
+    def __init__(self, model:HFModel, storage:Storage|None=None):
         self.model = model
         self.storage = storage
 
@@ -18,7 +18,7 @@ class RAG:
         """Retrieve an answer by first searching relevant documents in the colleciton."""
         if self.storage is None:
             return []
-        
+
         documents = self.storage.query_sentence(collection, query, 5)
         doc_contents = self.__prepare_documents(documents)
 
