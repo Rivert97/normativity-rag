@@ -7,17 +7,18 @@ from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from llms.storage import ChromaDBStorage
 from llms.rag import RAG
-from llms.models import Qwen, LLama
+from llms.models import GemmaBuilder, LlamaBuilder, QwenBuilder, MistralBuilder
 
 DEFAULTS = {
-    'database_dir': './db',
     'embedder': 'all-MiniLM-L6-v2',
-    'model': 'qwen',
+    'model': 'gemma3',
 }
 
-MODELS = {
-    'qwen': Qwen,
-    'llama': LLama,
+MODEL_BUILDERS = {
+    'gemma': GemmaBuilder,
+    'llama': LlamaBuilder,
+    'qwen': QwenBuilder,
+    'mistral': MistralBuilder,
 }
 
 PROGRAM_NAME = 'RAG'
@@ -32,19 +33,26 @@ class CLIController(CLI):
 
     def run(self):
         """Run the script logic."""
-        storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
-        model = MODELS[self._args.model]()
-        rag = RAG(
-            model=model,
-            storage=storage
-        )
+        self._logger.info("Loading Model '%s (%s)'", self._args.model, self._args.variant)
+        try:
+            model = MODEL_BUILDERS[self._args.model].build_from_variant(variant=self._args.variant)
+        except (AttributeError, OSError) as e:
+            self._logger.error(e)
+            raise CLIException(f"Invalid variant '{self._args.variant}' for model") from e
 
         if self._args.collection == '':
+            self._logger.info("Querying without RAG")
+            rag = RAG(model=model)
             response = rag.query(self._args.query)
         else:
+            self._logger.info("Using collection '%s'", self._args.collection)
+            storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
+            rag = RAG(model=model, storage=storage)
             response = rag.query_with_documents(self._args.query, self._args.collection)
 
         print(response)
+
+        self._logger.info("Response served. Length: %s", len(response))
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()
@@ -59,12 +67,9 @@ class CLIController(CLI):
                                  type=str,
                                  help='Name of the collection to use. Must exist in the database')
         self.parser.add_argument('-d', '--database-dir',
-                                default=DEFAULTS['database_dir'],
+                                default='',
                                 type=str,
-                                help=f'''
-                                    Directory where the database is stored.
-                                    Defaults to {DEFAULTS['database_dir']}
-                                    ''')
+                                help='Directory where the database is stored')
         self.parser.add_argument('-e', '--embedder',
                                  default=DEFAULTS['embedder'],
                                  type=str,
@@ -75,10 +80,17 @@ class CLIController(CLI):
         self.parser.add_argument('-m', '--model',
                                  default=DEFAULTS['model'],
                                  type=str,
-                                 choices=MODELS.keys(),
+                                 choices=MODEL_BUILDERS.keys(),
                                  help=f'''
-                                    Model to use as a conversational agent.
+                                    Base model to use as a conversational agent.
                                     Defaults to {DEFAULTS['model']}
+                                    ''')
+        self.parser.add_argument('--variant',
+                                 default='',
+                                 type=str,
+                                 help='''
+                                    Variant of model. See HuggingFace list of models
+                                    (https://huggingface.co/models). Ej: 4b-it
                                     ''')
 
         args = self.parser.parse_args()
@@ -86,7 +98,7 @@ class CLIController(CLI):
         if args.query == '':
             raise CLIException("Please specify an input query.")
 
-        if not os.path.exists(args.database_dir):
+        if args.database_dir != '' and not os.path.exists(args.database_dir):
             raise CLIException(f"Database directory '{args.database_dir}' not found")
 
         self._args = args
