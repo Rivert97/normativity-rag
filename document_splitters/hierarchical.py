@@ -13,7 +13,6 @@ from anytree import RenderTree, NodeMixin, PreOrderIter
 from anytree.node.node import _repr
 from anytree.exporter import UniqueDotExporter
 
-from .data import Document
 from .detectors import TitleDetector
 
 class DocNode(NodeMixin):
@@ -143,20 +142,20 @@ class TreeSplitter():
 
         return text
 
-    def extract_documents(self, inner_splitter: str):
+    def extract_documents(self, inner_splitter: str) -> list[dict[str:str|dict]]:
         """Get a list of documents corresponding to each node of the tree and its substrings."""
         documents = []
         for node in PreOrderIter(self.root):
             splits = node.split_content(remove_hypens=True, split_type=inner_splitter)
             for split in splits:
-                doc = Document(
-                    content=split,
-                    metadata={
+                doc = {
+                    'content': split,
+                    'metadata': {
                         'document_name': self.document_name,
                         'title': node.get_full_title(),
                         'path': node.get_path(),
                     }
-                )
+                }
                 documents.append(doc)
 
         return documents

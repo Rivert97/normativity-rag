@@ -261,8 +261,8 @@ class CLIController(CLI):
         metadatas = []
         documents = splitter.extract_documents(self._args.inner_splitter)
         for doc in documents:
-            sentences.append(doc.get_content())
-            metadatas.append(doc.get_metadata())
+            sentences.append(doc['content'])
+            metadatas.append(doc['metadata'])
 
         return sentences, metadatas
 

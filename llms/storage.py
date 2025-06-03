@@ -6,6 +6,8 @@ import chromadb.errors
 from chromadb.utils import embedding_functions
 import pandas as pd
 
+from .data import Document
+
 class Storage(ABC):
     """Interface that defines methods that should be implemented by a storage."""
 
@@ -55,11 +57,11 @@ class ChromaDBStorage(Storage):
 
         documents = []
         for i in range(len(results['ids'][0])):
-            doc = {
-                'content': results['documents'][0][i],
-                'metadata': results['metadatas'][0][i],
-                'embeddings': results['embeddings'][0][i],
-            }
+            doc = Document(
+                content=results['documents'][0][i],
+                metadata=results['metadatas'][0][i],
+                embeddings=results['embeddings'][0][i],
+            )
             documents.append(doc)
 
         return documents
