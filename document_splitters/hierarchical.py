@@ -197,7 +197,7 @@ class DataTreeSplitter(TreeSplitter):
     def __init__(self, data: pd.DataFrame, document_name: str = ''):
         super().__init__(document_name)
 
-        self.data = data.copy()
+        self.data = data.copy().dropna()
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
         self.line_height = (self.data['bottom'] - self.data['top']).mean()
