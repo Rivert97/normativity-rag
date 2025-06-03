@@ -7,7 +7,6 @@ import dotenv
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
 from transformers import BitsAndBytesConfig, Gemma3ForConditionalGeneration, Gemma3ForCausalLM
-from transformers import Llama4ForConditionalGeneration
 import torch
 
 dotenv.load_dotenv()
@@ -32,42 +31,53 @@ class HFModel(ABC):
         """Query an answer based on a question and some documents passed as context."""
 
 class LlamaBuilder:
+    """Factory method for Llama classes."""
 
     @classmethod
     def build_from_variant(cls, variant:str) -> HFModel:
+        """Return an object of the corresponding Llama class depending on version."""
         main_version = variant.split('-')[0].split('.')[0]
 
         return getattr(sys.modules[__name__], f'Llama{main_version}')(variant)
 
 class GemmaBuilder:
+    """Factory method for Gemma classes."""
 
     @classmethod
     def build_from_variant(cls, variant:str='') -> HFModel:
+        """Return an object of the corresponding Gemma class depending on version."""
         version = variant.split('-')[0].replace('.', '_')
         sub_version = '-'.join(variant.split('-')[1:])
 
         return getattr(sys.modules[__name__], f'Gemma{version}')(sub_version)
 
 class QwenBuilder:
+    """Factory method for Qwen classes."""
 
     @classmethod
     def build_from_variant(cls, variant:str='') -> HFModel:
+        """Return an object of the corresponding Qwen class depending on version."""
         version = variant.split('-')[0].replace('.', '_')
         sub_version = '-'.join(variant.split('-')[1:])
 
         return getattr(sys.modules[__name__], f'Qwen{version}')(sub_version)
 
 class MistralBuilder:
+    """Factory method for Mistral classes."""
 
     @classmethod
     def build_from_variant(cls, variant:str='') -> HFModel:
+        """Return an object of the corresponding Mistral class depending on version."""
         return Mistral(variant)
 
 class Llama3(HFModel):
     """Class to load Meta Llama 3.1 and 3.2 model and its variants."""
 
     def __init__(self, sub_version:str=''):
-        self.model_id = "meta-llama/Llama-3.2-1B" if sub_version == '' else f'meta-llama/Llama-{sub_version}'
+        if sub_version == '':
+            self.model_id = "meta-llama/Llama-3.2-1B"
+        else:
+            self.model_id = f'meta-llama/Llama-{sub_version}'
 
         tokenizer = AutoTokenizer.from_pretrained(self.model_id, legacy=False)
         tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -100,16 +110,22 @@ class Llama3(HFModel):
         """Query an answer based on a question and some documents passed as context."""
 
 class Gemma3(HFModel):
+    """Class to load Gemma3 model and its variants."""
 
     def __init__(self, sub_version:str=''):
-        self.model_id = "google/gemma-3-4b-it" if sub_version == '' else f"google/gemma-3-{sub_version}"
+        if sub_version == '':
+            self.model_id = "google/gemma-3-4b-it"
+        else:
+            self.model_id = f"google/gemma-3-{sub_version}"
 
         self.multimodal = not(sub_version == '1b-it' or sub_version.endswith('-gguf'))
         self.processor = None
         self.tokenizer = None
 
         if self.model_id.endswith('-gguf'):
-            gguf_file = self.model_id.split('/')[-1].replace('-gguf', '.gguf').replace('-qat', '')
+            gguf_file = self.model_id.rsplit('/', maxsplit=1)[-1].replace('-gguf',
+                                                                          '.gguf').replace('-qat',
+                                                                                           '')
             quantization_config = None
         else:
             gguf_file = None
@@ -127,6 +143,7 @@ class Gemma3(HFModel):
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, gguf_file=gguf_file)
 
     def query(self, query:str) -> str:
+        """Query an answer based on a question."""
         messages = [
             {
                 "role": "system",
@@ -241,7 +258,10 @@ class Mistral(HFModel):
     """Class to load Mistral AI models."""
 
     def __init__(self, sub_version:str=''):
-        self.model_id = "mistralai/Mistral-7B-Instruct-v0.3" if sub_version == '' else f"mistralai/Mistral-{sub_version}"
+        if sub_version == '':
+            self.model_id = "mistralai/Mistral-7B-Instruct-v0.3"
+        else:
+            self.model_id = f"mistralai/Mistral-{sub_version}"
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
         self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
@@ -252,6 +272,7 @@ class Mistral(HFModel):
         )
 
     def query(self, query:str):
+        """Query an answer based on a question."""
         messages = [
             {
                 "role": "system",
@@ -280,4 +301,4 @@ class Mistral(HFModel):
         return result
 
     def query_with_documents(self, query, documents):
-        return super().query_with_documents(query, documents)
+        """Query an answer based on a question and some documents passed as context."""

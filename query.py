@@ -33,7 +33,7 @@ class CLIController(CLI):
 
     def run(self):
         """Run the script logic."""
-        self._logger.info(f"Loading Model '{self._args.model} ({self._args.variant})'")
+        self._logger.info("Loading Model '%s (%s)'", self._args.model, self._args.variant)
         try:
             model = MODEL_BUILDERS[self._args.model].build_from_variant(variant=self._args.variant)
         except (AttributeError, OSError) as e:
@@ -41,18 +41,18 @@ class CLIController(CLI):
             raise CLIException(f"Invalid variant '{self._args.variant}' for model") from e
 
         if self._args.collection == '':
-            self._logger.info(f"Querying without RAG")
+            self._logger.info("Querying without RAG")
             rag = RAG(model=model)
             response = rag.query(self._args.query)
         else:
-            self._logger.info(f"Using collection '{self._args.collection}'")
+            self._logger.info("Using collection '%s'", self._args.collection)
             storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
             rag = RAG(model=model, storage=storage)
             response = rag.query_with_documents(self._args.query, self._args.collection)
 
         print(response)
 
-        self._logger.info(f"Response served. Length: {len(response)}")
+        self._logger.info("Response served. Length: %s", len(response))
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()
