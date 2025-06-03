@@ -205,7 +205,7 @@ class CLIController(CLI):
 
         self._logger.info('Obtaining file structure')
         splitter.analyze()
-        sentences, metadatas = self.__extract_info(splitter)
+        sentences, metadatas = self.__extract_info(splitter, params)
 
         self._logger.info('Storing file info into Chromadb')
         storage = ChromaDBStorage(params.embedder, settings.database_dir)
@@ -256,13 +256,13 @@ class CLIController(CLI):
 
         return pdf_loader
 
-    def __extract_info(self, splitter:TreeSplitter):
+    def __extract_info(self, splitter:TreeSplitter, params:CollectionParams):
         sentences = []
         metadatas = []
-        documents = splitter.extract_documents(self._args.inner_splitter)
+        documents = splitter.extract_documents(params.inner_splitter)
         for doc in documents:
-            sentences.append(doc.get_content())
-            metadatas.append(doc.get_metadata())
+            sentences.append(doc['content'])
+            metadatas.append(doc['metadata'])
 
         return sentences, metadatas
 

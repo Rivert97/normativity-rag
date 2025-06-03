@@ -20,17 +20,5 @@ class RAG:
             return []
 
         documents = self.storage.query_sentence(collection, query, 5)
-        doc_contents = self.__prepare_documents(documents)
 
-        return self.model.query_with_documents(query, doc_contents)
-
-    def __prepare_documents(self, raw_documents:list[str]):
-        documents = []
-        for d in raw_documents:
-            doc = {
-                'title': d['metadata']['title'],
-                'text': d['content'],
-            }
-            documents.append(doc)
-
-        return documents
+        return self.model.query_with_documents(query, documents)

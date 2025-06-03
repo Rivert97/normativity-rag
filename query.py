@@ -11,7 +11,7 @@ from llms.models import GemmaBuilder, LlamaBuilder, QwenBuilder, MistralBuilder
 
 DEFAULTS = {
     'embedder': 'all-MiniLM-L6-v2',
-    'model': 'gemma3',
+    'model': 'gemma',
 }
 
 MODEL_BUILDERS = {

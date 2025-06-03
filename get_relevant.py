@@ -36,9 +36,9 @@ class CLIController(CLI):
         self._logger.debug('Showing results')
         for doc in documents:
             print("\n---------------------------------------")
-            print(f"Sentence: {doc['content']}")
-            print(f"Path: {doc['metadata']['path']}")
-            print(f"Embeddings size: {doc['embeddings'].shape}")
+            print(f"Sentence: {doc.get_content()}")
+            print(f"Path: {doc.get_metadata()['path']}")
+            print(f"Embeddings size: {doc.get_embeddings().shape}")
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()
