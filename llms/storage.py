@@ -52,7 +52,7 @@ class ChromaDBStorage(Storage):
         results = collection.query(
             query_texts=[sentence],
             n_results=n_results,
-            include=['documents', 'metadatas', 'embeddings'],
+            include=['documents', 'metadatas', 'embeddings', 'distances'],
         )
 
         documents = []
@@ -61,6 +61,7 @@ class ChromaDBStorage(Storage):
                 content=results['documents'][0][i],
                 metadata=results['metadatas'][0][i],
                 embeddings=results['embeddings'][0][i],
+                distance=results['distances'][0][i],
             )
             documents.append(doc)
 
