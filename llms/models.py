@@ -48,6 +48,7 @@ class Model:
             self.__add_text_message_with_context(query, documents)
 
     def add_response(self, response:str):
+        """Add response to the history of conversation."""
         new_message = {
             "role": "assistant",
             "content": response,
