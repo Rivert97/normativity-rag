@@ -71,7 +71,10 @@ class CLIController(CLI):
         self.parser.add_argument('--context',
                                  default=False,
                                  action='store_true',
-                                 help='Show the relevant context passed to the LLM to answer the question')
+                                 help='''
+                                    Show the relevant context passed to the LLM to answer
+                                    the question.
+                                    ''')
         self.parser.add_argument('-d', '--database-dir',
                                 default='',
                                 type=str,
@@ -94,7 +97,10 @@ class CLIController(CLI):
         self.parser.add_argument('--max-distance',
                                  default=1.0,
                                  type=float,
-                                 help='Maximum cosine distance for a document to be considered relevant.')
+                                 help='''
+                                    Maximum cosine distance for a document to be considered
+                                    relevant.
+                                    ''')
         self.parser.add_argument('--variant',
                                  default='',
                                  type=str,

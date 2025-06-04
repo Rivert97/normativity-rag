@@ -72,8 +72,7 @@ class Document:
                 print(' |')
                 print('|', t, end='')
                 i = 3
-        else:
-            print(' '*(width-i-2), '|')
+        print(' '*(width-i-2), '|')
         print('+', '-'*(width-2), '+', sep='')
 
     def __str__(self):
