@@ -1,24 +1,24 @@
 """Module to define clases that apply different types of rag."""
 
-from .models import HFModel
+from .models import Model
 from .storage import Storage
 
 class RAG:
     """A class to perform basic RAG."""
 
-    def __init__(self, model:HFModel, storage:Storage|None=None):
+    def __init__(self, model:Model, storage:Storage|None=None):
         self.model = model
         self.storage = storage
 
-    def query(self, query:str) -> str:
-        """Retrieve an answer with no additional context."""
-        return self.model.query(query)
-
-    def query_with_documents(self, query:str, collection:str, num_docs:int=5,
+    def query(self, query:str, collection:str='', num_docs:int=5,
                              max_distance:float=1.0) -> str:
-        """Retrieve an answer by first searching relevant documents in the colleciton."""
+        """Retrieve an answer if a collection is specified it passes relevant
+        documents as context."""
+        if collection == '':
+            return self.model.query(query), []
+
         if self.storage is None:
-            return []
+            return '', []
 
         documents = self.storage.query_sentence(collection, query, num_docs)
 

@@ -1,6 +1,6 @@
 """Module to define multiple types of models provided by HuggingFace."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import sys
 
 import dotenv
@@ -17,8 +17,13 @@ dotenv.load_dotenv()
 torch.backends.cuda.enable_mem_efficient_sdp(False)
 torch.backends.cuda.enable_flash_sdp(False)
 
-class HFModel(ABC):
-    """Abstract class to define methods for models downloaded from huggingface."""
+class Model:
+    """Base class for all the models."""
+
+    def __init__(self, multimodal:bool=False):
+        self.multimodal = multimodal
+
+        self.messages = self.__init_messages()
 
     @abstractmethod
     def query(self, query:str) -> str:
@@ -28,54 +33,68 @@ class HFModel(ABC):
     def query_with_documents(self, query: str, documents:list[Document]) -> str:
         """Query an answer based on a question and some documents passed as context."""
 
-class Model:
-    """Base class for all the models."""
+    def add_message(self, query:str):
+        """Add a new message to be sent to the model."""
+        if self.multimodal:
+            self.__add_multimodal_message(query)
+        else:
+            self.__add_text_message(query)
 
-    def build_multimodal_messages(self, query:str) -> list[dict[str:str|list]]:
-        """Build the structure of the messages to send to the model when they support
-        multimodal messages."""
-        messages = [
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": "Eres un experto en resolver preguntas."}]
-            },
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": query}]
-            }
-        ]
+    def add_message_with_context(self, query:str, documents:list[Document]):
+        """Add a new message to be sent to the model including documents to be used as context."""
+        if self.multimodal:
+            self.__add_multimodal_message_with_context(query, documents)
+        else:
+            self.__add_text_message_with_context(query, documents)
+
+    def add_response(self, response:str):
+        new_message = {
+            "role": "assistant",
+            "content": response,
+        }
+        self.messages.append(new_message)
+
+    def __init_messages(self) -> list[dict[str:str|dict]]:
+        if self.multimodal:
+            messages = [
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "Eres un experto en resolver preguntas."}],
+                },
+            ]
+        else:
+            messages = [
+                {
+                    "role": "system",
+                    "content": "Eres un experto en resolver preguntas.",
+                },
+            ]
 
         return messages
 
-    def build_text_messages(self, query:str) -> list[dict[str:str]]:
-        """Build the structure of the messages to send to the model when they support
-        only text."""
-        messages = [
-            {
-                "role": "system",
-                "content": "Eres un experto en resolver preguntas."
-            },
-            {
-                "role": "user",
-                "content": query
-            }
-        ]
+    def __add_multimodal_message(self, query:str):
+        new_message = {
+            "role": "user",
+            "content": [{"type": "text", "text": query}]
+        }
+        self.messages.append(new_message)
 
-        return messages
+    def __add_text_message(self, query:str):
+        new_message = {
+            "role": "user",
+            "content": query
+        }
+        self.messages.append(new_message)
 
-    def build_multimodal_messages_with_context(self,
-                                               query:str,
-                                               documents:list[Document]) -> list[dict]:
-        """Build the structure of the messages passing the context documents when the model
-        supports multimodal messages."""
+    def __add_multimodal_message_with_context(self, query:str, documents:list[Document]):
         documents_context = self.__format_documents(documents)
 
-        messages = [
+        new_messages = [
             {
                 "role": "system",
                 "content": [{
                     "type": "text",
-                    "text": "Responde las siguientes preguntas utilizando únicamente los "\
+                    "text": "Responde la siguiente pregunta utilizando únicamente los "\
                             f"fragmentos de la normativa siguiente:\n\n{documents_context}"
                 }]
             },
@@ -84,17 +103,12 @@ class Model:
                 "content": [{"type": "text", "text": query}]
             }
         ]
+        self.messages.extend(new_messages)
 
-        return messages
-
-    def build_text_messages_with_context(self,
-                                         query:str,
-                                         documents:list[Document]) -> list[dict[str:str|list]]:
-        """Build the structure of the messages passing the context documents when the model
-        supports text only messages."""
+    def __add_text_message_with_context(self, query:str, documents:list[Document]):
         documents_context = self.__format_documents(documents)
 
-        messages = [
+        new_messages = [
             {
                 "role": "system",
                 "content": "Responde las siguientes preguntas utilizando únicamente los "\
@@ -105,8 +119,7 @@ class Model:
                 "content": query
             }
         ]
-
-        return messages
+        self.messages.extend(new_messages)
 
     def __format_documents(self, documents:list[Document]) -> str:
         docs_str = ''
@@ -120,7 +133,7 @@ class LlamaBuilder:
     """Factory method for Llama classes."""
 
     @classmethod
-    def build_from_variant(cls, variant:str) -> HFModel:
+    def build_from_variant(cls, variant:str) -> Model:
         """Return an object of the corresponding Llama class depending on version."""
         main_version = variant.split('-')[0].split('.')[0]
 
@@ -130,7 +143,7 @@ class GemmaBuilder:
     """Factory method for Gemma classes."""
 
     @classmethod
-    def build_from_variant(cls, variant:str='') -> HFModel:
+    def build_from_variant(cls, variant:str='') -> Model:
         """Return an object of the corresponding Gemma class depending on version."""
         version = variant.split('-')[0].replace('.', '_')
         sub_version = '-'.join(variant.split('-')[1:])
@@ -141,7 +154,7 @@ class QwenBuilder:
     """Factory method for Qwen classes."""
 
     @classmethod
-    def build_from_variant(cls, variant:str='') -> HFModel:
+    def build_from_variant(cls, variant:str='') -> Model:
         """Return an object of the corresponding Qwen class depending on version."""
         version = variant.split('-')[0].replace('.', '_')
         sub_version = '-'.join(variant.split('-')[1:])
@@ -152,14 +165,16 @@ class MistralBuilder:
     """Factory method for Mistral classes."""
 
     @classmethod
-    def build_from_variant(cls, variant:str='') -> HFModel:
+    def build_from_variant(cls, variant:str='') -> Model:
         """Return an object of the corresponding Mistral class depending on version."""
         return Mistral(variant)
 
-class Llama3(HFModel, Model):
+class Llama3(Model):
     """Class to load Meta Llama 3.1 and 3.2 model and its variants."""
 
     def __init__(self, sub_version:str=''):
+        super().__init__(multimodal=True)
+
         if sub_version == '':
             self.model_id = "meta-llama/Llama-3.2-1B"
         else:
@@ -177,29 +192,31 @@ class Llama3(HFModel, Model):
 
     def query(self, query:str) -> str:
         """Query an answer based on a question."""
-        messages = self.build_multimodal_messages(query)
+        self.add_message(query)
 
-        result = self.pipeline(messages)
+        result = self.pipeline(self.messages)
 
         return result
 
     def query_with_documents(self, query:str, documents:list[Document]):
         """Query an answer based on a question and some documents passed as context."""
-        messages = self.build_multimodal_messages_with_context(query, documents)
-        response = self.pipeline(messages)
+        self.add_message_with_context(query, documents)
+        response = self.pipeline(self.messages)
 
         return response
 
-class Gemma3(HFModel, Model):
+class Gemma3(Model):
     """Class to load Gemma3 model and its variants."""
 
     def __init__(self, sub_version:str=''):
+        multimodal = not(sub_version == '1b-it' or sub_version.endswith('-gguf'))
+        super().__init__(multimodal=multimodal)
+
         if sub_version == '':
             self.model_id = "google/gemma-3-4b-it"
         else:
             self.model_id = f"google/gemma-3-{sub_version}"
 
-        self.multimodal = not(sub_version == '1b-it' or sub_version.endswith('-gguf'))
         self.processor = None
         self.tokenizer = None
 
@@ -225,22 +242,22 @@ class Gemma3(HFModel, Model):
 
     def query(self, query:str) -> str:
         """Query an answer based on a question."""
-        messages = self.build_multimodal_messages(query)
+        self.add_message(query)
 
         if self.multimodal:
-            response = self.__process_multimodal(messages)
+            response = self.__process_multimodal(self.messages)
         else:
-            response = self.__process_text(messages)
+            response = self.__process_text(self.messages)
 
         return response
 
     def query_with_documents(self, query:str, documents:list[Document]):
         """Query an answer based on a question and some documents passed as context."""
-        messages = self.build_multimodal_messages_with_context(query, documents)
+        self.add_message_with_context(query, documents)
         if self.multimodal:
-            response = self.__process_multimodal(messages)
+            response = self.__process_multimodal(self.messages)
         else:
-            response = self.__process_text(messages)
+            response = self.__process_text(self.messages)
 
         return response
 
@@ -276,10 +293,12 @@ class Gemma3(HFModel, Model):
 
         return decoded
 
-class Qwen3(HFModel, Model):
+class Qwen3(Model):
     """Class to load Qwen models."""
 
     def __init__(self, sub_version:str=''):
+        super().__init__(multimodal=False)
+
         self.model_id = "Qwen/Qwen3-0.6B" if sub_version == '' else f"Qwen/Qwen3-{sub_version}"
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
@@ -291,15 +310,15 @@ class Qwen3(HFModel, Model):
 
     def query(self, query:str):
         """Query an answer based on a question."""
-        messages = self.build_text_messages(query)
-        response = self.__get_response_from_model(messages)
+        self.add_message(query)
+        response = self.__get_response_from_model(self.messages)
 
         return response
 
     def query_with_documents(self, query:str, documents:list[Document]):
         """Query an answer based on a question and some documents passed as context."""
-        messages = self.build_text_messages_with_context(query, documents)
-        response = self.__get_response_from_model(messages)
+        self.add_message_with_context(query, documents)
+        response = self.__get_response_from_model(self.messages)
 
         return response
 
@@ -332,10 +351,12 @@ class Qwen3(HFModel, Model):
 
         return content
 
-class Mistral(HFModel, Model):
+class Mistral(Model):
     """Class to load Mistral AI models."""
 
     def __init__(self, sub_version:str=''):
+        super().__init__(multimodal=False)
+
         if sub_version == '':
             self.model_id = "mistralai/Mistral-7B-Instruct-v0.3"
         else:
@@ -351,15 +372,15 @@ class Mistral(HFModel, Model):
 
     def query(self, query:str):
         """Query an answer based on a question."""
-        messages = self.build_text_messages(query)
-        response = self.__get_response_from_model(messages)
+        self.add_message(query)
+        response = self.__get_response_from_model(self.messages)
 
         return response
 
     def query_with_documents(self, query:str, documents:list[Document]):
         """Query an answer based on a question and some documents passed as context."""
-        messages = self.build_text_messages_with_context(query, documents)
-        response = self.__get_response_from_model(messages)
+        self.add_message_with_context(query, documents)
+        response = self.__get_response_from_model(self.messages)
 
         return response
 

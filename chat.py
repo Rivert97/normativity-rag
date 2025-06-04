@@ -44,25 +44,20 @@ class CLIController(CLI):
         if self._args.collection == '':
             self._logger.info("Querying without RAG")
             rag = RAG(model=model)
-            response = rag.query(self._args.query)
-            context = []
         else:
-            self._logger.info("Using collection '%s'", self._args.collection)
             storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
             rag = RAG(model=model, storage=storage)
-            response, context = rag.query_with_documents(self._args.query, self._args.collection,
-                                                         num_docs=10,
-                                                         max_distance=self._args.max_distance)
 
-        self.__show_response(response, context, self._args.context)
+        if self._args.query == '':
+            self.__process_interactive(rag)
+        else:
+            response, context = rag.query(self._args.query, self._args.collection, num_docs=10,
+                                        max_distance=self._args.max_distance)
+
+            self.__show_response(response, context, self._args.context)
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()
-
-        self.parser.add_argument('query',
-                                 default='',
-                                 type=str,
-                                 help='Sentence query to be answered by the model')
 
         self.parser.add_argument('-c', '--collection',
                                  default='',
@@ -86,6 +81,10 @@ class CLIController(CLI):
                                     Embeddings model to be used. Must match the database embedder.
                                     Defaults to {DEFAULTS['embedder']}
                                     ''')
+        self.parser.add_argument('-i', '--interactive',
+                                 default=False,
+                                 action='store_true',
+                                 help='Use the script in interactive mode in the console.')
         self.parser.add_argument('-m', '--model',
                                  default=DEFAULTS['model'],
                                  type=str,
@@ -101,6 +100,10 @@ class CLIController(CLI):
                                     Maximum cosine distance for a document to be considered
                                     relevant.
                                     ''')
+        self.parser.add_argument('--query',
+                                 default='',
+                                 type=str,
+                                 help='Sentence query to be answered by the model')
         self.parser.add_argument('--variant',
                                  default='',
                                  type=str,
@@ -111,9 +114,6 @@ class CLIController(CLI):
 
         args = self.parser.parse_args()
 
-        if args.query == '':
-            raise CLIException("Please specify an input query.")
-
         if args.database_dir != '' and not os.path.exists(args.database_dir):
             raise CLIException(f"Database directory '{args.database_dir}' not found")
 
@@ -121,6 +121,25 @@ class CLIController(CLI):
             raise CLIException("Invalid maximum distance")
 
         self._args = args
+
+    def __process_interactive(self, rag=RAG):
+        self._logger.info("Loading interactive mode")
+
+        print("Bienvenido al ChatBot UG. Presione Ctrl+c para salir\n")
+        while True:
+            try:
+                query = input(">> ")
+            except KeyboardInterrupt:
+                print("\nGracias")
+                break
+
+            if query == '':
+                continue
+
+            response, context = rag.query(query, self._args.collection, num_docs=10,
+                                        max_distance=self._args.max_distance)
+
+            self.__show_response(response, context, self._args.context)
 
     def __show_response(self, response:str, context:list[Document], show_context:bool):
         if show_context:
