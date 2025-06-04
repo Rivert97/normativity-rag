@@ -8,6 +8,7 @@ from utils.exceptions import CLIException
 from llms.storage import ChromaDBStorage
 from llms.rag import RAG
 from llms.models import GemmaBuilder, LlamaBuilder, QwenBuilder, MistralBuilder
+from llms.data import Document
 
 DEFAULTS = {
     'embedder': 'all-MiniLM-L6-v2',
@@ -44,15 +45,16 @@ class CLIController(CLI):
             self._logger.info("Querying without RAG")
             rag = RAG(model=model)
             response = rag.query(self._args.query)
+            context = []
         else:
             self._logger.info("Using collection '%s'", self._args.collection)
             storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
             rag = RAG(model=model, storage=storage)
-            response = rag.query_with_documents(self._args.query, self._args.collection)
+            response, context = rag.query_with_documents(self._args.query, self._args.collection,
+                                                         num_docs=10,
+                                                         max_distance=self._args.max_distance)
 
-        print(response)
-
-        self._logger.info("Response served. Length: %s", len(response))
+        self.__show_response(response, context, self._args.context)
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()
@@ -66,6 +68,10 @@ class CLIController(CLI):
                                  default='',
                                  type=str,
                                  help='Name of the collection to use. Must exist in the database')
+        self.parser.add_argument('--context',
+                                 default=False,
+                                 action='store_true',
+                                 help='Show the relevant context passed to the LLM to answer the question')
         self.parser.add_argument('-d', '--database-dir',
                                 default='',
                                 type=str,
@@ -85,6 +91,10 @@ class CLIController(CLI):
                                     Base model to use as a conversational agent.
                                     Defaults to {DEFAULTS['model']}
                                     ''')
+        self.parser.add_argument('--max-distance',
+                                 default=1.0,
+                                 type=float,
+                                 help='Maximum cosine distance for a document to be considered relevant.')
         self.parser.add_argument('--variant',
                                  default='',
                                  type=str,
@@ -101,7 +111,19 @@ class CLIController(CLI):
         if args.database_dir != '' and not os.path.exists(args.database_dir):
             raise CLIException(f"Database directory '{args.database_dir}' not found")
 
+        if args.max_distance <= 0:
+            raise CLIException("Invalid maximum distance")
+
         self._args = args
+
+    def __show_response(self, response:str, context:list[Document], show_context:bool):
+        if show_context:
+            for doc in context:
+                doc.print_to_console()
+
+        print(response)
+
+        self._logger.info("Response served. Length: %s", len(response))
 
 if __name__ == "__main__":
     run_cli(CLIController)

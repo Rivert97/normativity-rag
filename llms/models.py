@@ -111,8 +111,8 @@ class Model:
     def __format_documents(self, documents:list[Document]) -> str:
         docs_str = ''
         for doc in documents:
-            docs_str += f"{doc.get_reference()}:\n\n{doc.get_content()}\n\n"\
-                        "-----------------------------\n\n"
+            docs_str += f"{doc.get_reference()}:\n\n{doc.get_metadata()['title']}\n\n"\
+                        f"{doc.get_content()}\n\n-----------------------------\n\n"
 
         return docs_str
 

@@ -14,11 +14,24 @@ class RAG:
         """Retrieve an answer with no additional context."""
         return self.model.query(query)
 
-    def query_with_documents(self, query:str, collection:str) -> str:
+    def query_with_documents(self, query:str, collection:str, num_docs:int=5,
+                             max_distance:float=1.0) -> str:
         """Retrieve an answer by first searching relevant documents in the colleciton."""
         if self.storage is None:
             return []
 
-        documents = self.storage.query_sentence(collection, query, 5)
+        documents = self.storage.query_sentence(collection, query, num_docs)
 
-        return self.model.query_with_documents(query, documents)
+        relevant_docs = []
+        for doc in documents:
+            if doc.get_distance() > max_distance:
+                continue
+
+            relevant_docs.append(doc)
+
+        if len(relevant_docs) > 0:
+            response = self.model.query_with_documents(query, relevant_docs)
+        else:
+            response = self.model.query(query)
+
+        return response, relevant_docs
