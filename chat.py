@@ -81,10 +81,6 @@ class CLIController(CLI):
                                     Embeddings model to be used. Must match the database embedder.
                                     Defaults to {DEFAULTS['embedder']}
                                     ''')
-        self.parser.add_argument('-i', '--interactive',
-                                 default=False,
-                                 action='store_true',
-                                 help='Use the script in interactive mode in the console.')
         self.parser.add_argument('-m', '--model',
                                  default=DEFAULTS['model'],
                                  type=str,
