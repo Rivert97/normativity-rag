@@ -6,6 +6,10 @@
 
 This guide was made considering Ubuntu-based distros, and tested in Kubuntu 24.04.
 
+## Donwload repo
+
+    git clone https://github.com/Rivert97/normativity-rag.git
+
 ## Install Ubuntu packages
 
 Poppler-Utils must be installed in the system:

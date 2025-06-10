@@ -14,7 +14,7 @@ This repository implements basic features of RAG for normativity-like files:
     * Storage using ChromaDB
 *
 
-# Instalation
+# Installation
 
 Please refer to the proper installation guide according to your system
 

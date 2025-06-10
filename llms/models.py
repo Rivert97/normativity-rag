@@ -188,21 +188,27 @@ class Llama3(Model):
             model=self.model_id,
             model_kwargs={"torch_dtype": torch.bfloat16},
             tokenizer=tokenizer,
-            device_map="auto"
+            device_map="sequential"
         )
 
     def query(self, query:str) -> str:
         """Query an answer based on a question."""
         self.add_message(query)
+        response = self.__get_response_from_model()
 
-        result = self.pipeline(self.messages)
-
-        return result
+        return response
 
     def query_with_documents(self, query:str, documents:list[Document]):
         """Query an answer based on a question and some documents passed as context."""
         self.add_message_with_context(query, documents)
-        response = self.pipeline(self.messages)
+        response = self.__get_response_from_model()
+
+        return response
+
+    def __get_response_from_model(self) -> str:
+        output = self.pipeline(self.messages, max_new_tokens=1024)
+
+        response = output[0].get('generated_text')[-1].get('content', '')
 
         return response
 
@@ -226,18 +232,21 @@ class Gemma3(Model):
                                                                           '.gguf').replace('-qat',
                                                                                            '')
             quantization_config = None
+            device_map=None # Can't run qantized models in GPU for now
         else:
             gguf_file = None
             quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+            device_map='sequential'
 
         if self.multimodal:
             self.model = Gemma3ForConditionalGeneration.from_pretrained(
-                self.model_id, device_map="auto"
+                self.model_id, device_map=device_map
             ).eval()
             self.processor = AutoProcessor.from_pretrained(self.model_id, use_fast=True)
         else:
             self.model = Gemma3ForCausalLM.from_pretrained(
-                self.model_id, quantization_config=quantization_config, gguf_file=gguf_file
+                self.model_id, quantization_config=quantization_config, gguf_file=gguf_file,
+                device_map=device_map
             ).eval()
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, gguf_file=gguf_file)
 
@@ -271,7 +280,7 @@ class Gemma3(Model):
         input_len = inputs["input_ids"].shape[-1]
 
         with torch.inference_mode():
-            generation = self.model.generate(**inputs, max_new_tokens=100, do_sample=False)
+            generation = self.model.generate(**inputs, max_new_tokens=1024, do_sample=False)
             generation = generation[0][input_len:]
 
         decoded = self.processor.decode(generation, skip_special_tokens=True)
@@ -285,20 +294,34 @@ class Gemma3(Model):
             tokenize=True,
             return_dict=True,
             return_tensors="pt",
-        ).to(self.model.device)#.to(torch.bfloat16)
+        ).to(self.model.device)
 
         with torch.inference_mode():
-            outputs = self.model.generate(**inputs, max_new_tokens=64)
+            outputs = self.model.generate(**inputs, max_new_tokens=1024)
 
         decoded = self.tokenizer.batch_decode(outputs)
+        response = decoded[0]
 
-        return decoded
+        bos = response.find('<bos>')
+        bos_pos = bos + 5 if bos > -1 else 0
+        eos = response.find('<eos>')
+        eos_pos = eos if eos > -1 else None
+        response = response[bos_pos:eos_pos]
+
+        sot = response.find('<start_of_turn>model\n')
+        sot_pos = sot + 21 if sot > -1 else 0
+        eot = response.find('<end_of_turn>', sot_pos)
+        eot_pos = eot if eot > -1 else None
+        response = response[sot_pos:eot_pos]
+
+        return response
 
 class Qwen3(Model):
     """Class to load Qwen models."""
 
-    def __init__(self, sub_version:str=''):
+    def __init__(self, sub_version:str='', thinking:bool=False):
         super().__init__(multimodal=False)
+        self.thinking = thinking
 
         self.model_id = "Qwen/Qwen3-0.6B" if sub_version == '' else f"Qwen/Qwen3-{sub_version}"
 
@@ -306,36 +329,36 @@ class Qwen3(Model):
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_id,
             torch_dtype='auto',
-            device_map='auto'
+            device_map='sequential',
         )
 
     def query(self, query:str):
         """Query an answer based on a question."""
         self.add_message(query)
-        response = self.__get_response_from_model(self.messages)
+        response = self.__get_response_from_model()
 
         return response
 
     def query_with_documents(self, query:str, documents:list[Document]):
         """Query an answer based on a question and some documents passed as context."""
         self.add_message_with_context(query, documents)
-        response = self.__get_response_from_model(self.messages)
+        response = self.__get_response_from_model()
 
         return response
 
-    def __get_response_from_model(self, messages:list) -> str:
+    def __get_response_from_model(self) -> str:
         text = self.tokenizer.apply_chat_template(
-            messages,
+            self.messages,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=True # Switches between thinking and non-thinking modes. Default is True
+            enable_thinking=self.thinking, # Switches between thinking and non-thinking modes. Default is True
         )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
 
         # Conduct text completion
         generated_tokens = self.model.generate(
             **model_inputs,
-            max_new_tokens=32768
+            max_new_tokens=1024
         )
         output_ids = generated_tokens[0][len(model_inputs.input_ids[0]):].tolist()
 
@@ -363,41 +386,33 @@ class Mistral(Model):
         else:
             self.model_id = f"mistralai/Mistral-{sub_version}"
 
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
-        self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_id,
-            torch_dtype=torch.bfloat16,
-            device_map='auto'
+        tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+        self.pipeline = transformers.pipeline(
+            "text-generation",
+            model=self.model_id,
+            model_kwargs={"torch_dtype": torch.bfloat16},
+            tokenizer=tokenizer,
+            device_map="sequential"
         )
 
     def query(self, query:str):
         """Query an answer based on a question."""
         self.add_message(query)
-        response = self.__get_response_from_model(self.messages)
+        response = self.__get_response_from_model()
 
         return response
 
     def query_with_documents(self, query:str, documents:list[Document]):
         """Query an answer based on a question and some documents passed as context."""
         self.add_message_with_context(query, documents)
-        response = self.__get_response_from_model(self.messages)
+        response = self.__get_response_from_model()
 
         return response
 
-    def __get_response_from_model(self, messages:list) -> str:
-        text = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+    def __get_response_from_model(self) -> str:
+        output = self.pipeline(self.messages, max_new_tokens=1024)
 
-        generated_tokens = self.model.generate(
-            **model_inputs,
-            max_new_tokens=64
-        )
+        response = output[0].get('generated_text')[-1].get('content', '')
 
-        result = self.tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip("\n")
-
-        return result
+        return response
