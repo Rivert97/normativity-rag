@@ -43,7 +43,7 @@ class TestModels(unittest.TestCase):
 
     def test_gemma_3_1b_qat(self):
         """Test for Gemma-3-1b-it-qat-q4_0 model. Smallest qantized model for Gemma."""
-        model = GemmaBuilder.build_from_variant("1b-it-qat-q4_0")
+        model = GemmaBuilder.build_from_variant("3-1b-it-qat-q4_0-gguf")
         response = model.query("Qué es un LLM?")
 
         self.assertIsInstance(response, str, "Model response is not a string")

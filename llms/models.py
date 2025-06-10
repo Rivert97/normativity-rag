@@ -238,6 +238,10 @@ class Gemma3(Model):
             quantization_config = BitsAndBytesConfig(load_in_8bit=True)
             device_map='sequential'
 
+        # Apparently there's a bug with device_map="sequential", Gemma-3-4b and pytorch
+        if self.model_id.endswith('4b-it'):
+            device_map="auto"
+
         if self.multimodal:
             self.model = Gemma3ForConditionalGeneration.from_pretrained(
                 self.model_id, device_map=device_map
