@@ -351,7 +351,7 @@ class Qwen3(Model):
             self.messages,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=self.thinking, # Switches between thinking and non-thinking modes. Default is True
+            enable_thinking=self.thinking, # Switches between thinking and non-thinking modes
         )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
 
