@@ -73,6 +73,10 @@ class CLIController(CLI):
                             nargs='+',
                             type=str,
                             help='Type(s) of output(s). Defaults to txt')
+        self.parser.add_argument('-P', '--Parallel',
+                            default=False,
+                            action="store_true",
+                            help='Uses the total number of cores - 2, for concurrent processing')
 
         args = self.parser.parse_args()
 
@@ -134,7 +138,7 @@ class CLIController(CLI):
 
                 loader.load_page(filename, self._args.page)
             else:
-                loader.load(filename)
+                loader.load(filename, parallel=self._args.Parallel)
         elif self._args.loader == 'text':
             loader = PyPDFLoader(filename)
         elif self._args.loader == 'ocr':

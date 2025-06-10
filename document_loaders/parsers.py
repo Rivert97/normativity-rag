@@ -20,6 +20,9 @@ import pandas as pd
 from .visitors import PageTextVisitor
 from .processors import get_data_inside_boundaries
 
+# Parallel
+from concurrent.futures import ThreadPoolExecutor
+
 @dataclass
 class GroupState:
     """Store state when searching groups while reconstrucing text of document."""
@@ -478,16 +481,25 @@ class OcrPdfParser():
 
         return text
 
-    def get_pages(self) -> Iterator[OcrPage]:
+    def get_pages(self, parallel:bool = False) -> Iterator[OcrPage]:
         """Read each page of the document and return its information as an Iterator.
 
         :return:
         :rtype: Iterator[str]
         """
-        pages_path = glob.glob(f'{self.cache_subfolder}/0001-*.jpg')
-        for page_path in sorted(pages_path):
+        pages_path = sorted(glob.glob(f'{self.cache_subfolder}/0001-*.jpg'))
+
+        def process_page(page_path):
             basepath = os.path.splitext(page_path)[0]
-            yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
+            return OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
+        
+        if parallel:
+            with ThreadPoolExecutor() as executor:
+                yield from executor.map(process_page, pages_path)
+        else:
+            for page_path in pages_path:
+                basepath = os.path.splitext(page_path)[0]
+                yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
 
     def get_page(self, page_num: int) -> OcrPage:
         """Return a spific page of the document."""
