@@ -8,6 +8,8 @@ import os
 import glob
 import hashlib
 import shutil
+# Parallel
+from concurrent.futures import ThreadPoolExecutor
 
 from pypdf import PdfReader
 from pypdf._page import PageObject
@@ -16,6 +18,7 @@ import pytesseract
 import pdf2image
 import matplotlib.pyplot as plt
 import pandas as pd
+import psutil
 
 from .visitors import PageTextVisitor
 from .processors import get_data_inside_boundaries
@@ -478,16 +481,35 @@ class OcrPdfParser():
 
         return text
 
-    def get_pages(self) -> Iterator[OcrPage]:
+    def get_pages(self, parallel:bool = False) -> Iterator[OcrPage]:
         """Read each page of the document and return its information as an Iterator.
 
         :return:
         :rtype: Iterator[str]
         """
-        pages_path = glob.glob(f'{self.cache_subfolder}/0001-*.jpg')
-        for page_path in sorted(pages_path):
+        pages_path = sorted(glob.glob(f'{self.cache_subfolder}/0001-*.jpg'))
+
+        def process_page(page_path):
             basepath = os.path.splitext(page_path)[0]
-            yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
+            return OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
+
+        def get_number_of_workers(memory_of_process=700):
+            n_physical_cores = psutil.cpu_count(logical=False)
+            if n_physical_cores is None:
+                n_physical_cores = 2
+            memory = psutil.virtual_memory()
+            free_memory = memory.available / (1024 * 1024)
+            n_workers_by_memory = int(free_memory / memory_of_process)
+            n_workers = max(1, min(n_workers_by_memory, n_physical_cores))
+            return n_workers
+
+        if parallel:
+            with ThreadPoolExecutor(max_workers=get_number_of_workers()) as executor:
+                yield from executor.map(process_page, pages_path)
+        else:
+            for page_path in pages_path:
+                basepath = os.path.splitext(page_path)[0]
+                yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
 
     def get_page(self, page_num: int) -> OcrPage:
         """Return a spific page of the document."""

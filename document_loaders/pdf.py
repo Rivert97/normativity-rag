@@ -38,12 +38,19 @@ class PyPDFMixedLoader():
 
         self.document_data = PdfDocumentData()
 
-    def load(self, pdf_path: str):
+    def load(self, pdf_path: str, parallel: bool = False):
         """Load a full PDF document."""
         text_parser = PypdfParser(pdf_path)
         ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
 
-        for pypdf_page, ocr_page in zip(text_parser.get_pages(), ocr_parser.get_pages()):
+        if parallel:
+            pypdf_pages = list(text_parser.get_pages())
+            ocr_pages = list(ocr_parser.get_pages(parallel))
+        else:
+            pypdf_pages = text_parser.get_pages()
+            ocr_pages = ocr_parser.get_pages()
+
+        for pypdf_page, ocr_page in zip(pypdf_pages, ocr_pages):
             self.__merge_pages(pypdf_page, ocr_page)
 
     def load_page(self, pdf_path:str, page_num: int):
