@@ -8,7 +8,8 @@ import os
 import glob
 import hashlib
 import shutil
-import psutil
+# Parallel
+from concurrent.futures import ThreadPoolExecutor
 
 from pypdf import PdfReader
 from pypdf._page import PageObject
@@ -17,12 +18,10 @@ import pytesseract
 import pdf2image
 import matplotlib.pyplot as plt
 import pandas as pd
+import psutil
 
 from .visitors import PageTextVisitor
 from .processors import get_data_inside_boundaries
-
-# Parallel
-from concurrent.futures import ThreadPoolExecutor
 
 @dataclass
 class GroupState:

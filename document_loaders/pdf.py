@@ -42,7 +42,7 @@ class PyPDFMixedLoader():
         """Load a full PDF document."""
         text_parser = PypdfParser(pdf_path)
         ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
-        
+
         if parallel:
             pypdf_pages = list(text_parser.get_pages())
             ocr_pages = list(ocr_parser.get_pages(parallel))
