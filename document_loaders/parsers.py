@@ -8,6 +8,7 @@ import os
 import glob
 import hashlib
 import shutil
+import psutil
 
 from pypdf import PdfReader
 from pypdf._page import PageObject
@@ -492,9 +493,19 @@ class OcrPdfParser():
         def process_page(page_path):
             basepath = os.path.splitext(page_path)[0]
             return OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
-        
+
+        def get_number_of_workers(memory_of_process=700):
+            n_physical_cores = psutil.cpu_count(logical=False)
+            if n_physical_cores is None:
+                n_physical_cores = 2
+            memory = psutil.virtual_memory()
+            free_memory = memory.available / (1024 * 1024)
+            n_workers_by_memory = int(free_memory / memory_of_process)
+            n_workers = max(1, min(n_workers_by_memory, n_physical_cores))
+            return n_workers
+
         if parallel:
-            with ThreadPoolExecutor() as executor:
+            with ThreadPoolExecutor(max_workers=get_number_of_workers()) as executor:
                 yield from executor.map(process_page, pages_path)
         else:
             for page_path in pages_path:
