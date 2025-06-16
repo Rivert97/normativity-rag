@@ -17,8 +17,8 @@ class DifferenceState:
     merged: list
     added_words: list
     removed_words: list
-    missing_additions: list
-    missing_removals: list
+    missing_additions: list[list[(int, str)]]
+    missing_removals: list[list]
     ocr_idx: int
     status_tracker: list
 
@@ -115,14 +115,6 @@ class PyPDFMixedLoader():
         self.document_data.add_page(ocr_page.get_data(), df_merged_text, page_num)
 
     def __process_differences(self, differences):
-        #merged = [] # List of: (idx, word)
-        #added_words = []
-        #removed_words = []
-        #missing_additions = []
-        #missing_removals = []
-        #ocr_idx = -1
-        #status_tracker = [0, 0, 0] # curr, prev, prev_prev
-
         state = DifferenceState(
             merged=[], # List of: (idx, word)
             added_words=[],
@@ -144,6 +136,8 @@ class PyPDFMixedLoader():
 
             if curr_status == -1:
                 continue
+            if curr_status == 4 and state.status_tracker[1] == 4:
+                curr_status = 5
 
             state.status_tracker = [curr_status, *state.status_tracker[:2]]
 
@@ -160,44 +154,36 @@ class PyPDFMixedLoader():
             elif curr_status == 2: # Removal
                 self.__handle_removal(state, diff)
 
-            elif curr_status == 3: # Annotation
+            elif curr_status == 3: # Add or removed annotation
                 skip = self.__handle_annotation(state, differences, i)
                 state.added_words = []
                 state.removed_words = []
                 state.status_tracker[0] = 0
 
-        state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
-        if not state.added_words:
-            if len(state.removed_words) == 1:
+            elif curr_status == 5: # Change (^) annotation
+                self.__handle_change_annotation(state)
+
+        if (state.added_words) != (state.removed_words):
+            # When a single word is removed and is a small word, just add it to the end of the file
+            if len(state.removed_words) == 1 and len(state.removed_words[0]) < 4:
                 state.merged[-1] = (state.merged[-1][0],
-                                    state.merged[-1][1] + state.removed_words[0])
+                                    state.merged[-1][1] + "\n" + state.removed_words[0])
             else:
-                state.missing_removals.extend(state.removed_words)
-        elif not state.removed_words:
-            state.missing_additions.extend(state.added_words)
+                self.__set_as_missing(state.added_words, state.removed_words, state)
+        else:
+            state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
 
         return state.merged, state.missing_additions, state.missing_removals
 
-    def __reconcile_missing(self, additions, removals):
-        additions_len = len(additions)
-        removals_len = len(removals)
-        multi_removals = list(removals)
+    def __reconcile_missing(self, additions:list[(int, str)],
+                            removals:list[str]) -> list[(int, str)]:
+        reconciled = self.__reconcile_with_exact_match(additions, removals)
+        if reconciled:
+            return reconciled
 
-        for _ in range(math.ceil(additions_len / removals_len)):
-            multi_removals += removals
+        reconciled = self.__reconcile_with_f1_score(additions, removals)
 
-        similarities = []
-        for i in range(removals_len):
-            rem_sample = [word.lower() for word in multi_removals[i:i + additions_len]]
-            add_sample = [item[1].lower() for item in additions]
-            similarities.append(self.__calculate_similarity(rem_sample, add_sample))
-
-        max_sim = max(similarities)
-        best_idx = similarities.index(max_sim)
-
-        if max_sim >= 0.0:
-            return [(additions[i][0], multi_removals[best_idx + i]) for i in range(additions_len)]
-        return []
+        return reconciled
 
     def __get_difference_type(self, difference: str):
         status = -1
@@ -209,37 +195,58 @@ class PyPDFMixedLoader():
             status = 2
         elif re.search('^[?].*[+-]+$', difference):
             status = 3
+        elif re.search('^[?].*[^^]+$', difference):
+            status = 4
 
         return status
 
     def __handle_equal(self, state, diff, iteration):
+        if self.__is_text_out_of_place(state):
+            self.__handle_text_out_of_place(state)
+            return False
+
         single_removal = False
         if state.status_tracker[1] in [1, 2]:
-            state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
-            if not state.added_words:
-                if len(state.removed_words) == 1 and iteration > 1:
+            if bool(state.added_words) != bool(state.removed_words):
+                # If is a single removal and is not the first of the page and is a small word
+                # join the removed word with next word
+                if (len(state.removed_words) == 1 and iteration > 1 and
+                    len(state.removed_words[0]) < 4):
                     single_removal = True
                 else:
-                    state.missing_removals.extend(state.removed_words)
-            elif not state.removed_words:
-                state.missing_additions.extend(state.added_words)
+                    self.__set_as_missing(state.added_words, state.removed_words, state)
+                    state.added_words = []
+                    state.removed_words = []
+            else:
+                state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
+
         if single_removal:
             state.merged.append((state.ocr_idx, state.removed_words[0] + ' ' + diff[2:-1]))
         else:
             state.merged.append((state.ocr_idx, diff[2:-1]))
 
+    def __set_as_missing(self, added_words:list[(int, str)], removed_words:list[str],
+                         state:DifferenceState):
+        if added_words:
+            state.missing_additions.append(added_words)
+        if removed_words:
+            state.missing_removals.append(removed_words)
+
     def __handle_removal(self, state, diff):
         if state.status_tracker[1] == 1 and state.status_tracker[2] == 2:
-            state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
-            if not state.added_words:
-                state.missing_removals.extend(state.removed_words)
-            elif not state.removed_words:
-                state.missing_additions.extend(state.added_words)
+            if bool(state.added_words) != bool(state.removed_words):
+                self.__set_as_missing(state.added_words, state.removed_words, state)
+            else:
+                state.merged.extend(self.__merge_words(state.added_words, state.removed_words))
             state.removed_words = []
             state.added_words = []
         state.removed_words.append(diff[2:-1])
 
     def __handle_annotation(self, state:DifferenceState, diffs:list, i:int) -> bool:
+        if self.__is_text_out_of_place(state):
+            self.__handle_text_out_of_place(state)
+            return False
+
         annotation = diffs[i][2:-1]
         match_add = re.search(r'[+]+$', annotation)
         match_rem = re.search(r'[-]+$', annotation)
@@ -249,6 +256,44 @@ class PyPDFMixedLoader():
             return self.__handle_annotation_removal(state, match_rem, i, diffs)
 
         return False
+
+    def __handle_change_annotation(self, state:DifferenceState):
+        if bool(state.added_words[:-1]) or bool(state.removed_words[:-1]):
+            self.__set_as_missing(state.added_words[:-1], state.removed_words[:-1], state)
+
+        state.merged.extend(self.__merge_words([state.added_words[-1]], [state.removed_words[-1]]))
+        state.added_words = []
+        state.removed_words = []
+
+    def __is_text_out_of_place(self, state:DifferenceState):
+        if not state.added_words or not state.removed_words:
+            return False
+
+        has_exchanged_status = state.status_tracker[1] != state.status_tracker[2]
+        have_different_size = len(state.added_words) != len(state.removed_words)
+
+        joined_additions = ''.join(map(lambda a: a[1], state.added_words[:-1]))
+        joined_removals = ''.join(state.removed_words[:-1])
+        has_matching_words = joined_additions == joined_removals
+
+        additions_words = list(joined_additions+state.added_words[-1][1])
+        removals_words = list(joined_removals+state.removed_words[-1])
+        exact_match_score = self.__exact_match_score(additions_words, removals_words)
+
+        return has_exchanged_status and have_different_size and (not has_matching_words and exact_match_score < 0.5)
+
+    def __handle_text_out_of_place(self, state:DifferenceState):
+        if state.added_words[:-1]:
+            state.missing_additions.append(state.added_words[:-1])
+        if len(state.added_words) > 0:
+            state.missing_additions.append([state.added_words[-1]])
+        if state.removed_words[:-1]:
+            state.missing_removals.append(state.removed_words[:-1])
+        if len(state.removed_words) > 0:
+            state.missing_removals.append([state.removed_words[-1]])
+
+        state.added_words = []
+        state.removed_words = []
 
     def __handle_annotation_addition(self, state:DifferenceState, match:list, i:int, diffs:list):
         if (i + 1) >= len(diffs):
@@ -263,74 +308,209 @@ class PyPDFMixedLoader():
             if len(combined) == len(state.added_words[-1][1]):
                 state.merged.extend(self.__merge_words(state.added_words[:-1],
                                                        state.removed_words[:-2]))
-                if not state.added_words[:-1]:
-                    state.missing_removals.extend(state.removed_words[:-2])
-                elif not state.removed_words[:-2]:
-                    state.missing_additions.extend(state.added_words[:-1])
+                if not state.added_words[:-1] and state.removed_words[:-2]:
+                    state.missing_removals.append(state.removed_words[:-2])
+                elif not state.removed_words[:-2] and state.added_words[:-1]:
+                    state.missing_additions.append(state.added_words[:-1])
                 state.merged.append((state.ocr_idx, combined))
-                state.added_words.clear()
-                state.removed_words.clear()
+                state.added_words = []
+                state.removed_words = []
                 return False
 
-        state.merged.extend(self.__merge_words(state.added_words[:-1], state.removed_words[:-1]))
-        if not state.added_words[:-1]:
-            state.missing_removals.extend(state.removed_words[:-1])
-        elif not state.removed_words[:-1]:
-            state.missing_additions.extend(state.added_words[:-1])
+        if bool(state.added_words[:-1]) != bool(state.removed_words[:-1]):
+            self.__set_as_missing(state.added_words[:-1], state.removed_words[:-1], state)
+        else:
+            state.merged.extend(self.__merge_words(state.added_words[:-1], state.removed_words[:-1]))
 
         if next_diff[2:-1] == state.added_words[-1][1][match.start():match.end()]:
             state.merged.append((state.ocr_idx, state.added_words[-1][1]))
-            state.added_words.clear()
-            state.removed_words.clear()
+            state.added_words = []
+            state.removed_words = []
             return True # Skip next iteration
 
         state.merged.append((state.ocr_idx, state.removed_words[-1]))
-        state.added_words.clear()
-        state.removed_words.clear()
+        state.added_words = []
+        state.removed_words = []
         return False
 
     def __handle_annotation_removal(self, state:DifferenceState, match:list, i:int, diffs:list):
         if (i + 1) >= len(diffs):
             return False  # No next_diff available
 
-        state.merged.extend(self.__merge_words(state.added_words, state.removed_words[:-1]))
-        if not state.added_words:
-            state.missing_removals.extend(state.removed_words[:-1])
-        elif not state.removed_words[:-1]:
-            state.missing_additions.extend(state.added_words)
+        if bool(state.added_words) != bool(state.removed_words[:-1]):
+            self.__set_as_missing(state.added_words, state.removed_words[:-1], state)
+        else:
+            state.merged.extend(self.__merge_words(state.added_words, state.removed_words[:-1]))
 
         next_diff = diffs[i + 1]
         combined = state.removed_words[-1][:match.start()] + state.removed_words[-1][match.end():]
+        removed = state.removed_words[-1][match.start():match.end()]
 
         if combined == next_diff[2:-1]:
-            state.merged.append((state.ocr_idx + 1, state.removed_words[-1]))
-            state.added_words.clear()
-            state.removed_words.clear()
+            if removed == state.merged[-1][1]:
+                state.merged.append((state.ocr_idx + 1, combined))
+            else:
+                state.merged.append((state.ocr_idx + 1, state.removed_words[-1]))
             return True
+
+        if state.removed_words:
+            state.missing_removals.append([state.removed_words[-1]])
 
         return False
 
-    def __calculate_similarity(self, a, b):
+    def __reconcile_with_exact_match(self, additions:list[str],
+                                     removals:list[str]) -> list[(int, str)]:
+        reconciled = []
+        flatten_additions = self.__flatten(additions)
+        flatten_removals = self.__flatten(removals)
+        additions_str = [a[1] for a in flatten_additions]
+
+        idx = self.__get_exact_match_index(additions_str, flatten_removals)
+        if idx > -1:
+            for j in range(len(flatten_additions)):
+                extended_idx = (j+idx) % len(flatten_removals)
+                reconciled.append((flatten_additions[j][0], flatten_removals[extended_idx]))
+
+            return reconciled
+
+        removals_sentence = list(''.join(flatten_removals))
+        additions_sentence = list(''.join(additions_str))
+
+        sentence_idx = -1
+        for offset in range(len(additions_sentence) - len(removals_sentence) + 1):
+            score = self.__exact_match_score(additions_sentence[offset:len(removals_sentence)], removals_sentence)
+            if score == 1.0:
+                sentence_idx = offset
+
+        if sentence_idx > -1:
+            offset = 0
+            for i in range(len(flatten_additions)):
+                offset += len(additions_str[i])
+                if offset > sentence_idx:
+                    break
+                reconciled.append(flatten_additions[i])
+            additions_offset = i
+
+            offset = 0
+            for i in range(additions_offset, len(flatten_additions)):
+                reconciled.append((flatten_additions[i][0], ''.join(removals_sentence[offset:offset+len(flatten_additions[i][1])])))
+                offset += len(flatten_additions[i][1])
+
+        return reconciled
+
+    def __reconcile_with_f1_score(self, additions:list[(int, str)],
+                                  removals:list[str]) -> list[(int, str)]:
+        reconciled = []
+        for add in additions:
+            scores = []
+            for rem in removals:
+                f1 = self.__simple_f1_score(list(''.join(map(lambda a: a[1], add))), list(''.join(rem)))
+                scores.append(f1)
+
+            if not scores:
+                continue
+
+            max_score = max(scores)
+            best_f1_idx = scores.index(max_score)
+
+            if max_score >= 0.0:
+                pad_idx = self.__get_exact_match_index([a[1] for a in add], removals[best_f1_idx], exact=False)
+                if pad_idx > -1:
+                    for j in range(len(add)):
+                        extended_idx = (j + pad_idx) % len(removals[best_f1_idx])
+                        reconciled.append((add[j][0], removals[best_f1_idx][extended_idx]))
+
+                removals.pop(best_f1_idx)
+
+        return reconciled
+
+    def __get_exact_match_index(self, a:list[str], b:list[str], exact:bool=True) -> int:
+        a_len = len(a)
+        b_len = len(b)
+        extended_b = list(b)
+
+        for _ in range(math.ceil(a_len / b_len)):
+            extended_b += b
+
+        scores = []
+        for i in range(b_len):
+            b_sample = [word.lower() for word in extended_b[i:i + a_len]]
+            a_sample = [item.lower() for item in a]
+
+            score = self.__exact_match_score(b_sample, a_sample)
+            scores.append(score)
+            if score == 1.0:
+                break
+
+        max_score = max(scores)
+        best_idx = scores.index(max_score)
+
+        if exact and scores[best_idx] != 1.0:
+            return -1
+
+        return best_idx
+
+    def __exact_match_score(self, a:list[str], b:list[str]) -> float:
         total = len(a)
         count = 0
         for w_a, w_b in zip(a, b):
             if w_a == w_b:
                 count += 1
+
         return count / total
 
-    def __merge_words(self, added_words, removed_words):
+    def __simple_f1_score(self, predictions:list[str], references:list[str]) -> float:
+        # Usually articles and punctuation signs are ignored but not in this case
+        pred_tokens = set([pred.strip().lower() for pred in predictions])
+        ref_tokens = set([ref.strip().lower() for ref in references])
+
+        common_tokens = ref_tokens & pred_tokens
+        if len(common_tokens) == 0:
+            return 0
+
+        precission = len(common_tokens) / len(pred_tokens)
+        recall = len(common_tokens) / len(ref_tokens)
+
+        return 2 * (precission * recall) / (precission + recall)
+
+    def __merge_words(self, added_words:list[(int,str)], removed_words:list[str],
+                      extra_joiner:str='') -> list[(int, str)]:
         if not added_words or not removed_words:
             return []
 
         merged = []
-        num_iter = min(len(added_words), len(removed_words))
-        for i in range(num_iter - 1):
-            merged.append((added_words[i][0], removed_words[0]))
-            removed_words = removed_words[1:]
+        joined_additions = ''.join(map(lambda a: a[1], added_words))
+        joined_removals = ''.join(removed_words)
+        n_joined_additions = len(joined_additions)
+        n_joined_removals = len(joined_removals)
 
-        merged.append((added_words[num_iter - 1][0], ''.join(removed_words)))
+        # If added and joined seem to not be related, look for a good martch
+        # and if not, just use added
+        if abs(n_joined_additions - n_joined_removals) > 5:
+            missing_added = []
+            for i in range(len(added_words)):
+                for j in range(len(removed_words)):
+                    if self.__simple_f1_score(list(added_words[i][1]), list(removed_words[j])) >= 0.25:
+                        merged.append((added_words[i][0], removed_words[j]))
+                        removed_words.pop(j)
+                        break
+                else:
+                    missing_added.append(added_words[i])
+
+            if missing_added:
+                merged.extend(missing_added)
+        else:
+            num_iter = min(len(added_words), len(removed_words))
+            for i in range(num_iter - 1):
+                merged.append((added_words[i][0], removed_words[0]))
+                removed_words = removed_words[1:]
+
+            merged.append((added_words[num_iter - 1][0], extra_joiner.join(removed_words)))
 
         return merged
+
+    def __flatten(self, xss:list[object]) -> list:
+        return [x for xs in xss for x in xs]
 
 class PyPDFLoader():
     """Class to load a PDF file using pypdf library.

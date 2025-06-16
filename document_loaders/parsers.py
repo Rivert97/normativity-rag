@@ -212,7 +212,7 @@ class DataReconstructor():
 
     def __assign_group_number(self):
         self.data['group'] = pd.Series(dtype='int')
-        tolerance = self.writable_width * 0.005
+        tolerance = self.writable_width * 0.04
 
         state = GroupState(
             line_cols=None,
@@ -280,8 +280,8 @@ class DataReconstructor():
             return True
 
         for g_col in state.group_cols:
-            g_position_max = state.group_cols[g_col]['position_max']
             for l_col in state.line_cols:
+                g_position_max = state.group_cols[g_col]['position_max']
                 if state.line_cols[l_col]['position_max'] != g_position_max:
                     continue
 
