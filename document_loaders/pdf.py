@@ -6,7 +6,7 @@ import math
 
 import pandas as pd
 
-from .parsers import PypdfParser, OcrPdfParser, PypdfPage, OcrPage
+from .parsers import PypdfParser, OcrPdfParser, PypdfPage, OcrPage, PdfPlumberParser
 from .representations import PdfDocumentData
 from .processors import remove_hyphens, replace_ligatures
 
@@ -523,12 +523,20 @@ class PyPDFLoader():
 
     def get_text(self):
         """Return the full text of the PDF file."""
-        return self.parser.get_text()
+        text = self.parser.get_text()
+        text = replace_ligatures(text)
+        text = remove_hyphens(text)
+
+        return text
 
     def get_page_text(self, page_num: int):
         """Return the text of a single page of the PDF file."""
         page = self.parser.get_page(page_num)
-        return page.get_text()
+        page_text = page.get_text()
+        page_text = replace_ligatures(page_text)
+        page_text = remove_hyphens(page_text)
+
+        return page_text
 
 class OCRLoader():
     """Class to load a PDF file using pytesseract to extract the text through OCR."""
@@ -538,12 +546,50 @@ class OCRLoader():
 
     def get_text(self):
         """Return the full text of the PDF file."""
-        return self.parser.get_text(remove_headers=True)
+        text = self.parser.get_text(remove_headers=True)
+        text = replace_ligatures(text)
+        text = remove_hyphens(text)
+
+        return text
 
     def get_page_text(self, page_num: int):
         """Return the text of a single page of the PDF file."""
         page = self.parser.get_page(page_num)
-        return page.get_raw_text()
+        page_text = page.get_raw_text()
+        page_text = replace_ligatures(page_text)
+        page_text = remove_hyphens(page_text)
+
+        return page_text
+
+    def get_document_data(self):
+        """Return the relevant OCR data of the hole document."""
+        document_data = PdfDocumentData()
+        for page in self.parser.get_pages():
+            document_data.add_page(page.get_data())
+
+        return document_data
+
+class PDFPlumberLoader():
+    """Class to load a PDF file using pdfplumber with custom text reconstruction."""
+    def __init__(self, file_path:str):
+        self.parser = PdfPlumberParser(file_path)
+
+    def get_text(self):
+        """Return the full text of the PDF file."""
+        text = self.parser.get_text(remove_headers=True)
+        text = replace_ligatures(text)
+        text = remove_hyphens(text)
+
+        return text
+
+    def get_page_text(self, page_num: int):
+        """Return the text of a single page of the PDF file."""
+        page = self.parser.get_page(page_num)
+        page_text = page.get_text()
+        page_text = replace_ligatures(page_text)
+        page_text = remove_hyphens(page_text)
+
+        return page_text
 
     def get_document_data(self):
         """Return the relevant OCR data of the hole document."""

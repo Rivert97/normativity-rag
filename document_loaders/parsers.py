@@ -19,6 +19,7 @@ import pdf2image
 import matplotlib.pyplot as plt
 import pandas as pd
 import psutil
+import pdfplumber
 
 from .visitors import PageTextVisitor
 from .processors import get_data_inside_boundaries
@@ -118,13 +119,17 @@ class DataReconstructor():
     adding columns to the data.
     """
 
-    def __init__(self, data: pd.DataFrame):
+    def __init__(self, data: pd.DataFrame, writable_boundaries:tuple[float, float, float, float]):
         self.data = data.copy()
 
-        self.data['right'] = self.data['left'] + self.data['width']
-        self.data['bottom'] = self.data['top'] + self.data['height']
+        if 'right' not in self.data:
+            self.data['right'] = self.data['left'] + self.data['width']
+        if 'bottom' not in self.data:
+            self.data['bottom'] = self.data['top'] + self.data['height']
 
-        writable_min_x, _, writable_max_x, _ = self.__get_writable_boundaries()
+        writable_min_x = writable_boundaries[0]
+        writable_max_x = writable_boundaries[2]
+        #writable_min_x, _, writable_max_x, _ = self.__get_writable_boundaries()
         self.writable_width = writable_max_x - writable_min_x
         self.writable_center = writable_min_x + self.writable_width * 0.5
 
@@ -307,16 +312,6 @@ class DataReconstructor():
                 group_cols[g_col]['minX'] = min(group_cols[g_col]['minX'], line_cols[l_col]['minX'])
                 group_cols[g_col]['maxX'] = max(group_cols[g_col]['maxX'], line_cols[l_col]['maxX'])
 
-    def __get_writable_boundaries(self):
-        blocks = self.data[self.data['level'] == 2]
-        min_x = blocks['left'].min()
-        max_x = (blocks['left'] + blocks['width']).max()
-
-        min_y = blocks['top'].min()
-        max_y = (blocks['top'] + blocks['height']).max()
-
-        return min_x, min_y, max_x, max_y
-
 class OcrPage():
     """This class stores the information contained in a single page
     of a document and provides functions to process it.
@@ -330,8 +325,9 @@ class OcrPage():
         self.width = self.data.loc[0, 'width']
         self.height = self.data.loc[0, 'height']
         self.__normalize_data()
+        w_boundaries = self.__get_writable_boundaries()
 
-        reconstructor = DataReconstructor(self.data)
+        reconstructor = DataReconstructor(self.data, w_boundaries)
         self.data = reconstructor.get_reconstructed()
 
     def get_text(self, remove_headers: bool=False) -> str:
@@ -445,6 +441,16 @@ class OcrPage():
         self.data['top'] = self.data['top'] / self.data.loc[0, 'height']
         self.data['height'] = self.data['height'] / self.data.loc[0, 'height']
 
+    def __get_writable_boundaries(self):
+        blocks = self.data[self.data['level'] == 2]
+        min_x = blocks['left'].min()
+        max_x = (blocks['left'] + blocks['width']).max()
+
+        min_y = blocks['top'].min()
+        max_y = (blocks['top'] + blocks['height']).max()
+
+        return min_x, min_y, max_x, max_y
+
 class OcrPdfParser():
     """This class uses Google Tesseract to parse the content of PDF
     files into texto.
@@ -551,3 +557,144 @@ class OcrPdfParser():
             img.close()
 
         os.rename(tmp_cache, self.cache_subfolder) # Just to make sure all information is there
+
+class PdfPlumberPage():
+    """This class stores the text extracted by Pdfplumber and provides
+    methods to process it.
+    """
+
+    def __init__(self, page:pdfplumber.page.Page):
+        self.page = page
+
+        self.data = self.__get_data_from_page()
+
+        self.__normalize_data()
+
+        w_boundaries = self.__get_writable_boundaries()
+        reconstructor = DataReconstructor(self.data, w_boundaries)
+        self.data = reconstructor.get_reconstructed()
+
+    def get_text(self, remove_headers: bool=False) -> str:
+        """Return the reconstructed text of the page (without Tesseract errors)."""
+        if remove_headers:
+            data = get_data_inside_boundaries(self.data)
+        else:
+            data = self.data
+        data = data.sort_values(['line', 'left'])
+        texts_by_line = data.groupby(['group', 'col_position', 'line'])['text'].apply(' '.join)
+        texts_by_column = texts_by_line.groupby(['group', 'col_position']).apply('\n'.join)
+        texts_by_group = texts_by_column.groupby('group').apply('\n'.join)
+
+        return '\n'.join(texts_by_group)
+
+    def get_words(self, suffix = '') -> pd.DataFrame:
+        """Get the reconstructed text and split it into words into a dataframe."""
+        text = self.get_text()
+        if text == '':
+            return pd.DataFrame(columns=['word'])
+
+        indices = self.get_indices()
+        words = [(idx, f'{w}{suffix}') for idx, w in zip(indices, text.split())]
+        df_words = pd.DataFrame(words, columns=['ocr_idx', 'word'])
+        df_words.set_index('ocr_idx', inplace=True)
+
+        return df_words
+
+    def get_data(self) -> pd.DataFrame:
+        """Get the full DataFrame of pdfplumber processed info."""
+        return self.data
+
+    def __get_data_from_page(self) -> pd.DataFrame:
+        rects = self.page.extract_words()
+
+        if not rects:
+            data = pd.DataFrame(columns=['text', 'left', 'right', 'top', 'doctop', 'bottom',
+                                         'upright', 'height', 'width', 'direction', 'level'])
+        else:
+            data = pd.DataFrame(rects)
+            data = data.rename(columns={'x0': 'left', 'x1': 'right'})
+            data['level'] = pd.Series([5]*data.shape[0], dtype='int')
+
+        return data
+
+    def __normalize_data(self):
+        self.data['left'] = self.data['left'] / self.page.width
+        self.data['right'] = self.data['right'] / self.page.width
+        self.data['width'] = self.data['width'] / self.page.width
+        self.data['top'] = self.data['top'] / self.page.height
+        self.data['bottom'] = self.data['bottom'] / self.page.height
+        self.data['height'] = self.data['height'] / self.page.height
+
+    def __get_writable_boundaries(self):
+        min_x = self.data['left'].min()
+        min_y = self.data['top'].min()
+        max_x = self.data['right'].max()
+        max_y = self.data['bottom'].max()
+
+        return (min_x, min_y, max_x, max_y)
+
+
+class PdfPlumberParser():
+    """This parser uses PdfPlumber to convert a PDF file into text.
+
+    A custom layer of text reconstruction is added to address issues with wource library
+
+    :param file_path: The path of the file to be parsed.
+    :type file_path: str
+    """
+
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+
+        self.reader = pdfplumber.open(file_path)
+
+    def get_raw_text(self, page_separator: str = '') -> str:
+        """Return the full text of the file as extracted by pdfplumber.
+
+        :param page_separator: String to be added to separate each page,
+            defaults to ''.
+        :type page_separator: str, optional
+
+        :return: A string of all the text from the document
+        :rtype: str
+        """
+        text = ''
+        for page in self.reader.pages:
+            lines = page.extract_text_lines(use_text_flow=True)
+            text += "\n".join([line['text'] for line in lines]) + page_separator
+
+        return text
+
+    def get_text(self, page_separator: str = '\n', remove_headers:bool = False) -> str:
+        """Return the full text with pdfplumber but applyint custom text reconstruction
+
+        :param page_separator: String to be added to separate each page,
+            defaults to '\n'.
+        :type page_separator: str, optional
+
+        :return: A string of all the text from the document
+        :rtype: str
+        """
+        text = ''
+        for page in self.reader.pages:
+            page = PdfPlumberPage(page)
+            text += page.get_text(remove_headers) + page_separator
+
+        return text
+
+    def get_num_pages(self) -> int:
+        """Return the number of pages of the document."""
+        return len(self.reader.pages)
+
+    def get_pages(self) -> Iterator[PdfPlumberPage]:
+        """Read the document and return the text of each page as an Iterator.
+
+        :return: An Iterator that yields the text of each page at a time
+        :rtype: Iterator[PdfPlumberPage]
+        """
+        for page in self.reader.pages:
+            yield PdfPlumberPage(page)
+
+    def get_page(self, page_num: int):
+        """Return a specific page of the document."""
+        return PdfPlumberPage(self.reader.pages[page_num])
