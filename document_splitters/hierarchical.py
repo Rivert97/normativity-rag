@@ -269,7 +269,7 @@ class DataTreeSplitter(TreeSplitter):
                 column_percentage < 0.8)
 
     def __element_is_vertically_separated(self, pos_y:float, prev_pos_y:float):
-        tolerance = self.line_height * 1.5
+        tolerance = self.line_height * 1.2
 
         return abs(pos_y - prev_pos_y) > tolerance
 
