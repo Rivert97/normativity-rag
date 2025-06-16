@@ -600,6 +600,15 @@ class PdfPlumberPage():
 
         return df_words
 
+    def get_indices(self) -> list[int]:
+        """Return the indices of the reconstructed data."""
+        data = self.data.sort_values(['line', 'left']).reset_index()
+        indices_by_line = data.groupby(['group', 'col_position', 'line'])['index'].agg(list)
+        indices_by_colum = indices_by_line.groupby(['group', 'col_position']).sum()
+        indices_by_group = indices_by_colum.groupby('group').sum()
+
+        return list(indices_by_group.sum())
+
     def get_data(self) -> pd.DataFrame:
         """Get the full DataFrame of pdfplumber processed info."""
         return self.data

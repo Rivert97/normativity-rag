@@ -141,27 +141,7 @@ class PyPDFMixedLoader():
 
             state.status_tracker = [curr_status, *state.status_tracker[:2]]
 
-            if curr_status == 0:
-                state.ocr_idx += 1
-                self.__handle_equal(state, diff, i)
-                state.removed_words = []
-                state.added_words = []
-
-            elif curr_status == 1: # Addition
-                state.ocr_idx += 1
-                state.added_words.append((state.ocr_idx, diff[2:-1]))
-
-            elif curr_status == 2: # Removal
-                self.__handle_removal(state, diff)
-
-            elif curr_status == 3: # Add or removed annotation
-                skip = self.__handle_annotation(state, differences, i)
-                state.added_words = []
-                state.removed_words = []
-                state.status_tracker[0] = 0
-
-            elif curr_status == 5: # Change (^) annotation
-                self.__handle_change_annotation(state)
+            skip = self.__handle_difference(curr_status, state, differences, i)
 
         if (state.added_words) != (state.removed_words):
             # When a single word is removed and is a small word, just add it to the end of the file
@@ -175,9 +155,38 @@ class PyPDFMixedLoader():
 
         return state.merged, state.missing_additions, state.missing_removals
 
+    def __handle_difference(self, curr_status:int, state:DifferenceState,
+                            differences:list[str], i:int):
+        diff = differences[i]
+        skip = False
+        if curr_status == 0:
+            state.ocr_idx += 1
+            self.__handle_equal(state, diff, i)
+            state.removed_words = []
+            state.added_words = []
+
+        elif curr_status == 1: # Addition
+            state.ocr_idx += 1
+            state.added_words.append((state.ocr_idx, diff[2:-1]))
+
+        elif curr_status == 2: # Removal
+            self.__handle_removal(state, diff)
+
+        elif curr_status == 3: # Add or removed annotation
+            skip = self.__handle_annotation(state, differences, i)
+            state.added_words = []
+            state.removed_words = []
+            state.status_tracker[0] = 0
+
+        elif curr_status == 5: # Change (^) annotation
+            self.__handle_change_annotation(state)
+
+        return skip
+
     def __reconcile_missing(self, additions:list[(int, str)],
                             removals:list[str]) -> list[(int, str)]:
-        reconciled = self.__reconcile_with_exact_match(additions, removals)
+        reconciled = self.__reconcile_with_exact_match(self.__flatten(additions),
+                                                       self.__flatten(removals))
         if reconciled:
             return reconciled
 
@@ -203,7 +212,6 @@ class PyPDFMixedLoader():
     def __handle_equal(self, state, diff, iteration):
         if self.__is_text_out_of_place(state):
             self.__handle_text_out_of_place(state)
-            return False
 
         single_removal = False
         if state.status_tracker[1] in [1, 2]:
@@ -280,7 +288,8 @@ class PyPDFMixedLoader():
         removals_words = list(joined_removals+state.removed_words[-1])
         exact_match_score = self.__exact_match_score(additions_words, removals_words)
 
-        return has_exchanged_status and have_different_size and (not has_matching_words and exact_match_score < 0.5)
+        return (has_exchanged_status and have_different_size and
+                (not has_matching_words and exact_match_score < 0.5))
 
     def __handle_text_out_of_place(self, state:DifferenceState):
         if state.added_words[:-1]:
@@ -320,7 +329,8 @@ class PyPDFMixedLoader():
         if bool(state.added_words[:-1]) != bool(state.removed_words[:-1]):
             self.__set_as_missing(state.added_words[:-1], state.removed_words[:-1], state)
         else:
-            state.merged.extend(self.__merge_words(state.added_words[:-1], state.removed_words[:-1]))
+            state.merged.extend(self.__merge_words(state.added_words[:-1],
+                                                   state.removed_words[:-1]))
 
         if next_diff[2:-1] == state.added_words[-1][1][match.start():match.end()]:
             state.merged.append((state.ocr_idx, state.added_words[-1][1]))
@@ -358,45 +368,54 @@ class PyPDFMixedLoader():
 
         return False
 
-    def __reconcile_with_exact_match(self, additions:list[str],
-                                     removals:list[str]) -> list[(int, str)]:
+    def __reconcile_with_exact_match(self, flatten_additions:list[str],
+                                     flatten_removals:list[str]) -> list[(int, str)]:
         reconciled = []
-        flatten_additions = self.__flatten(additions)
-        flatten_removals = self.__flatten(removals)
         additions_str = [a[1] for a in flatten_additions]
 
         idx = self.__get_exact_match_index(additions_str, flatten_removals)
         if idx > -1:
-            for j in range(len(flatten_additions)):
+            for j, f_add in enumerate(flatten_additions):
                 extended_idx = (j+idx) % len(flatten_removals)
-                reconciled.append((flatten_additions[j][0], flatten_removals[extended_idx]))
+                reconciled.append((f_add[0], flatten_removals[extended_idx]))
 
             return reconciled
 
         removals_sentence = list(''.join(flatten_removals))
         additions_sentence = list(''.join(additions_str))
 
-        sentence_idx = -1
-        for offset in range(len(additions_sentence) - len(removals_sentence) + 1):
-            score = self.__exact_match_score(additions_sentence[offset:len(removals_sentence)], removals_sentence)
-            if score == 1.0:
-                sentence_idx = offset
+        sentence_idx = self.__find_index_where_sentence_match(additions_sentence, removals_sentence)
 
         if sentence_idx > -1:
             offset = 0
-            for i in range(len(flatten_additions)):
+            additions_offset = 0
+            for i, f_add in enumerate(flatten_additions):
                 offset += len(additions_str[i])
                 if offset > sentence_idx:
                     break
-                reconciled.append(flatten_additions[i])
-            additions_offset = i
+                reconciled.append(f_add)
+                additions_offset = i
 
             offset = 0
             for i in range(additions_offset, len(flatten_additions)):
-                reconciled.append((flatten_additions[i][0], ''.join(removals_sentence[offset:offset+len(flatten_additions[i][1])])))
+                reconciled.append((
+                    flatten_additions[i][0],
+                    ''.join(removals_sentence[offset:offset+len(flatten_additions[i][1])])
+                ))
                 offset += len(flatten_additions[i][1])
 
         return reconciled
+
+    def __find_index_where_sentence_match(self, additions_sentence:list[str],
+                                          removals_sentence:list[str]) -> int:
+        sentence_idx = -1
+        for offset in range(len(additions_sentence) - len(removals_sentence) + 1):
+            score = self.__exact_match_score(additions_sentence[offset:len(removals_sentence)],
+                                             removals_sentence)
+            if score == 1.0:
+                sentence_idx = offset
+
+        return sentence_idx
 
     def __reconcile_with_f1_score(self, additions:list[(int, str)],
                                   removals:list[str]) -> list[(int, str)]:
@@ -404,8 +423,8 @@ class PyPDFMixedLoader():
         for add in additions:
             scores = []
             for rem in removals:
-                f1 = self.__simple_f1_score(list(''.join(map(lambda a: a[1], add))), list(''.join(rem)))
-                scores.append(f1)
+                scores.append(self.__simple_f1_score(list(''.join(map(lambda a: a[1], add))),
+                                            list(''.join(rem))))
 
             if not scores:
                 continue
@@ -414,11 +433,13 @@ class PyPDFMixedLoader():
             best_f1_idx = scores.index(max_score)
 
             if max_score >= 0.0:
-                pad_idx = self.__get_exact_match_index([a[1] for a in add], removals[best_f1_idx], exact=False)
+                adds = [a[1] for a in add]
+                rems = removals[best_f1_idx]
+                pad_idx = self.__get_exact_match_index(adds, rems, exact=False)
                 if pad_idx > -1:
-                    for j in range(len(add)):
+                    for j, a in enumerate(add):
                         extended_idx = (j + pad_idx) % len(removals[best_f1_idx])
-                        reconciled.append((add[j][0], removals[best_f1_idx][extended_idx]))
+                        reconciled.append((a[0], removals[best_f1_idx][extended_idx]))
 
                 removals.pop(best_f1_idx)
 
@@ -461,8 +482,8 @@ class PyPDFMixedLoader():
 
     def __simple_f1_score(self, predictions:list[str], references:list[str]) -> float:
         # Usually articles and punctuation signs are ignored but not in this case
-        pred_tokens = set([pred.strip().lower() for pred in predictions])
-        ref_tokens = set([ref.strip().lower() for ref in references])
+        pred_tokens = set(pred.strip().lower() for pred in predictions)
+        ref_tokens = set(ref.strip().lower() for ref in references)
 
         common_tokens = ref_tokens & pred_tokens
         if len(common_tokens) == 0:
@@ -479,23 +500,23 @@ class PyPDFMixedLoader():
             return []
 
         merged = []
-        joined_additions = ''.join(map(lambda a: a[1], added_words))
-        joined_removals = ''.join(removed_words)
-        n_joined_additions = len(joined_additions)
-        n_joined_removals = len(joined_removals)
+        n_joined_additions = len(''.join(map(lambda a: a[1], added_words)))
+        n_joined_removals = len(''.join(removed_words))
 
         # If added and joined seem to not be related, look for a good martch
         # and if not, just use added
         if abs(n_joined_additions - n_joined_removals) > 5:
             missing_added = []
-            for i in range(len(added_words)):
-                for j in range(len(removed_words)):
-                    if self.__simple_f1_score(list(added_words[i][1]), list(removed_words[j])) >= 0.25:
-                        merged.append((added_words[i][0], removed_words[j]))
+            for i, a_words in enumerate(added_words):
+                for j, r_words in enumerate(removed_words):
+                    f1_score = self.__simple_f1_score(list(a_words[1]),
+                                                      list(r_words))
+                    if f1_score >= 0.25:
+                        merged.append((a_words[i], r_words))
                         removed_words.pop(j)
                         break
                 else:
-                    missing_added.append(added_words[i])
+                    missing_added.append(a_words)
 
             if missing_added:
                 merged.extend(missing_added)
