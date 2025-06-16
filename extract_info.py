@@ -8,7 +8,7 @@ import argparse
 import os
 import glob
 
-from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
+from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader, PDFPlumberLoader
 from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 
@@ -57,7 +57,7 @@ class CLIController(CLI):
         self.parser.add_argument('-l', '--loader',
                             default='mixed',
                             type=str,
-                            choices=['mixed', 'text', 'ocr'],
+                            choices=['mixed', 'text', 'ocr', 'pdfplumber'],
                             help='Type of loader to use. Defaults to mixed')
         self.parser.add_argument('-o', '--output',
                             default='',
@@ -143,6 +143,8 @@ class CLIController(CLI):
             loader = PyPDFLoader(filename)
         elif self._args.loader == 'ocr':
             loader = OCRLoader(filename, self._args.cache_dir, self._args.keep_cache)
+        elif self._args.loader == 'pdfplumber':
+            loader = PDFPlumberLoader(filename)
         else:
             raise CLIException("Invalid type of loader")
 
