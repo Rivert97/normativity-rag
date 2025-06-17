@@ -1,5 +1,6 @@
 """Module to load PDF files and extract it's text or data."""
 from dataclasses import dataclass
+from enum import Enum
 import difflib
 import re
 import math
@@ -9,6 +10,16 @@ import pandas as pd
 from .parsers import PypdfParser, OcrPdfParser, PypdfPage, OcrPage, PdfPlumberParser
 from .representations import PdfDocumentData
 from .processors import remove_hyphens, replace_ligatures
+
+class Status(Enum):
+    """Different types of status that can be present while mergin differences."""
+    NA = -1
+    EQUAL = 0
+    ADDITION = 1
+    REMOVAL = 2
+    ANNOTATION_ADD_OR_REM = 3
+    ANNOTATION_CHANGE_START = 4
+    ANNOTATION_CHANGE_END = 5
 
 @dataclass
 class DifferenceState:
@@ -122,22 +133,23 @@ class PyPDFMixedLoader():
             missing_additions=[],
             missing_removals=[],
             ocr_idx = -1,
-            status_tracker=[0, 0, 0] # curr, prev, prev_prev
+            status_tracker=[Status.EQUAL, Status.EQUAL, Status.EQUAL] # curr, prev, prev_prev
         )
 
         skip = False
         for i, diff in enumerate(differences):
-            curr_status = self.__get_difference_type(diff)
+            curr_status = self.__get_difference_status(diff)
             if skip:
-                if curr_status in (0, 1): # Don't loose count of index
+                if curr_status in (Status.EQUAL, Status.ADDITION): # Don't loose count of index
                     state.ocr_idx += 1
                 skip = False
                 continue
 
-            if curr_status == -1:
+            if curr_status == Status.NA:
                 continue
-            if curr_status == 4 and state.status_tracker[1] == 4:
-                curr_status = 5
+            if (curr_status == Status.ANNOTATION_CHANGE_START and
+                state.status_tracker[1] == Status.ANNOTATION_CHANGE_START):
+                curr_status = Status.ANNOTATION_CHANGE_END
 
             state.status_tracker = [curr_status, *state.status_tracker[:2]]
 
@@ -155,30 +167,30 @@ class PyPDFMixedLoader():
 
         return state.merged, state.missing_additions, state.missing_removals
 
-    def __handle_difference(self, curr_status:int, state:DifferenceState,
+    def __handle_difference(self, curr_status:Status, state:DifferenceState,
                             differences:list[str], i:int):
         diff = differences[i]
         skip = False
-        if curr_status == 0:
+        if curr_status == Status.EQUAL:
             state.ocr_idx += 1
             self.__handle_equal(state, diff, i)
             state.removed_words = []
             state.added_words = []
 
-        elif curr_status == 1: # Addition
+        elif curr_status == Status.ADDITION:
             state.ocr_idx += 1
             state.added_words.append((state.ocr_idx, diff[2:-1]))
 
-        elif curr_status == 2: # Removal
+        elif curr_status == Status.REMOVAL:
             self.__handle_removal(state, diff)
 
-        elif curr_status == 3: # Add or removed annotation
+        elif curr_status == Status.ANNOTATION_ADD_OR_REM:
             skip = self.__handle_annotation(state, differences, i)
             state.added_words = []
             state.removed_words = []
-            state.status_tracker[0] = 0
+            state.status_tracker[0] = Status.EQUAL
 
-        elif curr_status == 5: # Change (^) annotation
+        elif curr_status == Status.ANNOTATION_CHANGE_END:
             self.__handle_change_annotation(state)
 
         return skip
@@ -194,18 +206,18 @@ class PyPDFMixedLoader():
 
         return reconciled
 
-    def __get_difference_type(self, difference: str):
-        status = -1
+    def __get_difference_status(self, difference: str) -> Status:
+        status = Status.NA
         if difference.startswith('  '):
-            status = 0
+            status = Status.EQUAL
         elif difference.startswith('+ '):
-            status = 1
+            status = Status.ADDITION
         elif difference.startswith('- '):
-            status = 2
+            status = Status.REMOVAL
         elif re.search('^[?].*[+-]+$', difference):
-            status = 3
+            status = Status.ANNOTATION_ADD_OR_REM
         elif re.search('^[?].*[^^]+$', difference):
-            status = 4
+            status = Status.ANNOTATION_CHANGE_START
 
         return status
 
@@ -214,7 +226,7 @@ class PyPDFMixedLoader():
             self.__handle_text_out_of_place(state)
 
         single_removal = False
-        if state.status_tracker[1] in [1, 2]:
+        if state.status_tracker[1] in [Status.ADDITION, Status.REMOVAL]:
             if bool(state.added_words) != bool(state.removed_words):
                 # If is a single removal and is not the first of the page and is a small word
                 # join the removed word with next word
@@ -241,7 +253,7 @@ class PyPDFMixedLoader():
             state.missing_removals.append(removed_words)
 
     def __handle_removal(self, state, diff):
-        if state.status_tracker[1] == 1 and state.status_tracker[2] == 2:
+        if state.status_tracker[1] == Status.ADDITION and state.status_tracker[2] == Status.REMOVAL:
             if bool(state.added_words) != bool(state.removed_words):
                 self.__set_as_missing(state.added_words, state.removed_words, state)
             else:
