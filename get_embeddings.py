@@ -146,20 +146,23 @@ class CLIController(CLI):
         if args.output != '' or (args.action == 'embeddings' and args.storage != 'csv'):
             self.print_to_console = False
 
-        if args.storage == 'csv':
-            self.storage = CSVStorage()
-        elif args.storage == 'chromadb':
-            self.storage = ChromaDBStorage(args.embedder, args.database_dir)
-        else:
-            raise CLIException(f"Invalid storage '{args.storage}'")
-
         if args.action == 'embeddings' and args.storage != 'csv' and args.collection == '':
             raise CLIException("Please specify a name for the collection")
 
         if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
             raise CLIException("Parse parameters file does not exist")
 
+        self.__setup_storage(args)
+
         self._args = args
+
+    def __setup_storage(self, args):
+        if args.storage == 'csv':
+            self.storage = CSVStorage()
+        elif args.storage == 'chromadb':
+            self.storage = ChromaDBStorage(args.embedder, args.database_dir)
+        else:
+            raise CLIException(f"Invalid storage '{args.storage}'")
 
     def __process_file(self, filename: str, output: str, input_type: str):
         self._logger.info('Processing file %s', filename)
