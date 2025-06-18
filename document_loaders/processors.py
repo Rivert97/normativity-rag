@@ -14,6 +14,9 @@ def remove_hyphens(text: str) -> str:
     * Trailing math operands: 2 - 4
     * Names: Lopez-Ferreras, VGG-19, CIFAR-100
     """
+    if not text:
+        return text
+
     lines = [line.strip() for line in text.split("\n")]
 
     # Find dashes
@@ -37,6 +40,9 @@ def remove_hyphens(text: str) -> str:
 def replace_ligatures(text: str) -> str:
     """Replace special characters present in PDF files (ligatures) with the
     corresponding utf-8 characters."""
+    if not text:
+        return text
+
     ligatures = {
         "ﬀ": "ff",
         "ﬁ": "fi",
@@ -54,14 +60,15 @@ def replace_ligatures(text: str) -> str:
 
     return text
 
-def get_data_inside_boundaries(data: pd.DataFrame):
+def get_data_inside_boundaries(data: pd.DataFrame, boundaries:dict[str,float]=None):
     """Filter the data and return only the data that is inside the boundaries."""
-    boundaries = {
-        'left': 0.05,
-        'top': 0.1,
-        'right': 0.95,
-        'bottom': 0.95,
-    }
+    if not boundaries:
+        boundaries = {
+            'left': 0.05,
+            'top': 0.1,
+            'right': 0.95,
+            'bottom': 0.95,
+        }
     return data[
         (data['left'] > boundaries['left']) &
         (data['top'] > boundaries['top']) &

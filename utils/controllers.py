@@ -5,6 +5,7 @@ import os
 import sys
 
 import dotenv
+import yaml
 
 from .logger import AppLogger
 from .exceptions import CLIException
@@ -48,6 +49,18 @@ class CLI:
     def get_logger(self):
         """Get the logger handler."""
         return self._logger
+
+    def load_yaml(self, yaml_file: str):
+        """Loads a YAML file with options."""
+        options = {}
+        try:
+            with open(yaml_file, 'r', encoding='utf-8') as f:
+                options = yaml.safe_load(f)
+        except yaml.scanner.ScannerError as e:
+            self._logger.error(e)
+            raise CLIException(f'{yaml_file} is not a YAML file') from e
+
+        return options
 
 def run_cli(cli_class: CLI):
     """Run a CLI class."""

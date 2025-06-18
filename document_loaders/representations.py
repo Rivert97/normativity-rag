@@ -41,15 +41,16 @@ class PdfDocumentData():
 
         new_data.loc[:, 'group'] += self.group_counter
         self.group_counter = new_data.loc[:, 'group'].max() + 1
+        new_data = new_data.dropna()
 
         self.data = pd.concat([self.data, new_data[PdfDocumentData.columns]], ignore_index=True)
 
         self.page_counter += 1
 
-    def get_text(self, remove_headers: bool=False):
+    def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None):
         """Get text from all the document."""
         if remove_headers:
-            data = get_data_inside_boundaries(self.data)
+            data = get_data_inside_boundaries(self.data, boundaries)
         else:
             data = self.data
 
@@ -66,11 +67,12 @@ class PdfDocumentData():
         """Get text of the last page added to the document."""
         return self.get_page_text(self.page_counter - 1, remove_headers)
 
-    def get_page_text(self, page_num: int, remove_headers: bool=False) -> str:
+    def get_page_text(self, page_num: int, remove_headers: bool=False,
+                      boundaries:dict[str,float]=None) -> str:
         """Get text of certain page of the document."""
         if remove_headers:
             data = self.data[self.data['page'] == page_num]
-            data = get_data_inside_boundaries(self.data)
+            data = get_data_inside_boundaries(self.data, boundaries)
         else:
             data = self.data[self.data['page'] == page_num]
 
@@ -81,17 +83,18 @@ class PdfDocumentData():
 
         return '\n'.join(texts_by_group)
 
-    def get_data(self, remove_headers: bool=False):
+    def get_data(self, remove_headers: bool=False, boundaries:dict[str,float]=None):
         """Get data of all the documet."""
         if remove_headers:
-            return get_data_inside_boundaries(self.data)
+            return get_data_inside_boundaries(self.data, boundaries)
         return self.data
 
-    def get_page_data(self, page_num: int, remove_headers: bool=False):
+    def get_page_data(self, page_num: int, remove_headers: bool=False,
+                      boundaries:dict[str,float]=None):
         """Get data of certain page of the document."""
         if remove_headers:
             data = self.data[self.data['page'] == page_num]
-            return get_data_inside_boundaries(data)
+            return get_data_inside_boundaries(data, boundaries)
 
         return self.data[self.data['page'] == page_num]
 

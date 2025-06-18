@@ -74,7 +74,7 @@ class PyPDFMixedLoader():
 
         self.__merge_pages(pypdf_page, ocr_page, page_num)
 
-    def get_text(self) -> str:
+    def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:
         """Get the text string of the PDF document.
 
         Headers are removed, ligatures are replaced an hypens are fixed.
@@ -82,13 +82,14 @@ class PyPDFMixedLoader():
         if self.document_data.is_empty():
             return ''
 
-        text = self.document_data.get_text(remove_headers=True)
+        text = self.document_data.get_text(remove_headers, boundaries)
         text = replace_ligatures(text)
         text = remove_hyphens(text)
 
         return text
 
-    def get_page_text(self, page_num: int):
+    def get_page_text(self, page_num: int, remove_headers:bool=True,
+                      boundaries:dict[str,float]=None) -> str:
         """Get the text string of a single page of the PDF document.
 
         Headers are removed, ligatures are replaced an hypens are fixed.
@@ -96,7 +97,8 @@ class PyPDFMixedLoader():
         if self.document_data.is_empty():
             return ''
 
-        page_text = self.document_data.get_page_text(page_num, remove_headers=True)
+        page_text = self.document_data.get_page_text(page_num, remove_headers=remove_headers,
+                                                     boundaries=boundaries)
         page_text = replace_ligatures(page_text)
         page_text = remove_hyphens(page_text)
 
@@ -405,8 +407,8 @@ class PyPDFMixedLoader():
                 offset += len(additions_str[i])
                 if offset > sentence_idx:
                     break
-                reconciled.append(f_add)
-                additions_offset = i
+                reconciled.append((f_add[0], None))
+                additions_offset += 1
 
             offset = 0
             for i in range(additions_offset, len(flatten_additions)):
@@ -524,7 +526,7 @@ class PyPDFMixedLoader():
                     f1_score = self.__simple_f1_score(list(a_words[1]),
                                                       list(r_words))
                     if f1_score >= 0.25:
-                        merged.append((a_words[i], r_words))
+                        merged.append((a_words[0], r_words))
                         removed_words.pop(j)
                         break
                 else:
@@ -554,18 +556,19 @@ class PyPDFLoader():
         """Open the document."""
         self.parser = PypdfParser(file_path)
 
-    def get_text(self):
+    def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None):
         """Return the full text of the PDF file."""
-        text = self.parser.get_text()
+        text = self.parser.get_text(remove_headers=remove_headers, boundaries=boundaries)
         text = replace_ligatures(text)
         text = remove_hyphens(text)
 
         return text
 
-    def get_page_text(self, page_num: int):
+    def get_page_text(self, page_num: int, remove_headers:bool=True,
+                      boundaries:dict[str,float]=None):
         """Return the text of a single page of the PDF file."""
         page = self.parser.get_page(page_num)
-        page_text = page.get_text()
+        page_text = page.get_text(remove_headers, boundaries)
         page_text = replace_ligatures(page_text)
         page_text = remove_hyphens(page_text)
 
@@ -577,18 +580,19 @@ class OCRLoader():
         """Open the document."""
         self.parser = OcrPdfParser(file_path, cache_dir, keep_cache)
 
-    def get_text(self):
+    def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:
         """Return the full text of the PDF file."""
-        text = self.parser.get_text(remove_headers=True)
+        text = self.parser.get_text(remove_headers=remove_headers, boundaries=boundaries)
         text = replace_ligatures(text)
         text = remove_hyphens(text)
 
         return text
 
-    def get_page_text(self, page_num: int):
+    def get_page_text(self, page_num: int, remove_headers:bool=True,
+                      boundaries:dict[str,float]=None) -> str:
         """Return the text of a single page of the PDF file."""
         page = self.parser.get_page(page_num)
-        page_text = page.get_raw_text()
+        page_text = page.get_text(remove_headers=remove_headers, boundaries=boundaries)
         page_text = replace_ligatures(page_text)
         page_text = remove_hyphens(page_text)
 
@@ -607,18 +611,19 @@ class PDFPlumberLoader():
     def __init__(self, file_path:str):
         self.parser = PdfPlumberParser(file_path)
 
-    def get_text(self):
+    def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:
         """Return the full text of the PDF file."""
-        text = self.parser.get_text(remove_headers=True)
+        text = self.parser.get_text(remove_headers=remove_headers, boundaries=boundaries)
         text = replace_ligatures(text)
         text = remove_hyphens(text)
 
         return text
 
-    def get_page_text(self, page_num: int):
+    def get_page_text(self, page_num: int, remove_headers:bool=True,
+                      boundaries:dict[str,float]=None) -> str:
         """Return the text of a single page of the PDF file."""
         page = self.parser.get_page(page_num)
-        page_text = page.get_text()
+        page_text = page.get_text(remove_headers, boundaries)
         page_text = replace_ligatures(page_text)
         page_text = remove_hyphens(page_text)
 

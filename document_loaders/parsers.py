@@ -46,9 +46,19 @@ class PypdfPage():
 
         self.visitor = PageTextVisitor()
 
-    def get_text(self):
+    def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None):
         """Return the text contained within the boundaries of the page."""
-        self.visitor.set_boundaries(*self.page['/ArtBox'])
+        if remove_headers and boundaries is not None:
+            page_width = self.page['/ArtBox'][2]
+            page_height = self.page['/ArtBox'][3]
+            self.visitor.set_boundaries(
+                boundaries['left'] * page_width,
+                boundaries['top'] * page_height,
+                boundaries['right'] * page_width,
+                boundaries['bottom'] * page_height
+            )
+        else:
+            self.visitor.set_boundaries(*self.page['/ArtBox'])
         text = self.page.extract_text(visitor_text=self.visitor.visitor_text)
 
         return self.__remove_out_of_bounds_text(text)
@@ -83,7 +93,8 @@ class PypdfParser():
 
         self.reader = PdfReader(self.file_path)
 
-    def get_text(self, page_separator: str = '') -> str:
+    def get_text(self, page_separator: str = '', remove_headers:bool=True,
+                 boundaries:dict[str,float]=None) -> str:
         """Return the full text of the file as extracted by pypdf.
 
         :param page_separator: String to be added to separate each page,
@@ -93,7 +104,11 @@ class PypdfParser():
         :return: A string of all the text from the document
         :rtype: str
         """
-        return page_separator.join([page.extract_text() for page in self.reader.pages])
+        text = ''
+        for page in self.get_pages():
+            text += page.get_text(remove_headers, boundaries) + page_separator
+
+        return text
 
     def get_num_pages(self) -> int:
         """Return the number of pages of the document."""
@@ -344,10 +359,10 @@ class OcrPage():
         reconstructor = DataReconstructor(self.data, w_boundaries)
         self.data = reconstructor.get_reconstructed()
 
-    def get_text(self, remove_headers: bool=False) -> str:
+    def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
         """Return the reconstructed text of the page (without Tesseract errors)."""
         if remove_headers:
-            data = get_data_inside_boundaries(self.data)
+            data = get_data_inside_boundaries(self.data, boundaries)
         else:
             data = self.data
         data = data.sort_values(['line', 'left'])
@@ -493,11 +508,12 @@ class OcrPdfParser():
         if not self.keep_cache:
             self.clear_cache()
 
-    def get_text(self, page_separator: str = '\n', remove_headers:bool = False) -> str:
+    def get_text(self, page_separator: str = '\n', remove_headers:bool = False,
+                 boundaries:dict[str,float]=None) -> str:
         """Return the text of all the pages in the document."""
         text = ""
         for page in self.get_pages():
-            text += page.get_text(remove_headers) + page_separator
+            text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
 
@@ -588,10 +604,10 @@ class PdfPlumberPage():
         reconstructor = DataReconstructor(self.data, w_boundaries)
         self.data = reconstructor.get_reconstructed()
 
-    def get_text(self, remove_headers: bool=False) -> str:
+    def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
         """Return the reconstructed text of the page (without Tesseract errors)."""
         if remove_headers:
-            data = get_data_inside_boundaries(self.data)
+            data = get_data_inside_boundaries(self.data, boundaries)
         else:
             data = self.data
         data = data.sort_values(['line', 'left'])
@@ -688,7 +704,8 @@ class PdfPlumberParser():
 
         return text
 
-    def get_text(self, page_separator: str = '\n', remove_headers:bool = False) -> str:
+    def get_text(self, page_separator: str = '\n', remove_headers:bool = False,
+                 boundaries:dict[str,float]=None) -> str:
         """Return the full text with pdfplumber but applyint custom text reconstruction
 
         :param page_separator: String to be added to separate each page,
@@ -701,7 +718,7 @@ class PdfPlumberParser():
         text = ''
         for page in self.reader.pages:
             page = PdfPlumberPage(page)
-            text += page.get_text(remove_headers) + page_separator
+            text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
 

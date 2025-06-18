@@ -17,7 +17,7 @@ class PageTextVisitor:
         Everything outside the square [(left, top) (right, bottom)] will be
         considered out of boundary.
         """
-        self.boundaries = (top, left, bottom, right)
+        self.boundaries = (top, left, right, bottom)
 
     def visitor_text(self, *args):
         """Store in an array all the texts that are out of bounds.

@@ -31,9 +31,11 @@ class CLIController(CLI):
         self.storage = None
         self.embedder = None
         self._args = None
+        self.parse_params = None
 
     def run(self):
         """Run the script logic."""
+        self.parse_params = self.load_yaml(self._args.parse_params_file)
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output, self._args.type)
         elif self._args.directory != '':
@@ -95,6 +97,13 @@ class CLIController(CLI):
                             help='Path to file containing the data or text of the document')
         self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
+        self.parser.add_argument('--parse-params-file',
+                            default='settings/params-default.yml',
+                            type=str,
+                            help='''
+                                YAML file with custom parse parameters to be used
+                                during extraction
+                                ''')
         self.parser.add_argument('-s', '--storage',
                             default='csv',
                             type=str,
@@ -146,6 +155,9 @@ class CLIController(CLI):
 
         if args.action == 'embeddings' and args.storage != 'csv' and args.collection == '':
             raise CLIException("Please specify a name for the collection")
+
+        if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
+            raise CLIException("Parse parameters file does not exist")
 
         self._args = args
 
@@ -228,7 +240,10 @@ class CLIController(CLI):
                     document_data.get_page_data(self._args.page, remove_headers=True),
                     basename)
         else:
-            splitter = DataTreeSplitter(document_data.get_data(remove_headers=True), basename)
+            splitter = DataTreeSplitter(document_data.get_data(
+                                            remove_headers=True,
+                                            boundaries=self.parse_params['pdf_margins']),
+                                        basename)
 
         splitter.analyze()
 
