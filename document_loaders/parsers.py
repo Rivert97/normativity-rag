@@ -127,11 +127,11 @@ class DataReconstructor():
         if 'bottom' not in self.data:
             self.data['bottom'] = self.data['top'] + self.data['height']
 
-        writable_min_x = writable_boundaries[0]
-        writable_max_x = writable_boundaries[2]
+        self.writable_min_x = writable_boundaries[0]
+        self.writable_max_x = writable_boundaries[2]
         #writable_min_x, _, writable_max_x, _ = self.__get_writable_boundaries()
-        self.writable_width = writable_max_x - writable_min_x
-        self.writable_center = writable_min_x + self.writable_width * 0.5
+        self.writable_width = self.writable_max_x - self.writable_min_x
+        self.writable_center = self.writable_min_x + self.writable_width * 0.5
 
     def get_reconstructed(self) -> pd.DataFrame:
         """Return the reconstructed data of the page by fixing the issues of the original data
@@ -163,7 +163,7 @@ class DataReconstructor():
 
             self.data.loc[word_idx, 'line'] = current_line_num
 
-    def __assign_column_number(self):
+    def __assign_column_number(self, min_words_per_col:int=1):
         self.data['column'] = pd.Series(dtype='int')
         tolerance = self.writable_width * 0.05
 
@@ -172,12 +172,18 @@ class DataReconstructor():
             current_col = {}
 
             sorted_words = line_words.sort_values(by='left')
-            for idx, word in sorted_words.iterrows():
+            num_words = len(sorted_words)
+            for i, (idx, word) in enumerate(sorted_words.iterrows()):
                 word_left = word['left']
                 word_right = word['left'] + word['width']
 
-                if (current_col
-                    and word_left - current_col['maxX'] < tolerance):
+                if (current_col and
+                    num_words - i <= min_words_per_col and
+                    self.__words_are_right_aligned(sorted_words[i:], )):
+                    # When too few words are left and aligned right consider them as the same colum
+                    current_col['maxX'] = word_right
+                elif (current_col and
+                    word_left - current_col['maxX'] < tolerance):
                     # It is close enough to be in the same column
                     current_col['maxX'] = word_right
                 else:
@@ -199,6 +205,14 @@ class DataReconstructor():
 
             words_indices = self.data[(self.data['line'] == line) & (self.data['column'] == column)]
             self.data.loc[words_indices.index, 'col_position'] = position
+
+    def __words_are_right_aligned(self, words:pd.DataFrame) -> bool:
+        left = words['left'].min()
+        right = words['right'].max()
+        center = left + (right - left) * 0.5
+
+        return (abs(self.writable_max_x - right) < self.writable_width * 0.05 and
+                center > self.writable_width * 0.75)
 
     def __column_is_centered(self, min_x, max_x):
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
