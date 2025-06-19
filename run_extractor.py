@@ -5,8 +5,6 @@ import argparse
 import os
 import glob
 
-import yaml
-
 from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
@@ -220,7 +218,7 @@ class CLIController(CLI):
             self.__process_file(file, collection, settings, params)
 
     def __process_yaml(self, yaml_file:str):
-        yaml_settings = self.__load_settings(yaml_file)
+        yaml_settings = self.load_yaml(yaml_file)
         self.__validate_and_fill_settings(yaml_settings)
 
         settings = ExecSettings(
@@ -265,16 +263,6 @@ class CLIController(CLI):
             metadatas.append(doc['metadata'])
 
         return sentences, metadatas
-
-    def __load_settings(self, settings_file: str):
-        try:
-            with open(settings_file, 'r', encoding='utf-8') as f:
-                settings = yaml.safe_load(f)
-        except yaml.scanner.ScannerError as e:
-            self._logger.error(e)
-            raise CLIException(f'{settings_file} is not a YAML file') from e
-
-        return settings
 
     def __validate_and_fill_settings(self, settings):
         # Validate root node

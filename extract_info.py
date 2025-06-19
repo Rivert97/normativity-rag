@@ -24,9 +24,11 @@ class CLIController(CLI):
 
         self.print_to_console = True
         self._args = None
+        self.parse_params = None
 
     def run(self):
         """Run the script logic."""
+        self.parse_params = self.load_yaml(self._args.parse_params_file)
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output)
         elif self._args.directory != '':
@@ -67,6 +69,13 @@ class CLIController(CLI):
         self.parser.add_argument('-p', '--page',
                             type=int,
                             help='Number of page to be processed')
+        self.parser.add_argument('--parse-params-file',
+                            default='settings/params-default.yml',
+                            type=str,
+                            help='''
+                                YAML file with custom parse parameters to be used
+                                during extraction
+                                ''')
         self.parser.add_argument('-t', '--type',
                             default='txt',
                             choices=['txt', 'csv'],
@@ -109,6 +118,9 @@ class CLIController(CLI):
 
         if args.output != '':
             self.print_to_console = False
+
+        if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
+            raise CLIException("Parse parameters file does not exist")
 
         self._args = args
 
@@ -156,9 +168,10 @@ class CLIController(CLI):
             self._logger.debug('Generating text output')
 
             if self._args.page is not None:
-                text = pdf_loader.get_page_text(self._args.page)
+                text = pdf_loader.get_page_text(self._args.page, True,
+                                                self.parse_params.get('pdf_margins'))
             else:
-                text = pdf_loader.get_text()
+                text = pdf_loader.get_text(True, self.parse_params.get('pdf_margins'))
 
             if self.print_to_console:
                 print(text)

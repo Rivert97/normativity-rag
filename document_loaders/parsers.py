@@ -46,9 +46,19 @@ class PypdfPage():
 
         self.visitor = PageTextVisitor()
 
-    def get_text(self):
+    def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None):
         """Return the text contained within the boundaries of the page."""
-        self.visitor.set_boundaries(*self.page['/ArtBox'])
+        if remove_headers and boundaries is not None:
+            page_width = self.page['/ArtBox'][2]
+            page_height = self.page['/ArtBox'][3]
+            self.visitor.set_boundaries(
+                boundaries['left'] * page_width,
+                boundaries['top'] * page_height,
+                boundaries['right'] * page_width,
+                boundaries['bottom'] * page_height
+            )
+        else:
+            self.visitor.set_boundaries(*self.page['/ArtBox'])
         text = self.page.extract_text(visitor_text=self.visitor.visitor_text)
 
         return self.__remove_out_of_bounds_text(text)
@@ -83,7 +93,8 @@ class PypdfParser():
 
         self.reader = PdfReader(self.file_path)
 
-    def get_text(self, page_separator: str = '') -> str:
+    def get_text(self, page_separator: str = '', remove_headers:bool=True,
+                 boundaries:dict[str,float]=None) -> str:
         """Return the full text of the file as extracted by pypdf.
 
         :param page_separator: String to be added to separate each page,
@@ -93,7 +104,11 @@ class PypdfParser():
         :return: A string of all the text from the document
         :rtype: str
         """
-        return page_separator.join([page.extract_text() for page in self.reader.pages])
+        text = ''
+        for page in self.get_pages():
+            text += page.get_text(remove_headers, boundaries) + page_separator
+
+        return text
 
     def get_num_pages(self) -> int:
         """Return the number of pages of the document."""
@@ -127,11 +142,11 @@ class DataReconstructor():
         if 'bottom' not in self.data:
             self.data['bottom'] = self.data['top'] + self.data['height']
 
-        writable_min_x = writable_boundaries[0]
-        writable_max_x = writable_boundaries[2]
+        self.writable_min_x = writable_boundaries[0]
+        self.writable_max_x = writable_boundaries[2]
         #writable_min_x, _, writable_max_x, _ = self.__get_writable_boundaries()
-        self.writable_width = writable_max_x - writable_min_x
-        self.writable_center = writable_min_x + self.writable_width * 0.5
+        self.writable_width = self.writable_max_x - self.writable_min_x
+        self.writable_center = self.writable_min_x + self.writable_width * 0.5
 
     def get_reconstructed(self) -> pd.DataFrame:
         """Return the reconstructed data of the page by fixing the issues of the original data
@@ -163,7 +178,7 @@ class DataReconstructor():
 
             self.data.loc[word_idx, 'line'] = current_line_num
 
-    def __assign_column_number(self):
+    def __assign_column_number(self, min_words_per_col:int=1):
         self.data['column'] = pd.Series(dtype='int')
         tolerance = self.writable_width * 0.05
 
@@ -172,12 +187,18 @@ class DataReconstructor():
             current_col = {}
 
             sorted_words = line_words.sort_values(by='left')
-            for idx, word in sorted_words.iterrows():
+            num_words = len(sorted_words)
+            for i, (idx, word) in enumerate(sorted_words.iterrows()):
                 word_left = word['left']
                 word_right = word['left'] + word['width']
 
-                if (current_col
-                    and word_left - current_col['maxX'] < tolerance):
+                if (current_col and
+                    num_words - i <= min_words_per_col and
+                    self.__words_are_right_aligned(sorted_words[i:], )):
+                    # When too few words are left and aligned right consider them as the same colum
+                    current_col['maxX'] = word_right
+                elif (current_col and
+                    word_left - current_col['maxX'] < tolerance):
                     # It is close enough to be in the same column
                     current_col['maxX'] = word_right
                 else:
@@ -199,6 +220,14 @@ class DataReconstructor():
 
             words_indices = self.data[(self.data['line'] == line) & (self.data['column'] == column)]
             self.data.loc[words_indices.index, 'col_position'] = position
+
+    def __words_are_right_aligned(self, words:pd.DataFrame) -> bool:
+        left = words['left'].min()
+        right = words['right'].max()
+        center = left + (right - left) * 0.5
+
+        return (abs(self.writable_max_x - right) < self.writable_width * 0.05 and
+                center > self.writable_width * 0.75)
 
     def __column_is_centered(self, min_x, max_x):
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
@@ -330,10 +359,10 @@ class OcrPage():
         reconstructor = DataReconstructor(self.data, w_boundaries)
         self.data = reconstructor.get_reconstructed()
 
-    def get_text(self, remove_headers: bool=False) -> str:
+    def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
         """Return the reconstructed text of the page (without Tesseract errors)."""
         if remove_headers:
-            data = get_data_inside_boundaries(self.data)
+            data = get_data_inside_boundaries(self.data, boundaries)
         else:
             data = self.data
         data = data.sort_values(['line', 'left'])
@@ -479,11 +508,12 @@ class OcrPdfParser():
         if not self.keep_cache:
             self.clear_cache()
 
-    def get_text(self, page_separator: str = '\n', remove_headers:bool = False) -> str:
+    def get_text(self, page_separator: str = '\n', remove_headers:bool = False,
+                 boundaries:dict[str,float]=None) -> str:
         """Return the text of all the pages in the document."""
         text = ""
         for page in self.get_pages():
-            text += page.get_text(remove_headers) + page_separator
+            text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
 
@@ -574,10 +604,10 @@ class PdfPlumberPage():
         reconstructor = DataReconstructor(self.data, w_boundaries)
         self.data = reconstructor.get_reconstructed()
 
-    def get_text(self, remove_headers: bool=False) -> str:
+    def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
         """Return the reconstructed text of the page (without Tesseract errors)."""
         if remove_headers:
-            data = get_data_inside_boundaries(self.data)
+            data = get_data_inside_boundaries(self.data, boundaries)
         else:
             data = self.data
         data = data.sort_values(['line', 'left'])
@@ -674,7 +704,8 @@ class PdfPlumberParser():
 
         return text
 
-    def get_text(self, page_separator: str = '\n', remove_headers:bool = False) -> str:
+    def get_text(self, page_separator: str = '\n', remove_headers:bool = False,
+                 boundaries:dict[str,float]=None) -> str:
         """Return the full text with pdfplumber but applyint custom text reconstruction
 
         :param page_separator: String to be added to separate each page,
@@ -687,7 +718,7 @@ class PdfPlumberParser():
         text = ''
         for page in self.reader.pages:
             page = PdfPlumberPage(page)
-            text += page.get_text(remove_headers) + page_separator
+            text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
 

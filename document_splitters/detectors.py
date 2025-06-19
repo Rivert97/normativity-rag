@@ -5,8 +5,8 @@ import re
 METADATA_REGEX = {
     'permissive_titles' : {
         'titles': {
-            2: r'^(t[iíÍ]tulo|[xiv]+\.) .*',
-            3: r'^secci[oóÓ]n .*',
+            2: r'^([iíÍ]ndice$|(t[iíÍ]tulo|[xiv]+|[0-9]+\. .*))',
+            3: r'^([0-9]+\.[0-9]|secci[oóÓ]n) .*',
             4: r'^cap[iíÍ]tulo .*',
         },
         'contents': {

@@ -1,0 +1,5 @@
+pdf_margins:
+  left: 0.05
+  top: 0.1
+  right: 0.95
+  bottom: 0.95
