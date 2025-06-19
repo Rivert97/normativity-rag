@@ -240,7 +240,8 @@ class CLIController(CLI):
         basename = os.path.splitext(os.path.split(filename)[-1])[0]
         if self._args.page is not None:
             splitter = DataTreeSplitter(
-                    document_data.get_page_data(self._args.page, remove_headers=True),
+                    document_data.get_page_data(self._args.page, remove_headers=True,
+                                                boundaries=self.parse_params['pdf_margins']),
                     basename)
         else:
             splitter = DataTreeSplitter(document_data.get_data(
