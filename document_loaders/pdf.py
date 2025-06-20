@@ -352,9 +352,11 @@ class PyPDFMixedLoader():
             state.removed_words = []
             return True # Skip next iteration
 
-        state.merged.append((state.ocr_idx, state.removed_words[-1]))
+        if state.removed_words:
+            state.merged.append((state.ocr_idx, state.removed_words[-1]))
         state.added_words = []
         state.removed_words = []
+
         return False
 
     def __handle_annotation_removal(self, state:DifferenceState, match:list, i:int, diffs:list):
