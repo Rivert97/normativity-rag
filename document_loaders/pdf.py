@@ -424,8 +424,9 @@ class PyPDFMixedLoader():
                                           removals_sentence:list[str]) -> int:
         sentence_idx = -1
         for offset in range(len(additions_sentence) - len(removals_sentence) + 1):
-            score = self.__exact_match_score(additions_sentence[offset:len(removals_sentence)],
-                                             removals_sentence)
+            score = self.__exact_match_score(
+                additions_sentence[offset:offset+len(removals_sentence)],
+                removals_sentence)
             if score == 1.0:
                 sentence_idx = offset
 

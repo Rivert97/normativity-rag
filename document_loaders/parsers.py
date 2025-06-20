@@ -65,7 +65,7 @@ class PypdfPage():
 
     def get_words(self, suffix:str = '') -> pd.DataFrame:
         """Get the text of the page and split it into words into a dataframe."""
-        words = [(idx, f'{w}{suffix}') for idx, w in enumerate(self.get_text().split())]
+        words = [(idx, f'{w}{suffix}') for idx, w in enumerate(self.get_text(False).split())]
         df_words = pd.DataFrame(words, columns=['txt_idx', 'word'])
         df_words.set_index('txt_idx', inplace=True)
 

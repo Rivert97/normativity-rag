@@ -33,6 +33,7 @@ class PageTextVisitor:
         :param font_size: Specification of font sizes
         :type font_size: dict
         """
+        self.out_of_bounds_text = {}
         x = args[2][4]
         y = args[2][5]
         if not (self.boundaries[1] <= x <= self.boundaries[3] and
