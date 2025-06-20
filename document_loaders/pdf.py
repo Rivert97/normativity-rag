@@ -352,9 +352,11 @@ class PyPDFMixedLoader():
             state.removed_words = []
             return True # Skip next iteration
 
-        state.merged.append((state.ocr_idx, state.removed_words[-1]))
+        if state.removed_words:
+            state.merged.append((state.ocr_idx, state.removed_words[-1]))
         state.added_words = []
         state.removed_words = []
+
         return False
 
     def __handle_annotation_removal(self, state:DifferenceState, match:list, i:int, diffs:list):
@@ -424,8 +426,9 @@ class PyPDFMixedLoader():
                                           removals_sentence:list[str]) -> int:
         sentence_idx = -1
         for offset in range(len(additions_sentence) - len(removals_sentence) + 1):
-            score = self.__exact_match_score(additions_sentence[offset:len(removals_sentence)],
-                                             removals_sentence)
+            score = self.__exact_match_score(
+                additions_sentence[offset:offset+len(removals_sentence)],
+                removals_sentence)
             if score == 1.0:
                 sentence_idx = offset
 
@@ -608,12 +611,16 @@ class OCRLoader():
 
 class PDFPlumberLoader():
     """Class to load a PDF file using pdfplumber with custom text reconstruction."""
-    def __init__(self, file_path:str):
+    def __init__(self, file_path:str, raw:bool=False):
         self.parser = PdfPlumberParser(file_path)
+        self.raw = raw
 
     def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:
         """Return the full text of the PDF file."""
-        text = self.parser.get_text(remove_headers=remove_headers, boundaries=boundaries)
+        if self.raw:
+            text = self.parser.get_raw_text(remove_headers=remove_headers, boundaries=boundaries)
+        else:
+            text = self.parser.get_text(remove_headers=remove_headers, boundaries=boundaries)
         text = replace_ligatures(text)
         text = remove_hyphens(text)
 
@@ -623,7 +630,10 @@ class PDFPlumberLoader():
                       boundaries:dict[str,float]=None) -> str:
         """Return the text of a single page of the PDF file."""
         page = self.parser.get_page(page_num)
-        page_text = page.get_text(remove_headers, boundaries)
+        if self.raw:
+            page_text = page.get_raw_text(remove_headers, boundaries)
+        else:
+            page_text = page.get_text(remove_headers, boundaries)
         page_text = replace_ligatures(page_text)
         page_text = remove_hyphens(page_text)
 

@@ -65,7 +65,7 @@ class PypdfPage():
 
     def get_words(self, suffix:str = '') -> pd.DataFrame:
         """Get the text of the page and split it into words into a dataframe."""
-        words = [(idx, f'{w}{suffix}') for idx, w in enumerate(self.get_text().split())]
+        words = [(idx, f'{w}{suffix}') for idx, w in enumerate(self.get_text(False).split())]
         df_words = pd.DataFrame(words, columns=['txt_idx', 'word'])
         df_words.set_index('txt_idx', inplace=True)
 
@@ -605,17 +605,34 @@ class PdfPlumberPage():
         self.data = reconstructor.get_reconstructed()
 
     def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
-        """Return the reconstructed text of the page (without Tesseract errors)."""
+        """Return the reconstructed text of the page (without Pdfplumber errors)."""
         if remove_headers:
             data = get_data_inside_boundaries(self.data, boundaries)
         else:
             data = self.data
         data = data.sort_values(['line', 'left'])
-        texts_by_line = data.groupby(['group', 'col_position', 'line'])['text'].apply(' '.join)
-        texts_by_column = texts_by_line.groupby(['group', 'col_position']).apply('\n'.join)
-        texts_by_group = texts_by_column.groupby('group').apply('\n'.join)
+        t_by_line = data.groupby(['group', 'col_position', 'line'])['text'].apply(' '.join)
+        t_by_column = t_by_line.groupby(['group', 'col_position']).apply('\n'.join)
+        t_by_group = t_by_column.groupby('group').apply('\n'.join)
 
-        return '\n'.join(texts_by_group)
+        return '\n'.join(t_by_group)
+
+    def get_raw_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
+        """Return the text as returned by pdfplumber."""
+        if remove_headers:
+            x0 = boundaries['left'] * self.page.width
+            top = boundaries['top'] * self.page.height
+            x1 = boundaries['right'] * self.page.width
+            bottom = boundaries['bottom'] * self.page.height
+
+            page_content = self.page.crop((x0, top, x1, bottom))
+        else:
+            page_content = self.page
+
+        plumber_lines = page_content.extract_text_lines(use_text_flow=True)
+        text = '\n'.join([line['text'] for line in plumber_lines])
+
+        return text
 
     def get_words(self, suffix = '') -> pd.DataFrame:
         """Get the reconstructed text and split it into words into a dataframe."""
@@ -687,7 +704,8 @@ class PdfPlumberParser():
 
         self.reader = pdfplumber.open(file_path)
 
-    def get_raw_text(self, page_separator: str = '') -> str:
+    def get_raw_text(self, page_separator: str = '\n', remove_headers:bool = False,
+                 boundaries:dict[str,float]=None) -> str:
         """Return the full text of the file as extracted by pdfplumber.
 
         :param page_separator: String to be added to separate each page,
@@ -699,8 +717,8 @@ class PdfPlumberParser():
         """
         text = ''
         for page in self.reader.pages:
-            lines = page.extract_text_lines(use_text_flow=True)
-            text += "\n".join([line['text'] for line in lines]) + page_separator
+            page = PdfPlumberPage(page)
+            text += page.get_raw_text(remove_headers, boundaries) + page_separator
 
         return text
 

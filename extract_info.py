@@ -40,52 +40,63 @@ class CLIController(CLI):
         super().process_args()
 
         self.parser.add_argument('--cache-dir',
-                            default='./.cache',
-                            type=str,
-                            help='Directory to be used as cache. Defaults to ./.cache')
+                                 default='./.cache',
+                                 type=str,
+                                 help='Directory to be used as cache. Defaults to ./.cache')
         self.parser.add_argument('-d', '--directory',
-                            default='',
-                            type=str,
-                            help='Directory to be processed in directory mode')
+                                 default='',
+                                 type=str,
+                                 help='Directory to be processed in directory mode')
         self.parser.add_argument('-f', '--file',
-                            default='',
-                            type=str,
-                            help='File to be processed in single file mode')
+                                 default='',
+                                 type=str,
+                                 help='File to be processed in single file mode')
         self.parser.add_argument('-k', '--keep-cache',
-                            default=False,
-                            action='store_true',
-                            help='''Keep Tesseract cache after processing. Usefull when the
-                                same file is going to be processed multiple times''')
+                                 default=False,
+                                 action='store_true',
+                                 help='''Keep Tesseract cache after processing. Usefull when the
+                                     same file is going to be processed multiple times''')
         self.parser.add_argument('-l', '--loader',
-                            default='mixed',
-                            type=str,
-                            choices=['mixed', 'text', 'ocr', 'pdfplumber'],
-                            help='Type of loader to use. Defaults to mixed')
+                                 default='mixed',
+                                 type=str,
+                                 choices=['mixed', 'text', 'ocr', 'pdfplumber'],
+                                 help='Type of loader to use. Defaults to mixed')
         self.parser.add_argument('-o', '--output',
-                            default='',
-                            type=str,
-                            help='''File or directory to store the output text file(s).
-                                When -d is used, this defaults to ./''')
+                                 default='',
+                                 type=str,
+                                 help='''
+                                    File or directory to store the output text file(s).
+                                    When -d is used, this defaults to .
+                                 ''')
         self.parser.add_argument('-p', '--page',
-                            type=int,
-                            help='Number of page to be processed')
+                                 type=int,
+                                 help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
-                            default='settings/params-default.yml',
-                            type=str,
-                            help='''
-                                YAML file with custom parse parameters to be used
-                                during extraction
-                                ''')
+                                 default='settings/params-default.yml',
+                                 type=str,
+                                 help='''
+                                     YAML file with custom parse parameters to be used
+                                     during extraction
+                                 ''')
+        self.parser.add_argument('--raw',
+                                 default=False,
+                                 action='store_true',
+                                 help='''
+                                     When using 'pdfplumber' loader use this option to use text
+                                     as returned by the library.
+                                 ''')
         self.parser.add_argument('-t', '--type',
-                            default='txt',
-                            choices=['txt', 'csv'],
-                            nargs='+',
-                            type=str,
-                            help='Type(s) of output(s). Defaults to txt')
+                                 default='txt',
+                                 choices=['txt', 'csv'],
+                                 nargs='+',
+                                 type=str,
+                                 help='Type(s) of output(s). Defaults to txt')
         self.parser.add_argument('-P', '--Parallel',
-                            default=False,
-                            action="store_true",
-                            help='Uses the total number of cores - 2, for concurrent processing')
+                                 default=False,
+                                 action="store_true",
+                                 help='''Uses the total number of cores - 2,
+                                     for concurrent processing
+                                 ''')
 
         args = self.parser.parse_args()
 
@@ -156,7 +167,7 @@ class CLIController(CLI):
         elif self._args.loader == 'ocr':
             loader = OCRLoader(filename, self._args.cache_dir, self._args.keep_cache)
         elif self._args.loader == 'pdfplumber':
-            loader = PDFPlumberLoader(filename)
+            loader = PDFPlumberLoader(filename, self._args.raw)
         else:
             raise CLIException("Invalid type of loader")
 
