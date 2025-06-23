@@ -26,7 +26,7 @@ def remove_hyphens(text: str) -> str:
         match_end = re.match(r'^.*[a-zA-ZñÑáéíóúÁÉÍÓÚ ]-$', line)
         if match_end:
             line_numbers_end.append(line_no)
-        if line.startswith("-"):
+        elif line.startswith("-"):
             line_numbers_start.append(line_no)
 
     # Replace
@@ -87,6 +87,9 @@ def __dehyphenate_end(lines: list[str], line_no: int) -> list[str]:
     return lines
 
 def __dehyphenate_start(lines: list[str], line_no: int) -> list[str]:
+    if lines[line_no] == '':
+        return lines
+
     if lines[line_no].startswith("- "):
         word_suffix = lines[line_no].split(" ")[1]
         suffix_offset = 3

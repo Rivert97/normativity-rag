@@ -32,6 +32,7 @@ class GroupState:
     group_cols: dict[str, dict[str, int]]
     prev_num_cols: int|None
     centered: dict[str, bool|None]
+    pass_through_center: dict[str, bool|None]
     prev_new_group: bool
     tolerance: float
     group_num: int
@@ -51,11 +52,12 @@ class PypdfPage():
         if remove_headers and boundaries is not None:
             page_width = self.page['/ArtBox'][2]
             page_height = self.page['/ArtBox'][3]
+            # PDF Y-axis is inverted
             self.visitor.set_boundaries(
                 boundaries['left'] * page_width,
-                boundaries['top'] * page_height,
+                (1.0 - boundaries['top']) * page_height,
                 boundaries['right'] * page_width,
-                boundaries['bottom'] * page_height
+                (1.0 - boundaries['bottom']) * page_height
             )
         else:
             self.visitor.set_boundaries(*self.page['/ArtBox'])
@@ -75,9 +77,9 @@ class PypdfPage():
         clean_text = text
         for line in self.visitor.get_out_of_bounds_text():
             if clean_text.endswith(line):
-                clean_text = clean_text[:-len(line)]
+                clean_text = clean_text[:-len(line)].strip()
             elif clean_text.startswith(line):
-                clean_text = clean_text[len(line):]
+                clean_text = clean_text[len(line):].strip()
 
         return clean_text
 
@@ -93,7 +95,7 @@ class PypdfParser():
 
         self.reader = PdfReader(self.file_path)
 
-    def get_text(self, page_separator: str = '', remove_headers:bool=True,
+    def get_text(self, page_separator: str = '\n', remove_headers:bool=True,
                  boundaries:dict[str,float]=None) -> str:
         """Return the full text of the file as extracted by pypdf.
 
@@ -180,7 +182,7 @@ class DataReconstructor():
 
     def __assign_column_number(self, min_words_per_col:int=1):
         self.data['column'] = pd.Series(dtype='int')
-        tolerance = self.writable_width * 0.05
+        tolerance = self.writable_width * 0.025
 
         for _, line_words in self.data.groupby('line'):
             col_number = -1
@@ -194,7 +196,7 @@ class DataReconstructor():
 
                 if (current_col and
                     num_words - i <= min_words_per_col and
-                    self.__words_are_right_aligned(sorted_words[i:], )):
+                    self.__words_are_right_aligned(sorted_words[i:])):
                     # When too few words are left and aligned right consider them as the same colum
                     current_col['maxX'] = word_right
                 elif (current_col and
@@ -233,6 +235,9 @@ class DataReconstructor():
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
         return min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1
 
+    def __column_passes_through_center(self, min_x, max_x):
+        return min_x < self.writable_center < max_x
+
     def __column_is_aligned_left(self, min_x, max_x):
         col_center = min_x + (max_x - min_x) * 0.5
 
@@ -253,6 +258,7 @@ class DataReconstructor():
             group_cols=None,
             prev_num_cols=None,
             centered={'prev': None, 'curr': None},
+            pass_through_center={'prev': None, 'curr': None},
             prev_new_group=False,
             tolerance=tolerance,
             group_num=0
@@ -261,9 +267,12 @@ class DataReconstructor():
         for _, line_words in self.data.groupby('line'):
             state.line_cols = self.__extract_line_columns(line_words)
             state.centered['curr'] = False
+            state.pass_through_center['curr'] = False
             for _, col in state.line_cols.items():
                 if self.__column_is_centered(col['minX'], col['maxX']):
                     state.centered['curr'] = True
+                if self.__column_passes_through_center(col['minX'], col['maxX']):
+                    state.pass_through_center['curr'] = True
 
             new_group = self.__is_new_group(state)
 
@@ -275,6 +284,7 @@ class DataReconstructor():
             # Update tracking variables
             state.prev_num_cols = len(state.line_cols)
             state.centered['prev'] = state.centered['curr']
+            state.pass_through_center['prev'] = state.pass_through_center['curr']
             state.prev_new_group = new_group
 
             if state.group_cols is None or new_group:
@@ -307,7 +317,7 @@ class DataReconstructor():
             return False
 
         if len(state.group_cols) != len(state.line_cols):
-            if state.centered['curr'] or state.centered['prev']:
+            if state.pass_through_center['curr'] or state.pass_through_center['prev']:
                 return True
         elif (state.centered['curr'] != state.centered['prev'] and
               state.line_cols.get(0).get('position_max') == 0):
@@ -471,7 +481,8 @@ class OcrPage():
         self.data['height'] = self.data['height'] / self.data.loc[0, 'height']
 
     def __get_writable_boundaries(self):
-        blocks = self.data[self.data['level'] == 2]
+        # There's a block with text ' ' from 0.0 to 1.0, we need to eliminate it
+        blocks = self.data[(self.data['level'] == 5) & (self.data['text'] != ' ')]
         min_x = blocks['left'].min()
         max_x = (blocks['left'] + blocks['width']).max()
 
@@ -594,7 +605,7 @@ class PdfPlumberPage():
     """
 
     def __init__(self, page:pdfplumber.page.Page):
-        self.page = page
+        self.page = page.dedupe_chars()
 
         self.data = self.__get_data_from_page()
 
