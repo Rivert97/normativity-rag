@@ -167,7 +167,8 @@ class CLIController(CLI):
         elif self._args.loader == 'ocr':
             loader = OCRLoader(filename, self._args.cache_dir, self._args.keep_cache)
         elif self._args.loader == 'pdfplumber':
-            loader = PDFPlumberLoader(filename, self._args.raw)
+            loader = PDFPlumberLoader(filename, self._args.raw, self._args.cache_dir,
+                                      self._args.keep_cache)
         else:
             raise CLIException("Invalid type of loader")
 

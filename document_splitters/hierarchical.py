@@ -230,20 +230,23 @@ class DataTreeSplitter(TreeSplitter):
                         prev_line_height = line_height
 
     def __create_tree_structure(self):
-        n_titles = self.detector.get_number_of_titles()
-        n_content_titles = self.detector.get_number_of_content_tiltes()
+        n_nodes = self.detector.get_number_of_titles()
+        n_nodes += self.detector.get_number_of_content_titles()
 
         state = TreeState(
-            current_nodes=[None for _ in range(n_titles + n_content_titles)],
+            current_nodes=[None for _ in range(n_nodes)],
             last_node=self.root,
         )
         state.current_nodes[0] = state.last_node
         mean_line_height=(self.data['bottom']-self.data['top']).mean()
 
         sorted_lines = self.data.sort_values(['page', 'line', 'col_position', 'left'])
-        for _, page_words in sorted_lines.groupby('page'):
+        for n_page, page_words in sorted_lines.groupby('page'):
             page_center = self.__calculate_center(page_words, 'left', 'right')
-            page_writable_width = page_words['right'].max() - page_words['left'].min()
+            if n_page == 0:
+                page_writable_width = self.writable_width
+            else:
+                page_writable_width = page_words['right'].max() - page_words['left'].min()
 
             for _, block_words in page_words.groupby('block'):
                 state.block_words = block_words
@@ -287,11 +290,19 @@ class DataTreeSplitter(TreeSplitter):
         subtitle, block_content = self.__find_block_subtitle(state.block_words)
         if subtitle:
             block_text = block_content
+
+            title_level = self.detector.get_title_level(subtitle)
+            if title_level > 1:
+                parent = self.find_nearest_parent(state.current_nodes, title_level)
+                state.last_node = DocNode(subtitle, parent=parent)
+                state.current_nodes[title_level] = state.last_node
+                self.clear_lower_children(state.current_nodes, title_level)
         else:
             block_text = ' '.join(state.block_words['text'])
 
         level, name, content = self.detector.detect_content_header(block_text.lower())
         if level == -1:
+            state.last_node.append_content(subtitle)
             state.last_node.append_content(block_text)
         else:
             parent = self.find_nearest_parent(state.current_nodes, level)
@@ -319,9 +330,10 @@ class DataTreeSplitter(TreeSplitter):
 
             line_left = line_words['left'].min()
             line_right = line_words['right'].max()
-            is_centered = self.__element_is_centered((line_left, line_right.max()),
+            is_centered = self.__element_is_centered((line_left, line_right),
                                                      center,
-                                                     width)
+                                                     width,
+                                                     tolerance_rate=0.1)
             if is_centered:
                 subtitle.append(line_str)
                 continue
@@ -347,10 +359,10 @@ class TextTreeSplitter(TreeSplitter):
 
     def analyze(self):
         """Analyze the raw text to generate the tree."""
-        n_titles = self.detector.get_number_of_titles()
-        n_content_titles = self.detector.get_number_of_content_tiltes()
+        n_nodes = self.detector.get_number_of_titles()
+        n_nodes += self.detector.get_number_of_content_titles()
 
-        current_nodes = [None for _ in range(n_titles + n_content_titles)]
+        current_nodes = [None for _ in range(n_nodes)]
         last_node = self.root
         current_nodes[0] = last_node
 

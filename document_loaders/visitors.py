@@ -17,7 +17,7 @@ class PageTextVisitor:
         Everything outside the square [(left, top) (right, bottom)] will be
         considered out of boundary.
         """
-        self.boundaries = (top, left, right, bottom)
+        self.boundaries = (left, top, right, bottom)
 
     def visitor_text(self, *args):
         """Store in an array all the texts that are out of bounds.
@@ -33,12 +33,14 @@ class PageTextVisitor:
         :param font_size: Specification of font sizes
         :type font_size: dict
         """
-        self.out_of_bounds_text = {}
+        if args[0].strip() == '':
+            return
+
         x = args[2][4]
         y = args[2][5]
-        if not (self.boundaries[1] <= x <= self.boundaries[3] and
-                self.boundaries[0] <= y <= self.boundaries[2]):
-            self.out_of_bounds_text.setdefault(y, []).append(args[0])
+        if not (self.boundaries[0] <= x <= self.boundaries[2] and
+                self.boundaries[3] <= y <= self.boundaries[1]):
+            self.out_of_bounds_text.setdefault(y, []).append(args[0].strip())
 
     def get_out_of_bounds_text(self):
         """Return an array of lines of text detected as out of boundaries by the visitor."""

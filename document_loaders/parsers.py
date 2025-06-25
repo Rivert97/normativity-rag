@@ -16,13 +16,15 @@ from pypdf._page import PageObject
 from PIL import Image, ImageDraw
 import pytesseract
 import pdf2image
-import matplotlib.pyplot as plt
+import cv2
+from matplotlib import pyplot as plt
 import pandas as pd
+import numpy as np
 import psutil
 import pdfplumber
 
 from .visitors import PageTextVisitor
-from .processors import get_data_inside_boundaries
+from .processors import get_data_inside_boundaries, get_lines_from_image
 
 @dataclass
 class GroupState:
@@ -30,9 +32,9 @@ class GroupState:
 
     line_cols: dict[str, dict[str, int]]
     group_cols: dict[str, dict[str, int]]
-    prev_num_cols: int|None
+    prev_values: dict[str, int|bool|None]
     centered: dict[str, bool|None]
-    prev_new_group: bool
+    pass_through_center: dict[str, bool|None]
     tolerance: float
     group_num: int
 
@@ -51,14 +53,17 @@ class PypdfPage():
         if remove_headers and boundaries is not None:
             page_width = self.page['/ArtBox'][2]
             page_height = self.page['/ArtBox'][3]
+            # PDF Y-axis is inverted
             self.visitor.set_boundaries(
                 boundaries['left'] * page_width,
-                boundaries['top'] * page_height,
+                (1.0 - boundaries['top']) * page_height,
                 boundaries['right'] * page_width,
-                boundaries['bottom'] * page_height
+                (1.0 - boundaries['bottom']) * page_height
             )
         else:
-            self.visitor.set_boundaries(*self.page['/ArtBox'])
+            # PDF Y-axis is inverted
+            left, top, right, bottom = self.page['/ArtBox']
+            self.visitor.set_boundaries(left=left, top=bottom, right=right, bottom=top)
         text = self.page.extract_text(visitor_text=self.visitor.visitor_text)
 
         return self.__remove_out_of_bounds_text(text)
@@ -75,9 +80,9 @@ class PypdfPage():
         clean_text = text
         for line in self.visitor.get_out_of_bounds_text():
             if clean_text.endswith(line):
-                clean_text = clean_text[:-len(line)]
+                clean_text = clean_text[:-len(line)].strip()
             elif clean_text.startswith(line):
-                clean_text = clean_text[len(line):]
+                clean_text = clean_text[len(line):].strip()
 
         return clean_text
 
@@ -93,7 +98,7 @@ class PypdfParser():
 
         self.reader = PdfReader(self.file_path)
 
-    def get_text(self, page_separator: str = '', remove_headers:bool=True,
+    def get_text(self, page_separator: str = '\n', remove_headers:bool=True,
                  boundaries:dict[str,float]=None) -> str:
         """Return the full text of the file as extracted by pypdf.
 
@@ -134,8 +139,10 @@ class DataReconstructor():
     adding columns to the data.
     """
 
-    def __init__(self, data: pd.DataFrame, writable_boundaries:tuple[float, float, float, float]):
+    def __init__(self, data: pd.DataFrame, writable_boundaries:tuple[float, float, float, float],
+                 lines:dict[str,np.array]):
         self.data = data.copy()
+        self.lines = lines
 
         if 'right' not in self.data:
             self.data['right'] = self.data['left'] + self.data['width']
@@ -167,9 +174,10 @@ class DataReconstructor():
         for word_idx, word in words.iterrows():
             word_top = word['top']
             word_bottom = word['top'] + word['height']
-            word_center = word['top'] + word['height'] * 0.5
+            word_height = word['bottom'] - word['top']
 
-            if current_min_y < word_center < current_max_y: # Is same line
+            if (current_min_y + word_height * 0.4 < word_bottom
+                and current_max_y - word_height * 0.4 > word_top): # Is same line
                 current_min_y = min(current_min_y, word_top)
                 current_max_y = max(current_max_y, word_bottom)
             else: # Is another line
@@ -180,7 +188,7 @@ class DataReconstructor():
 
     def __assign_column_number(self, min_words_per_col:int=1):
         self.data['column'] = pd.Series(dtype='int')
-        tolerance = self.writable_width * 0.05
+        tolerance = self.writable_width * 0.04
 
         for _, line_words in self.data.groupby('line'):
             col_number = -1
@@ -194,7 +202,7 @@ class DataReconstructor():
 
                 if (current_col and
                     num_words - i <= min_words_per_col and
-                    self.__words_are_right_aligned(sorted_words[i:], )):
+                    self.__words_are_right_aligned(sorted_words[i:])):
                     # When too few words are left and aligned right consider them as the same colum
                     current_col['maxX'] = word_right
                 elif (current_col and
@@ -233,6 +241,9 @@ class DataReconstructor():
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
         return min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1
 
+    def __column_passes_through_center(self, min_x, max_x):
+        return min_x < self.writable_center < max_x
+
     def __column_is_aligned_left(self, min_x, max_x):
         col_center = min_x + (max_x - min_x) * 0.5
 
@@ -251,19 +262,22 @@ class DataReconstructor():
         state = GroupState(
             line_cols=None,
             group_cols=None,
-            prev_num_cols=None,
+            prev_values={'num_cols': None, 'new_group': False},
             centered={'prev': None, 'curr': None},
-            prev_new_group=False,
+            pass_through_center={'prev': None, 'curr': None},
             tolerance=tolerance,
-            group_num=0
+            group_num=0,
         )
 
         for _, line_words in self.data.groupby('line'):
             state.line_cols = self.__extract_line_columns(line_words)
             state.centered['curr'] = False
+            state.pass_through_center['curr'] = False
             for _, col in state.line_cols.items():
                 if self.__column_is_centered(col['minX'], col['maxX']):
                     state.centered['curr'] = True
+                if self.__column_passes_through_center(col['minX'], col['maxX']):
+                    state.pass_through_center['curr'] = True
 
             new_group = self.__is_new_group(state)
 
@@ -273,9 +287,10 @@ class DataReconstructor():
             self.data.loc[line_words.index, 'group'] = state.group_num
 
             # Update tracking variables
-            state.prev_num_cols = len(state.line_cols)
+            state.prev_values['num_cols'] = len(state.line_cols)
             state.centered['prev'] = state.centered['curr']
-            state.prev_new_group = new_group
+            state.pass_through_center['prev'] = state.pass_through_center['curr']
+            state.prev_values['new_group'] = new_group
 
             if state.group_cols is None or new_group:
                 state.group_cols = state.line_cols
@@ -288,7 +303,9 @@ class DataReconstructor():
         grouped = line_words.groupby('column').agg({
             'col_position': 'max',
             'left': 'min',
-            'right': 'max'
+            'right': 'max',
+            'top': 'min',
+            'bottom': 'max',
         })
 
         for column, values in grouped.iterrows():
@@ -296,18 +313,26 @@ class DataReconstructor():
                 'position_max': values['col_position'],
                 'minX': values['left'],
                 'maxX': values['right'],
+                'minY': values['top'],
+                'maxY': values['bottom'],
             }
 
         return columns_info
 
     def __is_new_group(self, state:GroupState):
         if (state.group_cols is None or
-            state.prev_num_cols is None or
+            state.prev_values['num_cols'] is None or
             state.centered['prev'] is None):
             return False
 
+        for line in self.lines['horizontal']:
+            for c, l_col in state.line_cols.items():
+                if (c in state.group_cols and
+                    state.group_cols[c]['minY'] < line[0,1] < state.line_cols[c]['maxY']):
+                    return True
+
         if len(state.group_cols) != len(state.line_cols):
-            if state.centered['curr'] or state.centered['prev']:
+            if state.pass_through_center['curr'] or state.pass_through_center['prev']:
                 return True
         elif (state.centered['curr'] != state.centered['prev'] and
               state.line_cols.get(0).get('position_max') == 0):
@@ -321,7 +346,7 @@ class DataReconstructor():
 
                 if (not self.__columns_wrap_each_other(
                         state.line_cols[l_col], state.group_cols[g_col], state.tolerance) and
-                    not state.prev_new_group):
+                    not state.prev_values['new_group']):
                     return True
         return False
 
@@ -340,6 +365,13 @@ class DataReconstructor():
 
                 group_cols[g_col]['minX'] = min(group_cols[g_col]['minX'], line_cols[l_col]['minX'])
                 group_cols[g_col]['maxX'] = max(group_cols[g_col]['maxX'], line_cols[l_col]['maxX'])
+                group_cols[g_col]['minY'] = min(group_cols[g_col]['minY'], line_cols[l_col]['minY'])
+                group_cols[g_col]['maxY'] = max(group_cols[g_col]['maxY'], line_cols[l_col]['maxY'])
+
+        if len(line_cols) > len(group_cols):
+            for l_col in line_cols:
+                if l_col not in group_cols:
+                    group_cols[l_col] = line_cols[l_col]
 
 class OcrPage():
     """This class stores the information contained in a single page
@@ -351,12 +383,13 @@ class OcrPage():
         self.cache_file = cache_file
 
         self.data = self.__get_data_from_image()
+        self.lines = self.__get_lines_from_image()
         self.width = self.data.loc[0, 'width']
         self.height = self.data.loc[0, 'height']
         self.__normalize_data()
         w_boundaries = self.__get_writable_boundaries()
 
-        reconstructor = DataReconstructor(self.data, w_boundaries)
+        reconstructor = DataReconstructor(self.data, w_boundaries, self.lines)
         self.data = reconstructor.get_reconstructed()
 
     def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
@@ -464,14 +497,26 @@ class OcrPage():
 
         return data
 
+    def __get_lines_from_image(self):
+        image = cv2.cvtColor(np.array(self.image), cv2.COLOR_BGR2GRAY)
+        words_data = self.data[self.data['level'] == 5]
+
+        return get_lines_from_image(image, words_data)
+
     def __normalize_data(self):
-        self.data['left'] = self.data['left'] / self.data.loc[0, 'width']
-        self.data['width'] = self.data['width'] / self.data.loc[0, 'width']
-        self.data['top'] = self.data['top'] / self.data.loc[0, 'height']
-        self.data['height'] = self.data['height'] / self.data.loc[0, 'height']
+        width = self.data.loc[0, 'width']
+        height = self.data.loc[0, 'height']
+        self.data['left'] = self.data['left'] / width
+        self.data['width'] = self.data['width'] / width
+        self.data['top'] = self.data['top'] / height
+        self.data['height'] = self.data['height'] / height
+
+        if len(self.lines['horizontal']) > 0:
+            self.lines['horizontal'] = self.lines['horizontal'] / np.array((width, height))
 
     def __get_writable_boundaries(self):
-        blocks = self.data[self.data['level'] == 2]
+        # There's a block with text ' ' from 0.0 to 1.0, we need to eliminate it
+        blocks = self.data[(self.data['level'] == 5) & (self.data['text'] != ' ')]
         min_x = blocks['left'].min()
         max_x = (blocks['left'] + blocks['width']).max()
 
@@ -593,15 +638,17 @@ class PdfPlumberPage():
     methods to process it.
     """
 
-    def __init__(self, page:pdfplumber.page.Page):
-        self.page = page
+    def __init__(self, page:pdfplumber.page.Page, cache_file:str|None=None):
+        self.page = page.dedupe_chars()
+        self.cache_file = cache_file
 
         self.data = self.__get_data_from_page()
+        self.lines = self.__get_lines_from_image()
 
         self.__normalize_data()
 
         w_boundaries = self.__get_writable_boundaries()
-        reconstructor = DataReconstructor(self.data, w_boundaries)
+        reconstructor = DataReconstructor(self.data, w_boundaries, self.lines)
         self.data = reconstructor.get_reconstructed()
 
     def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
@@ -673,13 +720,41 @@ class PdfPlumberPage():
 
         return data
 
+    def __get_lines_from_image(self):
+        if not os.path.exists(self.cache_file):
+            return None
+
+        image = cv2.imread(self.cache_file, cv2.IMREAD_GRAYSCALE)
+        words_data = self.data.copy()
+
+        width_rate = image.shape[1] / self.page.width
+        height_rate = image.shape[0] / self.page.height
+        words_data['left'] = (words_data['left'] * width_rate).astype(int)
+        words_data['right'] = (words_data['right'] * width_rate).astype(int)
+        words_data['width'] = (words_data['width'] * width_rate).astype(int)
+        words_data['top'] = (words_data['top'] * height_rate).astype(int)
+        words_data['bottom'] = (words_data['bottom'] * height_rate).astype(int)
+        words_data['height'] = (words_data['height'] * height_rate).astype(int)
+
+        lines = get_lines_from_image(image, words_data)
+
+        if len(lines['horizontal']) > 0:
+            lines['horizontal'] = lines['horizontal'] / width_rate
+
+        return lines
+
     def __normalize_data(self):
-        self.data['left'] = self.data['left'] / self.page.width
-        self.data['right'] = self.data['right'] / self.page.width
-        self.data['width'] = self.data['width'] / self.page.width
-        self.data['top'] = self.data['top'] / self.page.height
-        self.data['bottom'] = self.data['bottom'] / self.page.height
-        self.data['height'] = self.data['height'] / self.page.height
+        width = self.page.width
+        height = self.page.height
+        self.data['left'] = self.data['left'] / width
+        self.data['right'] = self.data['right'] / width
+        self.data['width'] = self.data['width'] / width
+        self.data['top'] = self.data['top'] / height
+        self.data['bottom'] = self.data['bottom'] / height
+        self.data['height'] = self.data['height'] / height
+
+        if len(self.lines['horizontal']) > 0:
+            self.lines['horizontal'] = self.lines['horizontal'] / np.array((width, height))
 
     def __get_writable_boundaries(self):
         min_x = self.data['left'].min()
@@ -698,11 +773,23 @@ class PdfPlumberParser():
     :param file_path: The path of the file to be parsed.
     :type file_path: str
     """
-
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, cache_dir: str = './.cache', keep_cache:bool = False):
         self.file_path = file_path
+        self.cache_dir = cache_dir
+        self.keep_cache = keep_cache
 
         self.reader = pdfplumber.open(file_path)
+
+        with open(self.file_path, 'rb') as f:
+            file_md5 = hashlib.md5(f.read()).hexdigest()
+        self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
+
+        if not self.__cache_is_valid():
+            self.__create_cache()
+
+    def __del__(self):
+        if not self.keep_cache:
+            self.clear_cache()
 
     def get_raw_text(self, page_separator: str = '\n', remove_headers:bool = False,
                  boundaries:dict[str,float]=None) -> str:
@@ -716,8 +803,8 @@ class PdfPlumberParser():
         :rtype: str
         """
         text = ''
-        for page in self.reader.pages:
-            page = PdfPlumberPage(page)
+        for i, page in enumerate(self.reader.pages, start=1):
+            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
             text += page.get_raw_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -734,8 +821,8 @@ class PdfPlumberParser():
         :rtype: str
         """
         text = ''
-        for page in self.reader.pages:
-            page = PdfPlumberPage(page)
+        for i, page in enumerate(self.reader.pages, start=1):
+            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
             text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -750,9 +837,46 @@ class PdfPlumberParser():
         :return: An Iterator that yields the text of each page at a time
         :rtype: Iterator[PdfPlumberPage]
         """
-        for page in self.reader.pages:
-            yield PdfPlumberPage(page)
+        for i, page in enumerate(self.reader.pages, start=1):
+            yield PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
 
     def get_page(self, page_num: int):
         """Return a specific page of the document."""
-        return PdfPlumberPage(self.reader.pages[page_num])
+        return PdfPlumberPage(self.reader.pages[page_num],
+                              f'{self.cache_subfolder}/0001-{page_num+1:02d}.jpg')
+
+    def clear_cache(self):
+        """Delete the cache sub-directory for this file. If main directory is empty then
+        it is deleted aswell."""
+        tmp_cache = f'{self.cache_subfolder}.tmp'
+
+        if os.path.exists(self.cache_subfolder):
+            shutil.rmtree(self.cache_subfolder)
+        if os.path.exists(tmp_cache):
+            shutil.rmtree(tmp_cache)
+
+        if not os.listdir(self.cache_dir):
+            os.rmdir(self.cache_dir)
+
+    def __cache_is_valid(self) -> bool:
+        return os.path.exists(self.cache_subfolder)
+
+    def __create_cache(self):
+        tmp_cache = f'{self.cache_subfolder}.tmp'
+
+        if os.path.exists(self.cache_subfolder):
+            shutil.rmtree(self.cache_subfolder)
+        if os.path.exists(tmp_cache):
+            shutil.rmtree(tmp_cache)
+
+        os.makedirs(tmp_cache, exist_ok=True)
+
+        images = pdf2image.convert_from_path(self.file_path,
+                                        output_folder=tmp_cache,
+                                        fmt='jpeg',
+                                        dpi=1000,
+                                        output_file='')
+        for img in images: # Close images to be able to move the directory
+            img.close()
+
+        os.rename(tmp_cache, self.cache_subfolder) # Just to make sure all information is there
