@@ -7,7 +7,7 @@ import glob
 
 from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
-from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
+from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader, PDFPlumberLoader
 from document_splitters.hierarchical import TextTreeSplitter, DataTreeSplitter, TreeSplitter
 from llms.storage import ChromaDBStorage
 
@@ -27,6 +27,7 @@ LOADERS = {
     'mixed': PyPDFMixedLoader,
     'text': PyPDFLoader,
     'ocr': OCRLoader,
+    'pdfplumber': PDFPlumberLoader,
 }
 INNER_SPLITTERS = ['paragraph', 'section']
 EXTRACTION_TYPES = ['text', 'data']
@@ -45,6 +46,7 @@ class CollectionParams:
     extraction_type: str
     inner_splitter: str
     loader: str
+    raw: bool = False
 
 class CLIController(CLI):
     """This class controls the execution of the program when using
@@ -67,7 +69,8 @@ class CLIController(CLI):
                 self._args.embedder,
                 self._args.extraction_type,
                 self._args.inner_splitter,
-                self._args.loader
+                self._args.loader,
+                self._args.raw,
             )
 
             if self._args.file != '':
@@ -143,6 +146,13 @@ class CLIController(CLI):
                             type=str,
                             choices=LOADERS.keys(),
                             help='Type of loader to use. Defaults to mixed')
+        self.parser.add_argument('--raw',
+                                 default=False,
+                                 action='store_true',
+                                 help='''
+                                     When using 'pdfplumber' loader use this option to use text
+                                     as returned by the library.
+                                 ''')
         self.parser.add_argument('--settings-file',
                             default='',
                             type=str,
@@ -186,8 +196,7 @@ class CLIController(CLI):
         self._logger.info('Processing file %s', filename)
 
         basename = os.path.splitext(os.path.split(filename)[-1])[0]
-        pdf_loader = self.__get_loader(filename, params.loader, settings.cache_dir,
-                                       settings.keep_cache)
+        pdf_loader = self.__get_loader(filename, settings, params)
         if params.extraction_type == 'text':
             self._logger.info('Extracting text from file')
 
@@ -239,16 +248,19 @@ class CLIController(CLI):
         else:
             raise CLIException("No file or directory to process was specified in settings file")
 
-    def __get_loader(self, filename:str, loader:str, cache_dir:str, keep_cache:bool):
-        self._logger.info("Using '%s' loader", loader)
+    def __get_loader(self, filename:str, settings:ExecSettings, params:CollectionParams):
+        self._logger.info("Using '%s' loader", params.loader)
 
-        if loader == 'mixed':
-            pdf_loader = PyPDFMixedLoader(cache_dir, keep_cache)
+        if params.loader == 'mixed':
+            pdf_loader = PyPDFMixedLoader(settings.cache_dir, settings.keep_cache)
             pdf_loader.load(filename)
-        elif loader == 'text':
+        elif params.loader == 'text':
             pdf_loader = PyPDFLoader(filename)
-        elif loader == 'ocr':
-            pdf_loader = OCRLoader(filename, cache_dir, keep_cache)
+        elif params.loader == 'ocr':
+            pdf_loader = OCRLoader(filename, settings.cache_dir, settings.keep_cache)
+        elif params.loader == 'pdfplumber':
+            pdf_loader = PDFPlumberLoader(filename, params.raw, settings.cache_dir,
+                                          settings.keep_cache)
         else:
             raise CLIException("Invalid type of loader")
 
