@@ -69,20 +69,17 @@ class DocNode(NodeMixin):
         else:
             self.content = content + "\n" + self.content
 
-    def get_content(self, remove_hypens:bool=True):
+    def get_content(self):
         """Get the string of text of the document"""
-        if remove_hypens:
-            return re.sub(r' ?- ?\n', '', self.content)
+        return re.sub(r' ?- ?\n', '', self.content)
 
-        return self.content
-
-    def split_content(self, remove_hypens:bool=True, split_type:str='paragraph'):
+    def split_content(self, split_type:str='paragraph'):
         """Split the string of text of the document in multiple strings."""
-        content = self.get_content(remove_hypens)
+        content = self.get_content()
         content = re.sub(r'([^.:;\n])(\n)', r'\1 ', content)
 
         if split_type == 'paragraph':
-            splits = content.split('\n')
+            splits = filter(lambda l: l != '', content.split('\n'))
         elif split_type == 'section':
             splits = [content]
         else:
@@ -147,7 +144,10 @@ class TreeSplitter():
         """Get a list of documents corresponding to each node of the tree and its substrings."""
         documents = []
         for node in PreOrderIter(self.root):
-            splits = node.split_content(remove_hypens=True, split_type=inner_splitter)
+            if node.get_content() == '':
+                continue
+
+            splits = node.split_content(split_type=inner_splitter)
             for split in splits:
                 doc = {
                     'content': split,
@@ -279,7 +279,7 @@ class DataTreeSplitter(TreeSplitter):
                 column_percentage < 0.95)
 
     def __handle_title_block(self, state:TreeState):
-        block_text = ' '.join(state.block_words['text'])
+        block_text = self.__get_dehypenated_text(state.block_words)
         title_level = self.detector.get_title_level(block_text)
         parent = self.find_nearest_parent(state.current_nodes, title_level)
         state.last_node = DocNode(block_text, parent=parent)
@@ -298,11 +298,12 @@ class DataTreeSplitter(TreeSplitter):
                 state.current_nodes[title_level] = state.last_node
                 self.clear_lower_children(state.current_nodes, title_level)
         else:
-            block_text = ' '.join(state.block_words['text'])
+            block_text = self.__get_dehypenated_text(state.block_words)
 
         level, name, content = self.detector.detect_content_header(block_text.lower())
         if level == -1:
-            state.last_node.append_content(subtitle)
+            if subtitle:
+                state.last_node.append_content(subtitle)
             state.last_node.append_content(block_text)
         else:
             parent = self.find_nearest_parent(state.current_nodes, level)
@@ -343,6 +344,12 @@ class DataTreeSplitter(TreeSplitter):
 
         return ' '.join(subtitle), ' '.join(content)
 
+    def __get_dehypenated_text(self, block_words:pd.DataFrame):
+        text_lines = '\n'.join(block_words.groupby('line')['text'].apply(' '.join))
+        dehypenated_text = re.sub(r' ?- ?\n', '', text_lines)
+        joined_lines_text = re.sub(r'[^.]\n', '', dehypenated_text)
+
+        return joined_lines_text
 
 class TextTreeSplitter(TreeSplitter):
     """Class to split a document in sections to generate a tree structure.
