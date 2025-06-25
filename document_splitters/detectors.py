@@ -5,9 +5,10 @@ import re
 METADATA_REGEX = {
     'permissive_titles' : {
         'titles': {
-            2: r'^([iíÍ]ndice$|(t[iíÍ]tulo|[xiv]+|[0-9]+\. .*))',
-            3: r'^([0-9]+\.[0-9]|secci[oóÓ]n) .*',
-            4: r'^cap[iíÍ]tulo .*',
+            2: str(r'^([iíÍ]ndice$|art[iíÍ]culos? transitorios?( de reforma)?)|'
+                   r'((t[iíÍ]tulo|[xiv]+\.|[0-9]+\.) .*)$'),
+            3: r'^([0-9]+\.[0-9]|secci[oóÓ]n) .*$',
+            4: r'^cap[iíÍ]tulo .*$',
         },
         'contents': {
             5: str(
@@ -49,7 +50,7 @@ class TitleDetector:
         """Get the number of different types of titles the dector can find."""
         return len(self.metadata_regex['titles']) + 2
 
-    def get_number_of_content_tiltes(self):
+    def get_number_of_content_titles(self):
         """Get the number of different types of sections in the contents the dector can find."""
         return len(self.metadata_regex['contents'])
 
