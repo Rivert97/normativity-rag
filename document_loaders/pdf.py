@@ -611,8 +611,9 @@ class OCRLoader():
 
 class PDFPlumberLoader():
     """Class to load a PDF file using pdfplumber with custom text reconstruction."""
-    def __init__(self, file_path:str, raw:bool=False):
-        self.parser = PdfPlumberParser(file_path)
+    def __init__(self, file_path:str, raw:bool=False, cache_dir: str='./.cache',
+                 keep_cache: bool = False):
+        self.parser = PdfPlumberParser(file_path, cache_dir, keep_cache)
         self.raw = raw
 
     def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:

@@ -4,6 +4,8 @@ clean the data.
 import re
 
 import pandas as pd
+import numpy as np
+import cv2
 
 def remove_hyphens(text: str) -> str:
     """
@@ -26,7 +28,7 @@ def remove_hyphens(text: str) -> str:
         match_end = re.match(r'^.*[a-zA-ZñÑáéíóúÁÉÍÓÚ ]-$', line)
         if match_end:
             line_numbers_end.append(line_no)
-        elif line.startswith("-"):
+        if line.startswith("-"):
             line_numbers_start.append(line_no)
 
     # Replace
@@ -71,9 +73,9 @@ def get_data_inside_boundaries(data: pd.DataFrame, boundaries:dict[str,float]=No
         }
     return data[
         (data['left'] > boundaries['left']) &
-        (data['top'] > boundaries['top']) &
+        (data['bottom'] > boundaries['top']) &
         (data['right'] < boundaries['right']) &
-        (data['bottom'] < boundaries['bottom'])]
+        (data['top'] < boundaries['bottom'])]
 
 def __dehyphenate_end(lines: list[str], line_no: int) -> list[str]:
     next_line = lines[line_no + 1]
@@ -100,3 +102,57 @@ def __dehyphenate_start(lines: list[str], line_no: int) -> list[str]:
     lines[line_no] = lines[line_no][len(word_suffix) + suffix_offset:]
     lines[line_no - 1] = lines[line_no - 1] + word_suffix
     return lines
+
+def get_lines_from_image(image:np.array, words_data:pd.DataFrame) -> dict[str, np.array]:
+    """Applies image processing techniques to extract horizontal
+    and vertical lines from the image of a page of a PDF file.
+    """
+    lines = {
+        'horizontal': None,
+        'vertical': None,
+    }
+
+    no_words_img = __erase_words_from_image(image, words_data)
+
+    lines['horizontal'] = __get_horizontal_lines_from_image(no_words_img)
+
+    return lines
+
+def __erase_words_from_image(image:np.array, words_data:pd.DataFrame) -> np.array:
+    no_words_img = image.copy()
+
+    for _, word in words_data.iterrows():
+        rectangle = (
+            (word['left'], word['top']),
+            (word['left']+word['width'], word['top']+word['height'])
+        )
+
+        no_words_img = cv2.rectangle(no_words_img, rectangle[0], rectangle[1], 255, -1)
+
+    return no_words_img
+
+def __get_horizontal_lines_from_image(image:np.array) -> np.array:
+    _, binary_img = cv2.threshold(image, 200, 255, cv2.THRESH_BINARY_INV)
+    horizontal_structure = cv2.getStructuringElement(cv2.MORPH_RECT,
+                                                     (int(image.shape[1]*0.02), 1))
+
+    binary_img = cv2.erode(binary_img, horizontal_structure, iterations=1)
+    binary_img = cv2.dilate(binary_img, horizontal_structure, iterations=1)
+
+    contours, _ = cv2.findContours(binary_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    h_lines = []
+    for cnt in contours:
+        m = cv2.moments(cnt)
+        if m['m00'] == 0:
+            continue
+
+        cy = int(m['m01']/m['m00'])
+        left = int(cnt[:, 0, 0].min())
+        right = int(cnt[:, 0, 0].max())
+        top = int(cnt[:, 0, 1].min())
+        bottom = int(cnt[:, 0, 1].max())
+        if bottom - top < image.shape[0]*0.001:
+            h_lines.append(((left, cy), (right, cy)))
+
+    return np.array(h_lines, dtype=int)
