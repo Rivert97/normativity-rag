@@ -58,7 +58,7 @@ class CLIController(CLI):
 
         self.parser.add_argument('-a', '--action',
                             default='embeddings',
-                            choices=['embeddings', 'structure', 'tree'],
+                            choices=['embeddings', 'structure', 'tree', 'txt'],
                             type=str,
                             help='''
                                 Action to perform.
@@ -180,6 +180,8 @@ class CLIController(CLI):
             self.__action_structure(splitter, output)
         elif self._args.action == 'tree':
             self.__action_tree(splitter, output)
+        elif self._args.action == 'txt':
+            self.__action_txt(splitter, output)
         else:
             raise CLIException(f"Invalid action '{self._args.action}'")
 
@@ -231,6 +233,17 @@ class CLIController(CLI):
             base_filename = os.path.splitext(output)[0]
             splitter.save_tree(base_filename + '-tree.png')
             self._logger.info('File tree saved to %s-tree.png', base_filename)
+
+    def __action_txt(self, splitter:TreeSplitter, output:str):
+        self._logger.info('Generating text output')
+
+        clean_text = splitter.get_clean_text()
+
+        if self.print_to_console:
+            print(clean_text)
+        else:
+            self.__save_txt_file(output, clean_text)
+            self._logger.info('File text saved to %s', output)
 
     def __load_and_split_doc(self, filename:str) -> DataTreeSplitter:
         self._logger.info('Loading document data')
