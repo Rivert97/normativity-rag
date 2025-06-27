@@ -22,6 +22,7 @@ DEFAULTS = {
     'database_dir': './db',
     'embedder': 'all-MiniLM-L6-v2',
     'inner_splitter': 'paragraph',
+    'parse_params_file': 'settings/params-default.yml',
 }
 LOADERS = {
     'mixed': PyPDFMixedLoader,
@@ -38,6 +39,7 @@ class ExecSettings:
     cache_dir: str
     database_dir: str
     keep_cache: bool
+    file_settings: dict[str,dict[str,str]]
 
 @dataclass
 class CollectionParams:
@@ -63,7 +65,8 @@ class CLIController(CLI):
             settings = ExecSettings(
                 self._args.cache_dir,
                 self._args.database_dir,
-                self._args.keep_cache
+                self._args.keep_cache,
+                {},
             )
             collection_params = CollectionParams(
                 self._args.embedder,
@@ -195,18 +198,23 @@ class CLIController(CLI):
                        params:CollectionParams):
         self._logger.info('Processing file %s', filename)
 
+        file_settings = self.__get_file_settings(filename, settings)
+        file_parse_params = self.load_yaml(file_settings.get('parse_params_file',
+                                                             DEFAULTS['parse_params_file']))
+
         basename = os.path.splitext(os.path.split(filename)[-1])[0]
         pdf_loader = self.__get_loader(filename, settings, params)
         if params.extraction_type == 'text':
             self._logger.info('Extracting text from file')
-
-            text = pdf_loader.get_text()
+            text = pdf_loader.get_text(boundaries=file_parse_params.get('pdf_margins'))
             splitter = TextTreeSplitter(text, basename)
         elif params.extraction_type == 'data':
             self._logger.info('Extracting data from file')
 
             data = pdf_loader.get_document_data()
-            splitter = DataTreeSplitter(data.get_data(remove_headers=True), basename)
+            splitter = DataTreeSplitter(
+                data.get_data(remove_headers=True, boundaries=file_parse_params.get('pdf_margins')),
+                basename)
         else:
             raise CLIException(f"Invalid extraction type '{params.extraction_type}'")
 
@@ -233,7 +241,8 @@ class CLIController(CLI):
         settings = ExecSettings(
             yaml_settings['db']['settings']['cache_dir'],
             yaml_settings['db']['settings']['database_dir'],
-            yaml_settings['db']['settings']['keep_cache'])
+            yaml_settings['db']['settings']['keep_cache'],
+            yaml_settings['db'].get('file_settings', {}))
 
         if 'directory' in yaml_settings['db']:
             for collection, params in yaml_settings['db']['collections'].items():
@@ -338,6 +347,11 @@ class CLIController(CLI):
             params['loader'] = DEFAULTS['loader']
         if params['loader'] not in LOADERS:
             raise CLIException(f"Invalid loader '{params['loader']}'")
+
+    def __get_file_settings(self, filename:str, settings:ExecSettings) -> dict[str,str]:
+        settings = settings.file_settings.get(os.path.split(filename)[-1], {})
+
+        return settings
 
 
 if __name__ == "__main__":

@@ -50,8 +50,11 @@ class CLI:
         """Get the logger handler."""
         return self._logger
 
-    def load_yaml(self, yaml_file: str):
+    def load_yaml(self, yaml_file: str) -> dict:
         """Loads a YAML file with options."""
+        if yaml_file == '':
+            return {}
+
         options = {}
         try:
             with open(yaml_file, 'r', encoding='utf-8') as f:

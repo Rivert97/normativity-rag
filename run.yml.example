@@ -6,6 +6,10 @@ db:
     database_dir: ./db
     keep_cache: True
 
+  file_settings:
+    file-with-letterhead.pdf:
+      parse_params_file: ./settings/params-bottom-letterhead.yml
+
   collections:
     NORM_001:
       embedder: all-MiniLM-L6-v2

@@ -666,7 +666,7 @@ class PdfPlumberPage():
 
     def get_raw_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
         """Return the text as returned by pdfplumber."""
-        if remove_headers:
+        if remove_headers and boundaries is not None:
             x0 = boundaries['left'] * self.page.width
             top = boundaries['top'] * self.page.height
             x1 = boundaries['right'] * self.page.width

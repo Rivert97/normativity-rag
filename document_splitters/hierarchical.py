@@ -21,12 +21,13 @@ class DocNode(NodeMixin):
     A document is a part of the text from a file or long string.
     """
 
-    def __init__(self, name:str, parent=None, children=None):
+    def __init__(self, name:str, parent=None, show_title_before=True,
+                 name_sep:str='\n'):
         super().__init__()
         self.name = name
         self.parent = parent
-        if children:
-            self.children = children
+        self.show_title_before = show_title_before
+        self.name_sep = name_sep
 
         self.title = ''
         self.content = ''
@@ -188,6 +189,28 @@ class TreeSplitter():
         for i in range(from_level + 1, len(nodes)):
             nodes[i] = None
 
+    def get_clean_text(self):
+        """Return the reconstructed text from the tree."""
+        blocks = []
+        for node in PreOrderIter(self.root):
+            if node.name == 'root':
+                text = ''
+            else:
+                text = node.name + node.name_sep
+
+            if node.title != '':
+                if node.show_title_before:
+                    text = node.title + "\n" + text
+                else:
+                    text += node.title + "\n"
+            if node.content != '':
+                text += node.get_content() + "\n"
+
+            blocks.append(text)
+
+        return '\n'.join(blocks)
+
+
 class DataTreeSplitter(TreeSplitter):
     """Class to split a document in sections to generate a tree structure.
 
@@ -294,20 +317,20 @@ class DataTreeSplitter(TreeSplitter):
             title_level = self.detector.get_title_level(subtitle)
             if title_level > 1:
                 parent = self.find_nearest_parent(state.current_nodes, title_level)
-                state.last_node = DocNode(subtitle, parent=parent)
+                state.last_node = DocNode(subtitle, parent=parent, name_sep='. ')
                 state.current_nodes[title_level] = state.last_node
                 self.clear_lower_children(state.current_nodes, title_level)
         else:
             block_text = self.__get_dehypenated_text(state.block_words)
 
-        level, name, content = self.detector.detect_content_header(block_text.lower())
+        level, name, content = self.detector.detect_content_header(block_text)
         if level == -1:
             if subtitle:
                 state.last_node.append_content(subtitle)
             state.last_node.append_content(block_text)
         else:
             parent = self.find_nearest_parent(state.current_nodes, level)
-            state.last_node = DocNode(name, parent=parent)
+            state.last_node = DocNode(name, parent=parent, name_sep='. ')
             state.last_node.append_content(content)
             if subtitle:
                 state.last_node.set_title(subtitle)
@@ -347,7 +370,7 @@ class DataTreeSplitter(TreeSplitter):
     def __get_dehypenated_text(self, block_words:pd.DataFrame):
         text_lines = '\n'.join(block_words.groupby('line')['text'].apply(' '.join))
         dehypenated_text = re.sub(r' ?- ?\n', '', text_lines)
-        joined_lines_text = re.sub(r'[^.]\n', '', dehypenated_text)
+        joined_lines_text = re.sub(r'([^.])(\n)', r'\1 ', dehypenated_text)
 
         return joined_lines_text
 
@@ -376,7 +399,7 @@ class TextTreeSplitter(TreeSplitter):
         for line_text in self.text.split('\n'):
             title_level = self.detector.get_title_level(line_text)
             if title_level == 1:
-                level, name, content = self.detector.detect_content_header(line_text.lower())
+                level, name, content = self.detector.detect_content_header(line_text)
 
                 if level == -1:
                     last_node.append_content(content)
@@ -389,7 +412,7 @@ class TextTreeSplitter(TreeSplitter):
                     last_node = new_node
             else:
                 parent = self.__find_nearest_parent(current_nodes, title_level)
-                new_node = DocNode(line_text, parent=parent)
+                new_node = DocNode(line_text, parent=parent, name_sep='. ')
                 current_nodes[title_level] = new_node
                 self.__clear_lower_children(current_nodes, title_level)
                 last_node = new_node
