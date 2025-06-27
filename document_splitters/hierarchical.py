@@ -245,7 +245,7 @@ class DataTreeSplitter(TreeSplitter):
                         bottom = line_words['bottom'].max()
                         line_height = bottom - top
 
-                        if abs(top - prev_y) > min(line_height, prev_line_height) * 1.1:
+                        if abs(top - prev_y) > min(line_height, prev_line_height) * 2.0:
                             block += 1
 
                         self.data.loc[lines.groups[n_line], 'block'] = block
@@ -338,8 +338,8 @@ class DataTreeSplitter(TreeSplitter):
             self.clear_lower_children(state.current_nodes, level)
 
     def __find_block_subtitle(self, block_words):
-        subtitle = []
-        content = []
+        subtitle_idx = []
+        content_idx = []
         left = block_words['left'].min()
         right = block_words['right'].max()
         width = right - left
@@ -347,9 +347,8 @@ class DataTreeSplitter(TreeSplitter):
 
         has_reached_content = False
         for _, line_words in block_words.groupby('line'):
-            line_str = ' '.join(line_words['text'])
             if has_reached_content:
-                content.append(line_str)
+                content_idx.extend(line_words.index)
                 continue
 
             line_left = line_words['left'].min()
@@ -359,13 +358,15 @@ class DataTreeSplitter(TreeSplitter):
                                                      width,
                                                      tolerance_rate=0.1)
             if is_centered:
-                subtitle.append(line_str)
+                subtitle_idx.extend(line_words.index)
                 continue
 
-            content.append(line_str)
+            content_idx.extend(line_words.index)
             has_reached_content = True
 
-        return ' '.join(subtitle), ' '.join(content)
+        subtitle = self.__get_dehypenated_text(block_words.loc[subtitle_idx])
+        content = self.__get_dehypenated_text(block_words.loc[content_idx])
+        return subtitle, content
 
     def __get_dehypenated_text(self, block_words:pd.DataFrame):
         text_lines = '\n'.join(block_words.groupby('line')['text'].apply(' '.join))

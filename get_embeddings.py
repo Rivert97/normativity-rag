@@ -242,7 +242,7 @@ class CLIController(CLI):
         if self.print_to_console:
             print(clean_text)
         else:
-            self.__save_txt_file(output, clean_text)
+            self.__save_txt_file(output + '.txt', clean_text)
             self._logger.info('File text saved to %s', output)
 
     def __load_and_split_doc(self, filename:str) -> DataTreeSplitter:
