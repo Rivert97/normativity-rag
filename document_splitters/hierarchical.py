@@ -245,7 +245,7 @@ class DataTreeSplitter(TreeSplitter):
                         bottom = line_words['bottom'].max()
                         line_height = bottom - top
 
-                        if abs(top - prev_y) > min(line_height, prev_line_height) * 2.0:
+                        if abs(top - prev_y) > min(line_height, prev_line_height) * 1.1:
                             block += 1
 
                         self.data.loc[lines.groups[n_line], 'block'] = block
