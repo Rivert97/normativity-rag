@@ -44,12 +44,59 @@ class ChromaDBStorage(Storage):
     def query_sentence(self, collection, sentence, n_results):
         """Make a query to the database to find similar sentences."""
         try:
-            collection = self.client.get_collection(collection, embedding_function=self.em_func)
+            chromadb_collection = self.client.get_collection(collection, embedding_function=self.em_func)
         except (chromadb.errors.NotFoundError, ValueError) as e:
             print(e)
             return []
 
-        results = collection.query(
+        return self.__query(chromadb_collection, sentence, n_results)
+
+    def batch_query(self, collection, sentences, n_results):
+        """Make multiple queries to the database to find similar sentences."""
+        try:
+            chromadb_collection = self.client.get_collection(collection, embedding_function=self.em_func)
+        except (chromadb.errors.NotFoundError, ValueError) as e:
+            print(e)
+            return []
+
+        results = []
+        for sentence in sentences:
+            results.append(self.__query(chromadb_collection, sentence, n_results))
+
+        return results
+
+    def get_all_from_parent(self, collection, document_name, parent):
+        """Get all documents from a document and a specific parent."""
+        try:
+            chromadb_collection = self.client.get_collection(collection, embedding_function=self.em_func)
+        except (chromadb.errors.NotFoundError, ValueError) as e:
+            print(e)
+            return []
+
+        results = chromadb_collection.get(
+            where={
+                '$and': [
+                    {'document_name': document_name},
+                    {'parent': parent.split('/')[-1]},
+                ]
+            }
+        )
+
+        if not results['ids']:
+            return []
+
+        documents = []
+        for i, _ in enumerate(results['ids']):
+            doc = Document(
+                content=results['documents'][i],
+                metadata=results['metadatas'][i],
+            )
+            documents.append(doc)
+
+        return documents
+
+    def __query(self, chromadb_collection, sentence, n_results):
+        results = chromadb_collection.query(
             query_texts=[sentence],
             n_results=n_results,
             include=['documents', 'metadatas', 'embeddings', 'distances'],
