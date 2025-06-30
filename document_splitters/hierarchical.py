@@ -156,6 +156,7 @@ class TreeSplitter():
                         'document_name': self.document_name,
                         'title': node.get_full_title(),
                         'path': node.get_path(),
+                        'parent': node.get_path().split('/')[-1],
                     }
                 }
                 documents.append(doc)
