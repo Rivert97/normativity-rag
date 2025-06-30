@@ -90,7 +90,7 @@ class DocNode(NodeMixin):
 
     def get_path(self):
         """Get the full path of the node in the tree."""
-        return f'{(self.separator.join([""] + [str(node.name) for node in self.path]))!r}'
+        return f'{self.separator.join([""] + [str(node.name) for node in self.path])}'
 
     def __str__(self):
         text = self.get_full_title()
