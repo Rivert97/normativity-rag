@@ -90,7 +90,7 @@ class DocNode(NodeMixin):
 
     def get_path(self):
         """Get the full path of the node in the tree."""
-        return f'{(self.separator.join([""] + [str(node.name) for node in self.path]))!r}'
+        return f'{self.separator.join([""] + [str(node.name) for node in self.path])}'
 
     def __str__(self):
         text = self.get_full_title()
@@ -156,6 +156,7 @@ class TreeSplitter():
                         'document_name': self.document_name,
                         'title': node.get_full_title(),
                         'path': node.get_path(),
+                        'parent': node.get_path().split('/')[-1],
                     }
                 }
                 documents.append(doc)
@@ -245,7 +246,7 @@ class DataTreeSplitter(TreeSplitter):
                         bottom = line_words['bottom'].max()
                         line_height = bottom - top
 
-                        if abs(top - prev_y) > min(line_height, prev_line_height) * 2.0:
+                        if abs(top - prev_y) > min(line_height, prev_line_height) * 1.1:
                             block += 1
 
                         self.data.loc[lines.groups[n_line], 'block'] = block
