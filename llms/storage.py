@@ -44,7 +44,8 @@ class ChromaDBStorage(Storage):
     def query_sentence(self, collection, sentence, n_results):
         """Make a query to the database to find similar sentences."""
         try:
-            chromadb_collection = self.client.get_collection(collection, embedding_function=self.em_func)
+            chromadb_collection = self.client.get_collection(collection,
+                                                             embedding_function=self.em_func)
         except (chromadb.errors.NotFoundError, ValueError) as e:
             print(e)
             return []
@@ -54,7 +55,8 @@ class ChromaDBStorage(Storage):
     def batch_query(self, collection, sentences, n_results):
         """Make multiple queries to the database to find similar sentences."""
         try:
-            chromadb_collection = self.client.get_collection(collection, embedding_function=self.em_func)
+            chromadb_collection = self.client.get_collection(collection,
+                                                             embedding_function=self.em_func)
         except (chromadb.errors.NotFoundError, ValueError) as e:
             print(e)
             return []
@@ -68,7 +70,8 @@ class ChromaDBStorage(Storage):
     def get_all_from_parent(self, collection, document_name, parent):
         """Get all documents from a document and a specific parent."""
         try:
-            chromadb_collection = self.client.get_collection(collection, embedding_function=self.em_func)
+            chromadb_collection = self.client.get_collection(collection,
+                                                             embedding_function=self.em_func)
         except (chromadb.errors.NotFoundError, ValueError) as e:
             print(e)
             return []
