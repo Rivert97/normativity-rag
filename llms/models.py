@@ -2,6 +2,7 @@
 
 from abc import abstractmethod
 import sys
+from enum import Enum
 
 import dotenv
 import transformers
@@ -23,7 +24,7 @@ class Model:
     def __init__(self, multimodal:bool=False):
         self.multimodal = multimodal
 
-        self.messages = self.__init_messages()
+        self.messages = self.init_messages()
 
     @abstractmethod
     def query(self, query:str) -> str:
@@ -55,19 +56,21 @@ class Model:
         }
         self.messages.append(new_message)
 
-    def __init_messages(self) -> list[dict[str:str|dict]]:
+    def init_messages(self) -> list[dict[str:str|dict]]:
+        """Initializes the history of messages."""
+        instruction = 'Eres un experto en resolver preguntas.'
         if self.multimodal:
             messages = [
                 {
                     "role": "system",
-                    "content": [{"type": "text", "text": "Eres un experto en resolver preguntas."}],
+                    "content": [{"type": "text", "text": instruction}],
                 },
             ]
         else:
             messages = [
                 {
                     "role": "system",
-                    "content": "Eres un experto en resolver preguntas.",
+                    "content": instruction,
                 },
             ]
 
@@ -95,7 +98,8 @@ class Model:
                 "role": "system",
                 "content": [{
                     "type": "text",
-                    "text": "Responde la siguiente pregunta utilizando únicamente los "\
+                    "text": "Responde la siguiente pregunta, contesta con únicamente la "\
+                            "respuesta sin palabras adicionales. Utiliza únicamente los "\
                             f"fragmentos de la normativa siguiente:\n\n{documents_context}"
                 }]
             },
@@ -112,7 +116,8 @@ class Model:
         new_messages = [
             {
                 "role": "system",
-                "content": "Responde las siguientes preguntas utilizando únicamente los "\
+                "content": "Responde las siguientes preguntas, contesta con únicamente la "\
+                           "respuesta sin palabras adicionales. Utiliza únicamente los "\
                            f"fragmentos de la normativa siguiente:\n\n{documents_context}"
             },
             {
@@ -420,3 +425,10 @@ class Mistral(Model):
         response = output[0].get('generated_text')[-1].get('content', '')
 
         return response
+
+class Builders(Enum):
+    """Different types of model builders available."""
+    GEMMA = GemmaBuilder
+    LLAMA = LlamaBuilder
+    QWEN = QwenBuilder
+    MISTRAL = MistralBuilder

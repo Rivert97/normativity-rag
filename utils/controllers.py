@@ -43,6 +43,9 @@ class CLI:
         """Add and process the arguments of the script."""
         self.parser.add_argument('-v', '--version', action='version', version=self.version)
 
+    def eval_args(self):
+        """Evaluate the arguments."""
+
     def run(self):
         """Run the script logic."""
 
@@ -70,6 +73,7 @@ def run_cli(cli_class: CLI):
     try:
         controller = cli_class()
         controller.process_args()
+        controller.eval_args()
         controller.run()
     except CLIException as e:
         print(e)

@@ -35,3 +35,26 @@ class RAG:
             response = self.model.query(query)
 
         return response, relevant_docs
+
+    def batch_query(self, queries:list[str], collection:str='', num_docs:int=5,
+                    max_distance:float=1.0) -> list[dict]:
+        """Query multiple sentences to the model with or without context.
+
+        Messages history is deleted between queries so each one is independen.
+        """
+        responses = []
+        n_queries = len(queries)
+
+        for _, query in enumerate(queries):
+            response, docs = self.query(query, collection, num_docs, max_distance)
+            d = {
+                'response': response,
+                'relevant_docs': docs
+            }
+            responses.append(d)
+
+            self.model.init_messages()
+
+        print(f"Finished {n_queries}/{n_queries}")
+
+        return responses

@@ -7,19 +7,12 @@ from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from llms.storage import ChromaDBStorage
 from llms.rag import RAG
-from llms.models import GemmaBuilder, LlamaBuilder, QwenBuilder, MistralBuilder
+from llms.models import Builders
 from llms.data import Document
 
 DEFAULTS = {
     'embedder': 'all-MiniLM-L6-v2',
-    'model': 'gemma',
-}
-
-MODEL_BUILDERS = {
-    'gemma': GemmaBuilder,
-    'llama': LlamaBuilder,
-    'qwen': QwenBuilder,
-    'mistral': MistralBuilder,
+    'model': 'GEMMA',
 }
 
 PROGRAM_NAME = 'RAG'
@@ -36,7 +29,7 @@ class CLIController(CLI):
         """Run the script logic."""
         self._logger.info("Loading Model '%s (%s)'", self._args.model, self._args.variant)
         try:
-            model = MODEL_BUILDERS[self._args.model].build_from_variant(variant=self._args.variant)
+            model = Builders[self._args.model].build_from_variant(variant=self._args.variant)
         except (AttributeError, OSError) as e:
             self._logger.error(e)
             raise CLIException(f"Invalid variant '{self._args.variant}' for model") from e
@@ -84,7 +77,7 @@ class CLIController(CLI):
         self.parser.add_argument('-m', '--model',
                                  default=DEFAULTS['model'],
                                  type=str,
-                                 choices=MODEL_BUILDERS.keys(),
+                                 choices=[b.name for b in Builders],
                                  help=f'''
                                     Base model to use as a conversational agent.
                                     Defaults to {DEFAULTS['model']}
