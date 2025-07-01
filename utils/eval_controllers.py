@@ -4,11 +4,11 @@ import argparse
 
 from datasets import load_dataset
 
-from .controllers import CLI
-from .exceptions import CLIException
 from llms.storage import ChromaDBStorage
 from llms.models import Builders, Model
 from llms.rag import RAG
+from .controllers import CLI
+from .exceptions import CLIException
 
 class EvalCLI(CLI):
     """Special controller for CLI in evaluation mode."""
