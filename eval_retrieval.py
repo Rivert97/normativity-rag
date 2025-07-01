@@ -4,34 +4,27 @@ This script requires a database previously created with get_embeddings.py script
 and a dataset of questions and answers.
 """
 import argparse
-import os
 
-from datasets import load_dataset
 import numpy as np
 
-from utils.controllers import CLI, run_cli
-from utils.exceptions import CLIException
+from utils.controllers import run_cli
+from utils.eval_controllers import EvalCLI
 from llms.storage import ChromaDBStorage
 
 PROGRAM_NAME = 'EvalRetrieval'
 VERSION = '1.00.00'
 
-class CLIController(CLI):
+class EvalRetrievalCLI(EvalCLI):
     """This class controls the execution of the program when using
     CLI.
     """
     def __init__(self):
         super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
-        self._args = None
-
     def run(self):
         """Run the script logic."""
-        self._logger.info('Loading dataset')
-        dataset = load_dataset(self._args.dataset)
-
-        self._logger.info('Loading database')
-        storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
+        dataset = self.load_dataset(self._args.dataset)
+        storage = self.get_storage(self._args.embedder, self._args.database_dir)
 
         self._logger.info('Querying sentences')
         questions = dataset['train']
@@ -49,46 +42,7 @@ class CLIController(CLI):
     def process_args(self) -> argparse.Namespace:
         super().process_args()
 
-        self.parser.add_argument('dataset',
-                                default='Rivert97/ug-normativity',
-                                type=str,
-                                help='''
-                                    Name of the HuggingFace dataset to be used.
-                                    Defaults to Rivert97/ug-normativity
-                                    ''')
-        self.parser.add_argument('-c', '--collection',
-                                default='',
-                                type=str,
-                                help='Name of the collection to search in the database')
-        self.parser.add_argument('-d', '--database-dir',
-                                default='./db',
-                                type=str,
-                                help='Database directory to be used. Defaults to ./db')
-        self.parser.add_argument('-e', '--embedder',
-                            default='all-MiniLM-L6-v2',
-                            type=str,
-                            help='''Embeddings model to be used. Check SentenceTransformers doc
-                                for all the options (
-                                https://sbert.net/docs/sentence_transformer/pretrained_models.html
-                                ). Defaults to all-MiniLM-L6-v2''')
-        self.parser.add_argument('-n', '--number-results',
-                                default=5,
-                                type=int,
-                                help='Number of relevant documents to retrieve. Defaults to 5')
-        self.parser.add_argument('-s', '--split',
-                                 default='train',
-                                 type=str,
-                                 help='Dataset split to be used to evaluate.')
-
-        args = self.parser.parse_args()
-
-        if args.collection == '':
-            raise CLIException("Please specify a collection")
-
-        if not os.path.exists(args.database_dir):
-            raise CLIException(f"Database folder '{args.database_dir}' not found")
-
-        self._args = args
+        self._args = self.parser.parse_args()
 
     def __calculate_metrics_at_k(self, questions, queries_results:list, storage:ChromaDBStorage,
                                  k:int) -> tuple[float, float, float]:
@@ -128,4 +82,4 @@ class CLIController(CLI):
 
 
 if __name__ == "__main__":
-    run_cli(CLIController)
+    run_cli(EvalRetrievalCLI)

@@ -83,11 +83,11 @@ Single-query mode, get the answer to a simple question:
 
     python chat.py -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m qwen --variant "3-0.6B" --query "Que tipos de profesores hay?"
 
-NOTE: To know the variant for the model visit HuggingFace models collection (https://huggingface.co/models). A variant is the identifier of the model starting from the version. For model 'google/gemma-3-4b-it' the model is 'gemma' and the variant is '3-4b-it'.
+NOTE: To know the variant for the model visit HuggingFace models collection (https://huggingface.co/models). A variant is the identifier of the model starting from the version. For model 'google/gemma-3-4b-it' the model is 'GEMMA' and the variant is '3-4b-it'.
 
 Interactive mode:
 
-    python chat.py -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m gemma --variant "3-4b-it"
+    python chat.py -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m GEMMA --variant "3-4b-it"
 
 Interactive mode with context. This option shows the relevant documents before the answer:
 
