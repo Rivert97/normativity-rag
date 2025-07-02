@@ -11,11 +11,11 @@ class RAG:
         self.storage = storage
 
     def query(self, query:str, collection:str='', num_docs:int=5,
-                             max_distance:float=1.0) -> str:
+              max_distance:float=1.0, add_to_history:bool=True) -> str:
         """Retrieve an answer if a collection is specified it passes relevant
         documents as context."""
         if collection == '':
-            return self.model.query(query), []
+            return self.model.query(query, add_to_history), []
 
         if self.storage is None:
             return '', []
@@ -30,9 +30,9 @@ class RAG:
             relevant_docs.append(doc)
 
         if len(relevant_docs) > 0:
-            response = self.model.query_with_documents(query, relevant_docs)
+            response = self.model.query_with_documents(query, relevant_docs, add_to_history)
         else:
-            response = self.model.query(query)
+            response = self.model.query(query, add_to_history)
 
         return response, relevant_docs
 
@@ -46,14 +46,13 @@ class RAG:
         n_queries = len(queries)
 
         for _, query in enumerate(queries):
-            response, docs = self.query(query, collection, num_docs, max_distance)
+            response, docs = self.query(query, collection, num_docs, max_distance,
+                                        add_to_history=False)
             d = {
                 'response': response,
                 'relevant_docs': docs
             }
             responses.append(d)
-
-            self.model.init_messages()
 
         print(f"Finished {n_queries}/{n_queries}")
 

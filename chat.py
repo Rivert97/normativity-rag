@@ -12,7 +12,8 @@ from llms.data import Document
 
 DEFAULTS = {
     'embedder': 'all-MiniLM-L6-v2',
-    'model': 'GEMMA',
+    'model': 'QWEN',
+    'variant': '3-0.6B',
 }
 
 PROGRAM_NAME = 'RAG'
@@ -29,7 +30,7 @@ class CLIController(CLI):
         """Run the script logic."""
         self._logger.info("Loading Model '%s (%s)'", self._args.model, self._args.variant)
         try:
-            model = Builders[self._args.model].values.build_from_variant(variant=self._args.variant)
+            model = Builders[self._args.model].value.build_from_variant(variant=self._args.variant)
         except (AttributeError, OSError) as e:
             self._logger.error(e)
             raise CLIException(f"Invalid variant '{self._args.variant}' for model") from e
@@ -94,11 +95,12 @@ class CLIController(CLI):
                                  type=str,
                                  help='Sentence query to be answered by the model')
         self.parser.add_argument('--variant',
-                                 default='',
+                                 default=DEFAULTS['variant'],
                                  type=str,
-                                 help='''
+                                 help=f'''
                                     Variant of model. See HuggingFace list of models
-                                    (https://huggingface.co/models). Ej: 4b-it
+                                    (https://huggingface.co/models).
+                                    Defaults to {DEFAULTS['variant']}
                                     ''')
 
         args = self.parser.parse_args()
