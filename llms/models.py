@@ -24,7 +24,7 @@ class Model:
     def __init__(self, multimodal:bool=False):
         self.multimodal = multimodal
 
-        self.messages = self.init_messages()
+        self.messages = self.__get_init_messages()
 
     @abstractmethod
     def query(self, query:str) -> str:
@@ -56,8 +56,11 @@ class Model:
         }
         self.messages.append(new_message)
 
-    def init_messages(self) -> list[dict[str:str|dict]]:
+    def init_messages(self):
         """Initializes the history of messages."""
+        self.messages = self.__get_init_messages()
+
+    def __get_init_messages(self) -> list[dict[str:str|dict]]:
         instruction = 'Eres un experto en resolver preguntas.'
         if self.multimodal:
             messages = [

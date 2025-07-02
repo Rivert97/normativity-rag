@@ -42,6 +42,7 @@ class EvalRAGCLI(EvalCLI):
         print("ROUGE 2:", rouge_score['rouge2'])
         print("ROUGE L:", rouge_score['rougeL'])
         print("ROUGE LSum:", rouge_score['rougeLsum'])
+        self._logger.info("ROUGUE: %s", rouge_score)
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()

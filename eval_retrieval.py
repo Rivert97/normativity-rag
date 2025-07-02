@@ -38,6 +38,10 @@ class EvalRetrievalCLI(EvalCLI):
         print(f"Precision@{self._args.number_results}:{precision}")
         print(f"Recall@{self._args.number_results}:{recall}")
         print(f"F1@{self._args.number_results}:{f1}")
+        self._logger.info("N Samples: %d", len(questions))
+        self._logger.info("Precision@%d: %f", self._args.number_results, precision)
+        self._logger.info("Recall@%d: %f", self._args.number_results, recall)
+        self._logger.info("F1@%d: %f", self._args.number_results, f1)
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()

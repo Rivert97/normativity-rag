@@ -40,7 +40,7 @@ class RAG:
                     max_distance:float=1.0) -> list[dict]:
         """Query multiple sentences to the model with or without context.
 
-        Messages history is deleted between queries so each one is independen.
+        Messages history is deleted between queries so each one is independent.
         """
         responses = []
         n_queries = len(queries)
