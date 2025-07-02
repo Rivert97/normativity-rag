@@ -17,7 +17,7 @@ class Storage(ABC):
         """Save information into the corresponding storage."""
 
     @abstractmethod
-    def query_sentence(self, collection:str, sentence:str, n_results:int) -> list[dict]:
+    def query_sentence(self, collection:str, sentence:str, n_results:int) -> list[Document]:
         """Find related documents using the corresponding storage."""
 
 class ChromaDBStorage(Storage):
@@ -41,7 +41,7 @@ class ChromaDBStorage(Storage):
             ids = [str(i+1) for i in range(len(sentences))]
         )
 
-    def query_sentence(self, collection, sentence, n_results):
+    def query_sentence(self, collection, sentence, n_results) -> list[Document]:
         """Make a query to the database to find similar sentences."""
         try:
             chromadb_collection = self.client.get_collection(collection,
@@ -52,7 +52,7 @@ class ChromaDBStorage(Storage):
 
         return self.__query(chromadb_collection, sentence, n_results)
 
-    def batch_query(self, collection, sentences, n_results):
+    def batch_query(self, collection, sentences, n_results) -> list[list[Document]]:
         """Make multiple queries to the database to find similar sentences."""
         try:
             chromadb_collection = self.client.get_collection(collection,
@@ -67,7 +67,7 @@ class ChromaDBStorage(Storage):
 
         return results
 
-    def get_all_from_parent(self, collection, document_name, parent):
+    def get_all_from_parent(self, collection, document_name, parent) -> list[Document]:
         """Get all documents from a document and a specific parent."""
         try:
             chromadb_collection = self.client.get_collection(collection,
@@ -98,7 +98,7 @@ class ChromaDBStorage(Storage):
 
         return documents
 
-    def __query(self, chromadb_collection, sentence, n_results):
+    def __query(self, chromadb_collection, sentence, n_results) -> list[Document]:
         results = chromadb_collection.query(
             query_texts=[sentence],
             n_results=n_results,

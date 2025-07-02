@@ -24,7 +24,7 @@ class Model:
     def __init__(self, multimodal:bool=False):
         self.multimodal = multimodal
 
-        self.messages = []
+        self.messages = self.__get_init_messages()
 
     @abstractmethod
     def query(self, query:str, add_to_history:bool=True) -> str:
@@ -34,6 +34,18 @@ class Model:
     def query_with_documents(self, query: str, documents:list[Document],
                              add_to_history:bool=True) -> str:
         """Query an answer based on a question and some documents passed as context."""
+
+    @abstractmethod
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+
+    @abstractmethod
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
 
     def str_to_message(self, query:str):
         """Add a new message to be sent to the model."""
@@ -62,7 +74,7 @@ class Model:
 
         return [response]
 
-    def get_init_messages(self) -> list[dict[str:str|dict]]:
+    def __get_init_messages(self) -> list[dict[str:str|dict]]:
         instruction = 'Eres un experto en resolver preguntas.'
         if self.multimodal:
             messages = [
@@ -225,6 +237,24 @@ class Llama3(Model):
 
         return response
 
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+        last_query = messages[-1]['content']
+        messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
     def __get_response_from_model(self, messages:list[dict[str, str]]) -> str:
         all_messages = self.messages + messages
         output = self.pipeline(all_messages, max_new_tokens=1024)
@@ -302,6 +332,31 @@ class Gemma3(Model):
             self.messages += messages + self.response_to_message(response)
 
         return response
+
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+        if self.multimodal:
+            response = self.__process_multimodal(messages)
+        else:
+            response = self.__process_text(messages)
+
+        return self.response_to_message(response)
+
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+        last_query = messages[-1]['content']
+        messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
+
+        if self.multimodal:
+            response = self.__process_multimodal(messages)
+        else:
+            response = self.__process_text(messages)
+
+        return self.response_to_message(response)
 
     def __process_multimodal(self, messages:list[dict]):
         all_messages = self.messages + messages
@@ -388,6 +443,24 @@ class Qwen3(Model):
 
         return response
 
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+        last_query = messages[-1]['content']
+        messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
     def __get_response_from_model(self, messages:list[dict[str, str]]) -> str:
         all_messages = self.messages + messages
         text = self.tokenizer.apply_chat_template(
@@ -460,6 +533,24 @@ class Mistral(Model):
             self.messages += messages + self.response_to_message(response)
 
         return response
+
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+        last_query = messages[-1]['content']
+        messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
 
     def __get_response_from_model(self, messages:list[dict[str, str]]) -> str:
         all_messages = self.messages + messages

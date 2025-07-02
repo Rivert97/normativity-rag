@@ -14,11 +14,8 @@ class RAG:
               max_distance:float=1.0, add_to_history:bool=True) -> str:
         """Retrieve an answer if a collection is specified it passes relevant
         documents as context."""
-        if collection == '':
+        if collection == ''or self.storage is None:
             return self.model.query(query, add_to_history), []
-
-        if self.storage is None:
-            return '', []
 
         documents = self.storage.query_sentence(collection, query, num_docs)
 
@@ -57,3 +54,27 @@ class RAG:
         print(f"Finished {n_queries}/{n_queries}")
 
         return responses
+
+    def query_with_conversation(self, messages:list[dict[str,str]], collection:str='',
+                                num_docs:int=5, max_distance:float=1.0) -> list[dict]:
+        """Makes a RAG query with a full conversation."""
+        if collection == '' or self.storage is None:
+            return self.model.query_with_conversation(messages), []
+
+        last_query = messages[-1]['content']
+        documents = self.storage.query_sentence(collection, last_query, num_docs)
+
+        relevant_docs = []
+        for doc in documents:
+            if doc.get_distance() > max_distance:
+                continue
+
+            relevant_docs.append(doc)
+
+        if len(relevant_docs) > 0:
+            response = self.model.query_with_conversation_and_documents(messages,
+                                                                        relevant_docs)
+        else:
+            response = self.model.query_with_conversation(messages)
+
+        return response, relevant_docs
