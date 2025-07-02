@@ -29,7 +29,7 @@ class CLIController(CLI):
         """Run the script logic."""
         self._logger.info("Loading Model '%s (%s)'", self._args.model, self._args.variant)
         try:
-            model = Builders[self._args.model].build_from_variant(variant=self._args.variant)
+            model = Builders[self._args.model].values.build_from_variant(variant=self._args.variant)
         except (AttributeError, OSError) as e:
             self._logger.error(e)
             raise CLIException(f"Invalid variant '{self._args.variant}' for model") from e
