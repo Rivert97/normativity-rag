@@ -27,38 +27,52 @@ class Model:
         self.messages = self.__get_init_messages()
 
     @abstractmethod
-    def query(self, query:str) -> str:
+    def query(self, query:str, add_to_history:bool=True) -> str:
         """Query an answer based on a question."""
 
     @abstractmethod
-    def query_with_documents(self, query: str, documents:list[Document]) -> str:
+    def query_with_documents(self, query: str, documents:list[Document],
+                             add_to_history:bool=True) -> str:
         """Query an answer based on a question and some documents passed as context."""
 
-    def add_message(self, query:str):
+    @abstractmethod
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+
+    @abstractmethod
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+
+    def str_to_message(self, query:str):
         """Add a new message to be sent to the model."""
         if self.multimodal:
-            self.__add_multimodal_message(query)
+            message = self.__get_multimodal_message(query)
         else:
-            self.__add_text_message(query)
+            message = self.__get_text_message(query)
 
-    def add_message_with_context(self, query:str, documents:list[Document]):
+        return [message]
+
+    def str_to_message_with_context(self, query:str, documents:list[Document]):
         """Add a new message to be sent to the model including documents to be used as context."""
         if self.multimodal:
-            self.__add_multimodal_message_with_context(query, documents)
+            messages = self.__get_multimodal_message_with_context(query, documents)
         else:
-            self.__add_text_message_with_context(query, documents)
+            messages = self.__get_text_message_with_context(query, documents)
 
-    def add_response(self, response:str):
+        return messages
+
+    def response_to_message(self, response:str):
         """Add response to the history of conversation."""
-        new_message = {
+        response = {
             "role": "assistant",
             "content": response,
         }
-        self.messages.append(new_message)
 
-    def init_messages(self):
-        """Initializes the history of messages."""
-        self.messages = self.__get_init_messages()
+        return [response]
 
     def __get_init_messages(self) -> list[dict[str:str|dict]]:
         instruction = 'Eres un experto en resolver preguntas.'
@@ -79,21 +93,23 @@ class Model:
 
         return messages
 
-    def __add_multimodal_message(self, query:str):
+    def __get_multimodal_message(self, query:str):
         new_message = {
             "role": "user",
             "content": [{"type": "text", "text": query}]
         }
-        self.messages.append(new_message)
 
-    def __add_text_message(self, query:str):
+        return new_message
+
+    def __get_text_message(self, query:str):
         new_message = {
             "role": "user",
             "content": query
         }
-        self.messages.append(new_message)
 
-    def __add_multimodal_message_with_context(self, query:str, documents:list[Document]):
+        return new_message
+
+    def __get_multimodal_message_with_context(self, query:str, documents:list[Document]):
         documents_context = self.__format_documents(documents)
 
         new_messages = [
@@ -111,15 +127,16 @@ class Model:
                 "content": [{"type": "text", "text": query}]
             }
         ]
-        self.messages.extend(new_messages)
 
-    def __add_text_message_with_context(self, query:str, documents:list[Document]):
+        return new_messages
+
+    def __get_text_message_with_context(self, query:str, documents:list[Document]):
         documents_context = self.__format_documents(documents)
 
         new_messages = [
             {
                 "role": "system",
-                "content": "Responde las siguientes preguntas, contesta con únicamente la "\
+                "content": "Responde la siguiente pregunta, contesta con únicamente la "\
                            "respuesta sin palabras adicionales. Utiliza únicamente los "\
                            f"fragmentos de la normativa siguiente:\n\n{documents_context}"
             },
@@ -128,7 +145,8 @@ class Model:
                 "content": query
             }
         ]
-        self.messages.extend(new_messages)
+
+        return new_messages
 
     def __format_documents(self, documents:list[Document]) -> str:
         docs_str = ''
@@ -142,7 +160,7 @@ class LlamaBuilder:
     """Factory method for Llama classes."""
 
     @classmethod
-    def build_from_variant(cls, variant:str) -> Model:
+    def build_from_variant(cls, variant:str='') -> Model:
         """Return an object of the corresponding Llama class depending on version."""
         main_version = variant.split('-')[0].split('.')[0]
 
@@ -199,22 +217,47 @@ class Llama3(Model):
             device_map="sequential"
         )
 
-    def query(self, query:str) -> str:
+    def query(self, query:str, add_to_history:bool=True) -> str:
         """Query an answer based on a question."""
-        self.add_message(query)
-        response = self.__get_response_from_model()
+        messages = self.str_to_message(query)
+        response = self.__get_response_from_model(messages)
+
+        if add_to_history:
+            self.messages += messages + self.response_to_message(response)
 
         return response
 
-    def query_with_documents(self, query:str, documents:list[Document]):
+    def query_with_documents(self, query:str, documents:list[Document], add_to_history:bool=True):
         """Query an answer based on a question and some documents passed as context."""
-        self.add_message_with_context(query, documents)
-        response = self.__get_response_from_model()
+        messages = self.str_to_message_with_context(query, documents)
+        response = self.__get_response_from_model(messages)
+
+        if add_to_history:
+            self.messages += messages + self.response_to_message(response)
 
         return response
 
-    def __get_response_from_model(self) -> str:
-        output = self.pipeline(self.messages, max_new_tokens=1024)
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+        last_query = messages[-1]['content']
+        messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def __get_response_from_model(self, messages:list[dict[str, str]]) -> str:
+        all_messages = self.messages + messages
+        output = self.pipeline(all_messages, max_new_tokens=1024)
 
         response = output[0].get('generated_text')[-1].get('content', '')
 
@@ -262,30 +305,63 @@ class Gemma3(Model):
             ).eval()
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, gguf_file=gguf_file)
 
-    def query(self, query:str) -> str:
+    def query(self, query:str, add_to_history:bool=True) -> str:
         """Query an answer based on a question."""
-        self.add_message(query)
+        messages = self.str_to_message(query)
 
         if self.multimodal:
-            response = self.__process_multimodal(self.messages)
+            response = self.__process_multimodal(messages)
         else:
-            response = self.__process_text(self.messages)
+            response = self.__process_text(messages)
+
+        if add_to_history:
+            self.messages += messages + self.response_to_message(response)
 
         return response
 
-    def query_with_documents(self, query:str, documents:list[Document]):
+    def query_with_documents(self, query:str, documents:list[Document], add_to_history:bool=True):
         """Query an answer based on a question and some documents passed as context."""
-        self.add_message_with_context(query, documents)
+        messages = self.str_to_message_with_context(query, documents)
+
         if self.multimodal:
-            response = self.__process_multimodal(self.messages)
+            response = self.__process_multimodal(messages)
         else:
-            response = self.__process_text(self.messages)
+            response = self.__process_text(messages)
+
+        if add_to_history:
+            self.messages += messages + self.response_to_message(response)
 
         return response
+
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+        if self.multimodal:
+            response = self.__process_multimodal(messages)
+        else:
+            response = self.__process_text(messages)
+
+        return self.response_to_message(response)
+
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+        last_query = messages[-1]['content']
+        messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
+
+        if self.multimodal:
+            response = self.__process_multimodal(messages)
+        else:
+            response = self.__process_text(messages)
+
+        return self.response_to_message(response)
 
     def __process_multimodal(self, messages:list[dict]):
+        all_messages = self.messages + messages
         inputs = self.processor.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=True,
+            all_messages, add_generation_prompt=True, tokenize=True,
             return_dict=True, return_tensors="pt"
         ).to(self.model.device, dtype=torch.bfloat16)
 
@@ -300,8 +376,9 @@ class Gemma3(Model):
         return decoded
 
     def __process_text(self, messages:list[dict]):
+        all_messages = self.messages + messages
         inputs = self.tokenizer.apply_chat_template(
-            messages,
+            all_messages,
             add_generation_prompt=True,
             tokenize=True,
             return_dict=True,
@@ -344,23 +421,50 @@ class Qwen3(Model):
             device_map='sequential',
         )
 
-    def query(self, query:str):
+    def query(self, query:str, add_to_history:bool=True):
         """Query an answer based on a question."""
-        self.add_message(query)
-        response = self.__get_response_from_model()
+        messages = self.str_to_message(query)
+
+        response = self.__get_response_from_model(messages)
+
+        if add_to_history:
+            self.messages += messages + self.response_to_message(response)
 
         return response
 
-    def query_with_documents(self, query:str, documents:list[Document]):
+    def query_with_documents(self, query:str, documents:list[Document], add_to_history:bool=True):
         """Query an answer based on a question and some documents passed as context."""
-        self.add_message_with_context(query, documents)
-        response = self.__get_response_from_model()
+        messages = self.str_to_message_with_context(query, documents)
+
+        response = self.__get_response_from_model(messages)
+
+        if add_to_history:
+            self.messages += messages + self.response_to_message(response)
 
         return response
 
-    def __get_response_from_model(self) -> str:
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+        last_query = messages[-1]['content']
+        messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def __get_response_from_model(self, messages:list[dict[str, str]]) -> str:
+        all_messages = self.messages + messages
         text = self.tokenizer.apply_chat_template(
-            self.messages,
+            all_messages,
             tokenize=False,
             add_generation_prompt=True,
             enable_thinking=self.thinking, # Switches between thinking and non-thinking modes
@@ -408,22 +512,49 @@ class Mistral(Model):
             device_map="sequential"
         )
 
-    def query(self, query:str):
+    def query(self, query:str, add_to_history:bool=True):
         """Query an answer based on a question."""
-        self.add_message(query)
-        response = self.__get_response_from_model()
+        messages = self.str_to_message(query)
+
+        response = self.__get_response_from_model(messages)
+
+        if add_to_history:
+            self.messages += messages + self.response_to_message(response)
 
         return response
 
-    def query_with_documents(self, query:str, documents:list[Document]):
+    def query_with_documents(self, query:str, documents:list[Document], add_to_history:bool=True):
         """Query an answer based on a question and some documents passed as context."""
-        self.add_message_with_context(query, documents)
-        response = self.__get_response_from_model()
+        messages = self.str_to_message_with_context(query, documents)
+
+        response = self.__get_response_from_model(messages)
+
+        if add_to_history:
+            self.messages += messages + self.response_to_message(response)
 
         return response
 
-    def __get_response_from_model(self) -> str:
-        output = self.pipeline(self.messages, max_new_tokens=1024)
+    def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
+        """Query an answer based on a full conversation."""
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
+                                              documents:list[Document]) -> str:
+        """
+        Query an answer based on a full conversation and some documents passed as context to
+        the last question.
+        """
+        last_query = messages[-1]['content']
+        messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
+        response = self.__get_response_from_model(messages)
+
+        return self.response_to_message(response)
+
+    def __get_response_from_model(self, messages:list[dict[str, str]]) -> str:
+        all_messages = self.messages + messages
+        output = self.pipeline(all_messages, max_new_tokens=1024)
 
         response = output[0].get('generated_text')[-1].get('content', '')
 
