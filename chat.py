@@ -6,7 +6,7 @@ import os
 from utils.controllers import CLI, run_cli
 from utils.exceptions import CLIException
 from llms.storage import ChromaDBStorage
-from llms.rag import RAG
+from llms.rag import RAG, RAGQueryConfig
 from llms.models import Builders
 from llms.data import Document
 
@@ -45,8 +45,12 @@ class CLIController(CLI):
         if self._args.query == '':
             self.__process_interactive(rag)
         else:
-            response, context = rag.query(self._args.query, self._args.collection, num_docs=10,
-                                        max_distance=self._args.max_distance)
+            query_config = RAGQueryConfig(
+                collection=self._args.collection,
+                num_docs=10,
+                max_distance=self._args.max_distance
+            )
+            response, context = rag.query(self._args.query, query_config)
 
             self.__show_response(response, context, self._args.context)
 
@@ -127,8 +131,12 @@ class CLIController(CLI):
             if query == '':
                 continue
 
-            response, context = rag.query(query, self._args.collection, num_docs=10,
-                                        max_distance=self._args.max_distance)
+            query_config = RAGQueryConfig(
+                collection=self._args.collection,
+                num_docs=10,
+                max_distance=self._args.max_distance
+            )
+            response, context = rag.query(query, query_config)
 
             self.__show_response(response, context, self._args.context)
 

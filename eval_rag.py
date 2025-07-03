@@ -10,6 +10,7 @@ import evaluate
 from utils.controllers import run_cli
 from utils.eval_controllers import EvalCLI
 from llms.models import Builders
+from llms.rag import RAGQueryConfig
 
 PROGRAM_NAME = 'EvalRAG'
 VERSION = '1.00.00'
@@ -30,9 +31,13 @@ class EvalRAGCLI(EvalCLI):
 
         self._logger.info("Getting Responses")
         train = dataset['train']
-        responses = rag.batch_query(train['question'], self._args.collection,
-                                    self._args.number_results,
-                                    self._args.max_distance)
+        query_config = RAGQueryConfig(
+            collection=self._args.collection,
+            num_docs=self._args.number_results,
+            max_distance=self._args.max_distance,
+            add_to_history=False
+        )
+        responses = rag.batch_query(train['question'], query_config)
 
         self._logger.info("Evaluating")
         rouge_score = self.__calculate_rouge([res['response'] for res in responses],
