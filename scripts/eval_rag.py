@@ -7,10 +7,10 @@ import argparse
 
 import evaluate
 
-from utils.controllers import run_cli
-from utils.eval_controllers import EvalCLI
-from llms.models import Builders
-from llms.rag import RAGQueryConfig
+from simplerag.llms.models import Builders
+from simplerag.llms.rag import RAGQueryConfig
+from .utils.controllers import run_cli
+from .utils.eval_controllers import EvalCLI
 
 PROGRAM_NAME = 'EvalRAG'
 VERSION = '1.00.00'
@@ -76,6 +76,10 @@ class EvalRAGCLI(EvalCLI):
                               references=answers)
 
         return score
+
+def main():
+    """Run the script."""
+    run_cli(EvalRAGCLI)
 
 if __name__ == "__main__":
     run_cli(EvalRAGCLI)

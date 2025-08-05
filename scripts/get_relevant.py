@@ -6,14 +6,14 @@ This script requires a database previously created with get_embeddings.py script
 import argparse
 import os
 
-from utils.controllers import CLI, run_cli
-from utils.exceptions import CLIException
-from llms.storage import ChromaDBStorage
+from simplerag.llms.storage import ChromaDBStorage
+from .utils.controllers import CLI, run_cli
+from .utils.exceptions import CLIException
 
 PROGRAM_NAME = 'GetRelevantCLI'
 VERSION = '1.00.00'
 
-class CLIController(CLI):
+class GetRelevantCLI(CLI):
     """This class controls the execution of the program when using
     CLI.
     """
@@ -80,5 +80,9 @@ class CLIController(CLI):
 
         self._args = args
 
+def main():
+    """Run the script."""
+    run_cli(GetRelevantCLI)
+
 if __name__ == "__main__":
-    run_cli(CLIController)
+    run_cli(GetRelevantCLI)

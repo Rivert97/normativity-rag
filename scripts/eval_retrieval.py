@@ -7,9 +7,9 @@ import argparse
 
 import numpy as np
 
-from utils.controllers import run_cli
-from utils.eval_controllers import EvalCLI
-from llms.storage import ChromaDBStorage
+from simplerag.llms.storage import ChromaDBStorage
+from .utils.controllers import run_cli
+from .utils.eval_controllers import EvalCLI
 
 PROGRAM_NAME = 'EvalRetrieval'
 VERSION = '1.00.00'
@@ -94,6 +94,9 @@ class EvalRetrievalCLI(EvalCLI):
 
         return True
 
+def main():
+    """Run the script."""
+    run_cli(EvalRetrievalCLI)
 
 if __name__ == "__main__":
     run_cli(EvalRetrievalCLI)

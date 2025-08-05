@@ -4,9 +4,9 @@ import argparse
 
 from datasets import load_dataset
 
-from llms.storage import ChromaDBStorage
-from llms.models import Builders, Model
-from llms.rag import RAG
+from simplerag.llms.storage import ChromaDBStorage
+from simplerag.llms.models import Builders, Model
+from simplerag.llms.rag import RAG
 from .controllers import CLI
 from .exceptions import CLIException
 
