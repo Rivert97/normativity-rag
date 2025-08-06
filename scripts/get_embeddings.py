@@ -7,17 +7,19 @@ import argparse
 import os
 import glob
 
-from utils.controllers import CLI, run_cli
-from utils.exceptions import CLIException
-from document_loaders.representations import PdfDocumentData
-from document_splitters.hierarchical import TreeSplitter, DataTreeSplitter, TextTreeSplitter
-from llms.embedders import STEmbedder
-from llms.storage import CSVStorage, ChromaDBStorage
+from simplerag.document_loaders.representations import PdfDocumentData
+from simplerag.document_splitters.hierarchical import TreeSplitter
+from simplerag.document_splitters.hierarchical import DataTreeSplitter
+from simplerag.document_splitters.hierarchical import TextTreeSplitter
+from simplerag.llms.embedders import STEmbedder
+from simplerag.llms.storage import CSVStorage, ChromaDBStorage
+from .utils.controllers import CLI, run_cli
+from .utils.exceptions import CLIException
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
 
-class CLIController(CLI):
+class GetEmbeddingsCLI(CLI):
     """Class to control the execution of the program when usied as CLI."""
 
     def __init__(self):
@@ -98,7 +100,7 @@ class CLIController(CLI):
         self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
-                            default='settings/params-default.yml',
+                            default='simplerag/settings/params-default.yml',
                             type=str,
                             help='''
                                 YAML file with custom parse parameters to be used
@@ -292,5 +294,9 @@ class CLIController(CLI):
 
         return sentences, metadatas
 
+def main():
+    """Run the script."""
+    run_cli(GetEmbeddingsCLI)
+
 if __name__ == "__main__":
-    run_cli(CLIController)
+    run_cli(GetEmbeddingsCLI)

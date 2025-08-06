@@ -7,9 +7,9 @@ import argparse
 
 import numpy as np
 
-from utils.controllers import run_cli
-from utils.eval_controllers import EvalCLI
-from llms.storage import ChromaDBStorage
+from simplerag.llms.storage import ChromaDBStorage
+from .utils.controllers import run_cli
+from .utils.eval_controllers import EvalCLI
 
 PROGRAM_NAME = 'EvalRetrieval'
 VERSION = '1.00.00'
@@ -27,6 +27,9 @@ class EvalRetrievalCLI(EvalCLI):
         storage = self.get_storage(self._args.embedder, self._args.database_dir)
 
         self._logger.info('Querying sentences')
+        if self._args.file != '':
+            dataset = dataset.filter(lambda row: row['title'] == self._args.file)
+
         questions = dataset['train']
         results = storage.batch_query(self._args.collection, questions['question'],
                                      self._args.number_results)
@@ -45,6 +48,13 @@ class EvalRetrievalCLI(EvalCLI):
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()
+
+        self.parser.add_argument('-f', '--file',
+                                 default='',
+                                 type=str,
+                                 help='''
+                                    Set to filter the database by file (title). Default ''
+                                    ''')
 
         self._args = self.parser.parse_args()
 
@@ -84,6 +94,9 @@ class EvalRetrievalCLI(EvalCLI):
 
         return True
 
+def main():
+    """Run the script."""
+    run_cli(EvalRetrievalCLI)
 
 if __name__ == "__main__":
     run_cli(EvalRetrievalCLI)

@@ -5,13 +5,16 @@ import argparse
 import os
 import glob
 
-from utils.controllers import CLI, run_cli
-from utils.exceptions import CLIException
-from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader, PDFPlumberLoader
-from document_splitters.hierarchical import TextTreeSplitter, DataTreeSplitter, TreeSplitter
-from llms.storage import ChromaDBStorage
+from simplerag.document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
+from simplerag.document_loaders.pdf import PDFPlumberLoader
+from simplerag.document_splitters.hierarchical import TreeSplitter
+from simplerag.document_splitters.hierarchical import DataTreeSplitter
+from simplerag.document_splitters.hierarchical import TextTreeSplitter
+from simplerag.llms.storage import ChromaDBStorage
+from .utils.controllers import CLI, run_cli
+from .utils.exceptions import CLIException
 
-PROGRAM_NAME = 'Runner'
+PROGRAM_NAME = 'Extractor'
 VERSION = '1.00.00'
 
 DEFAULTS = {
@@ -22,7 +25,7 @@ DEFAULTS = {
     'database_dir': './db',
     'embedder': 'all-MiniLM-L6-v2',
     'inner_splitter': 'paragraph',
-    'parse_params_file': 'settings/params-default.yml',
+    'parse_params_file': 'simplerag/settings/params-default.yml',
 }
 LOADERS = {
     'mixed': PyPDFMixedLoader,
@@ -50,7 +53,7 @@ class CollectionParams:
     loader: str
     raw: bool = False
 
-class CLIController(CLI):
+class ExtractorCLI(CLI):
     """This class controls the execution of the program when using
     CLI.
     """
@@ -353,6 +356,9 @@ class CLIController(CLI):
 
         return settings
 
+def main():
+    """Run the script."""
+    run_cli(ExtractorCLI)
 
 if __name__ == "__main__":
-    run_cli(CLIController)
+    run_cli(ExtractorCLI)

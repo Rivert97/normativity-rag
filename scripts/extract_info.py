@@ -8,14 +8,17 @@ import argparse
 import os
 import glob
 
-from document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader, PDFPlumberLoader
-from utils.controllers import CLI, run_cli
-from utils.exceptions import CLIException
+from simplerag.document_loaders.pdf import PyPDFMixedLoader
+from simplerag.document_loaders.pdf import PyPDFLoader
+from simplerag.document_loaders.pdf import OCRLoader
+from simplerag.document_loaders.pdf import PDFPlumberLoader
+from .utils.controllers import CLI, run_cli
+from .utils.exceptions import CLIException
 
 PROGRAM_NAME = 'ExtractorCLI'
 VERSION = '1.00.00'
 
-class CLIController(CLI):
+class ExtractInfoCLI(CLI):
     """This class controls the execution of the program when using
     CLI.
     """
@@ -72,7 +75,7 @@ class CLIController(CLI):
                                  type=int,
                                  help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
-                                 default='settings/params-default.yml',
+                                 default='simplerag/settings/params-default.yml',
                                  type=str,
                                  help='''
                                      YAML file with custom parse parameters to be used
@@ -215,5 +218,9 @@ class CLIController(CLI):
         except FileNotFoundError as e:
             raise CLIException("Output directory not found") from e
 
+def main():
+    """Run the script."""
+    run_cli(ExtractInfoCLI)
+
 if __name__ == "__main__":
-    run_cli(CLIController)
+    run_cli(ExtractInfoCLI)

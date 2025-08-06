@@ -3,12 +3,12 @@
 import argparse
 import os
 
-from utils.controllers import CLI, run_cli
-from utils.exceptions import CLIException
-from llms.storage import ChromaDBStorage
-from llms.rag import RAG, RAGQueryConfig
-from llms.models import Builders
-from llms.data import Document
+from simplerag.llms.storage import ChromaDBStorage
+from simplerag.llms.rag import RAG, RAGQueryConfig
+from simplerag.llms.models import Builders
+from simplerag.llms.data import Document
+from .utils.controllers import CLI, run_cli
+from .utils.exceptions import CLIException
 
 DEFAULTS = {
     'embedder': 'all-MiniLM-L6-v2',
@@ -19,7 +19,7 @@ DEFAULTS = {
 PROGRAM_NAME = 'RAG'
 VERSION = '1.00.00'
 
-class CLIController(CLI):
+class CLIChatController(CLI):
     """This class controls the execution of the program when used as CLI."""
     def __init__(self):
         super().__init__(PROGRAM_NAME, __doc__, VERSION)
@@ -149,5 +149,9 @@ class CLIController(CLI):
 
         self._logger.info("Response served. Length: %s", len(response))
 
+def main():
+    """Run the script."""
+    run_cli(CLIChatController)
+
 if __name__ == "__main__":
-    run_cli(CLIController)
+    run_cli(CLIChatController)
