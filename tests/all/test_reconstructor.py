@@ -19,8 +19,7 @@ class TestReconstructor(unittest.TestCase):
         # Ley organica (Pag. 3): DICTAMEN DE
         result = reconstructor._DataReconstructor__is_same_line(
             line_top=0.147747349823322, line_bottom=0.159673144876325,
-            word_top=0.148299469964664, word_bottom=0.159562720848057,
-            word_height=0.0112632508833922
+            word_top=0.148299469964664, word_height=0.0112632508833922
         )
         assert result is True
 
@@ -30,8 +29,7 @@ class TestReconstructor(unittest.TestCase):
         # Ley organica (Pag. 3): I. En
         result = reconstructor._DataReconstructor__is_same_line(
             line_top=0.630742049469965, line_bottom=0.638140459363958,
-            word_top=0.626766784452297, word_bottom=0.637919611307421,
-            word_height=0.0111528268551237
+            word_top=0.626766784452297, word_height=0.0111528268551237
         )
         assert result is True
 
@@ -41,8 +39,7 @@ class TestReconstructor(unittest.TestCase):
         # Código de Ética de las personas... (Pag. 4): 2 Véase
         result = reconstructor._DataReconstructor__is_same_line(
             line_top=0.72482332155477, line_bottom=0.731448763250884,
-            word_top=0.727583922261484, word_bottom=0.736969964664311,
-            word_height=0.00938604240282686
+            word_top=0.727583922261484, word_height=0.00938604240282686
         )
         assert result is True
 
@@ -52,8 +49,7 @@ class TestReconstructor(unittest.TestCase):
         # Ley organica (Pag. 3): titucion...\n iniciativa...
         result = reconstructor._DataReconstructor__is_same_line(
             line_top=0.646863957597173, line_bottom=0.658348056537103,
-            word_top=0.667292402826855, word_bottom=0.678003533568905,
-            word_height=0.0107111307420495
+            word_top=0.667292402826855, word_height=0.0107111307420495
         )
         assert result is False
 
