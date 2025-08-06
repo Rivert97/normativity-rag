@@ -25,7 +25,7 @@ DEFAULTS = {
     'database_dir': './db',
     'embedder': 'all-MiniLM-L6-v2',
     'inner_splitter': 'paragraph',
-    'parse_params_file': 'settings/params-default.yml',
+    'parse_params_file': 'simplerag/settings/params-default.yml',
 }
 LOADERS = {
     'mixed': PyPDFMixedLoader,

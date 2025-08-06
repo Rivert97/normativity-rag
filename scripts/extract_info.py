@@ -72,7 +72,7 @@ class ExtractInfoCLI(CLI):
                                  type=int,
                                  help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
-                                 default='settings/params-default.yml',
+                                 default='simplerag/settings/params-default.yml',
                                  type=str,
                                  help='''
                                      YAML file with custom parse parameters to be used
