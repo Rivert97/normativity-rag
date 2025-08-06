@@ -4,10 +4,8 @@ These tests require a medium GPU to run and may take too long.
 """
 import unittest
 
-#pylint: disable=wrong-import-position, import-error
-
-from llms.models import QwenBuilder, GemmaBuilder, LlamaBuilder, MistralBuilder
-from llms.rag import RAGQueryConfig
+from simplerag.llms.models import QwenBuilder, GemmaBuilder, LlamaBuilder, MistralBuilder
+from simplerag.llms.rag import RAGQueryConfig
 
 #pylint: enable=wrong-import-position, import-error
 
