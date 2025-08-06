@@ -8,7 +8,10 @@ import argparse
 import os
 import glob
 
-from simplerag.document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader, PDFPlumberLoader
+from simplerag.document_loaders.pdf import PyPDFMixedLoader
+from simplerag.document_loaders.pdf import PyPDFLoader
+from simplerag.document_loaders.pdf import OCRLoader
+from simplerag.document_loaders.pdf import PDFPlumberLoader
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
 

@@ -1,3 +1,4 @@
+"""Module to add unit test for DataReconstructor class."""
 import unittest
 
 import pandas as pd
@@ -5,8 +6,15 @@ import numpy as np
 
 from simplerag.document_loaders.parsers import DataReconstructor
 
+#pylint: disable=protected-access
+
 class TestReconstructor(unittest.TestCase):
+    """Class for unittesting DataReconstructor class.
+
+    Important private methods are tested.
+    """
     def test_is_same_line_uppercase(self):
+        """Test that text in uppercase in the same line is correct."""
         reconstructor = DataReconstructor(pd.DataFrame())
         # Ley organica (Pag. 3): DICTAMEN DE
         result = reconstructor._DataReconstructor__is_same_line(
@@ -17,6 +25,7 @@ class TestReconstructor(unittest.TestCase):
         assert result is True
 
     def test_is_same_line_lowercase(self):
+        """Test that text in lowercas in the same line is correct."""
         reconstructor = DataReconstructor(pd.DataFrame())
         # Ley organica (Pag. 3): I. En
         result = reconstructor._DataReconstructor__is_same_line(
@@ -27,6 +36,7 @@ class TestReconstructor(unittest.TestCase):
         assert result is True
 
     def test_is_same_line_upperindex(self):
+        """Test that text with upperindices is considered in the same line."""
         reconstructor = DataReconstructor(pd.DataFrame())
         # Código de Ética de las personas... (Pag. 4): 2 Véase
         result = reconstructor._DataReconstructor__is_same_line(
@@ -37,6 +47,7 @@ class TestReconstructor(unittest.TestCase):
         assert result is True
 
     def test_is_not_same_line(self):
+        """"Test that text in another line is correct."""
         reconstructor = DataReconstructor(pd.DataFrame())
         # Ley organica (Pag. 3): titucion...\n iniciativa...
         result = reconstructor._DataReconstructor__is_same_line(

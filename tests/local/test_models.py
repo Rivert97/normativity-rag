@@ -7,8 +7,6 @@ import unittest
 from simplerag.llms.models import QwenBuilder, GemmaBuilder, LlamaBuilder, MistralBuilder
 from simplerag.llms.rag import RAGQueryConfig
 
-#pylint: enable=wrong-import-position, import-error
-
 class TestModels(unittest.TestCase):
     """Class for unittesting the models available.
 

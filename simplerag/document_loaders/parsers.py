@@ -141,9 +141,9 @@ class DataReconstructor():
 
     def __init__(self, data: pd.DataFrame,
                  writable_boundaries: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
-                 lines: dict[str,np.array] = {}):
+                 lines: dict[str,np.array] = None):
         self.data = data.copy()
-        if lines == {}:
+        if lines is None:
             self.lines = {'horizontal': np.array([]), 'vertical': np.array([])}
         else:
             self.lines = lines
@@ -178,8 +178,7 @@ class DataReconstructor():
             word_top = word['top']
             word_bottom = word['top'] + word['height']
 
-            if self.__is_same_line(current_min_y, current_max_y, word_top, word_bottom,
-                                   word['height']):
+            if self.__is_same_line(current_min_y, current_max_y, word_top, word['height']):
                 current_min_y = min(current_min_y, word_top)
                 current_max_y = max(current_max_y, word_bottom)
             else:
@@ -189,8 +188,8 @@ class DataReconstructor():
             self.data.loc[word_idx, 'line'] = current_line_num
 
     def __is_same_line(self, line_top: float, line_bottom: float, word_top: float,
-                       word_bottom: float, word_height: float) -> bool:
-        return (line_top + word_height * 0.4 < word_bottom
+                       word_height: float) -> bool:
+        return (line_top + word_height * 0.4 < word_top + word_height
                 and line_bottom - word_height * 0.4 > word_top)
 
     def __assign_column_number(self, min_words_per_col:int=1):
