@@ -224,7 +224,6 @@ class DataTreeSplitter(TreeSplitter):
         self.data = data.copy().dropna()
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
-        self.line_height = (self.data['bottom'] - self.data['top']).mean()
         self.detector = TitleDetector()
 
     def analyze(self):
@@ -234,7 +233,9 @@ class DataTreeSplitter(TreeSplitter):
 
     def __assign_block(self):
         self.data['block'] = pd.Series(dtype=int)
-        prev_line_height = (self.data['top'] - self.data['bottom']).mean()
+        prev_line_height = self.data.groupby('line')[['bottom', 'top']].apply(
+            lambda g: g['bottom'].max() - g['top'].min()
+        ).mean()
         block = -1
         for _, page_words in self.data.groupby('page'):
             prev_y = 0
@@ -243,10 +244,10 @@ class DataTreeSplitter(TreeSplitter):
                     lines = col_words.groupby('line')
                     for n_line, line_words in lines:
                         top = line_words['top'].min()
-                        bottom = line_words['bottom'].max()
+                        bottom = line_words['bottom'].mode()[0]
                         line_height = bottom - top
 
-                        if abs(top - prev_y) > min(line_height, prev_line_height) * 1.1:
+                        if abs(top - prev_y) > min(line_height, prev_line_height) * 1.6:
                             block += 1
 
                         self.data.loc[lines.groups[n_line], 'block'] = block
@@ -262,7 +263,9 @@ class DataTreeSplitter(TreeSplitter):
             last_node=self.root,
         )
         state.current_nodes[0] = state.last_node
-        mean_line_height=(self.data['bottom']-self.data['top']).mean()
+        mean_line_height=self.data.groupby('line')[['bottom', 'top']].apply(
+            lambda g: g['bottom'].max() - g['top'].min()
+        ).mean()
 
         sorted_lines = self.data.sort_values(['page', 'line', 'col_position', 'left'])
         for n_page, page_words in sorted_lines.groupby('page'):
@@ -276,10 +279,12 @@ class DataTreeSplitter(TreeSplitter):
                 state.block_words = block_words
                 left = block_words['left'].min()
                 right = block_words['right'].max()
-                line_height = (block_words['bottom']-block_words['top']).mean()
+                line_height = block_words.groupby('line')[['bottom', 'top']].apply(
+                    lambda g: g['bottom'].max() - g['top'].min()
+                ).min()
                 is_centered = self.__element_is_centered((left, right), page_center,
                                                          page_writable_width, tolerance_rate=0.1)
-                lines_are_larger = line_height > mean_line_height*1.1
+                lines_are_larger = line_height > mean_line_height*1.15
 
                 if is_centered or lines_are_larger:
                     self.__handle_title_block(state)
@@ -297,10 +302,14 @@ class DataTreeSplitter(TreeSplitter):
         max_x = x_limits[1]
         center_rate = (reference_center - min_x) / (max_x - reference_center)
         column_percentage = (max_x - min_x) / reference_width
+        offset_left = min_x - (reference_center - reference_width * 0.5)
+        offset_right = (reference_center + reference_width * 0.5) - max_x
 
         return (min_x < reference_center < max_x and
                 abs(1.0 - center_rate) < tolerance_rate and
-                column_percentage < 0.95)
+                column_percentage < 0.95 and
+                offset_left > 0.01 and
+                offset_right > 0.01)
 
     def __handle_title_block(self, state:TreeState):
         block_text = self.__get_dehypenated_text(state.block_words)
