@@ -217,7 +217,8 @@ class ExtractorCLI(CLI):
             data = pdf_loader.get_document_data()
             splitter = DataTreeSplitter(
                 data.get_data(remove_headers=True, boundaries=file_parse_params.get('pdf_margins')),
-                basename)
+                basename,
+                params.loader)
         else:
             raise CLIException(f"Invalid extraction type '{params.extraction_type}'")
 

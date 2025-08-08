@@ -82,7 +82,7 @@ class TestDataTreeSplitter(unittest.TestCase):
             "line": 1, "column": 0, "col_position": 0, "group": 0},
         ])
 
-        splitter = DataTreeSplitter(data)
+        splitter = DataTreeSplitter(data, loader='mixed')
         splitter.analyze()
 
         assert "block" in splitter.data

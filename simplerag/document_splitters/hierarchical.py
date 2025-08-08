@@ -218,13 +218,15 @@ class DataTreeSplitter(TreeSplitter):
     Uses an array of data obtained with OCR to identify titles and centered texts.
     """
 
-    def __init__(self, data: pd.DataFrame, document_name: str = ''):
+    def __init__(self, data: pd.DataFrame, document_name: str = '', loader: str = 'any'):
         super().__init__(document_name)
 
         self.data = data.copy().dropna()
+        self.loader = loader
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
         self.detector = TitleDetector()
+        self.block_tolerance_rate = 1.6 if self.loader == 'mixed' else 1.1
 
     def analyze(self):
         """Analyze the data to generate the tree."""
@@ -247,7 +249,8 @@ class DataTreeSplitter(TreeSplitter):
                         bottom = line_words['bottom'].mode()[0]
                         line_height = bottom - top
 
-                        if abs(top - prev_y) > min(line_height, prev_line_height) * 1.6:
+                        if (abs(top - prev_y) >
+                            min(line_height, prev_line_height) * self.block_tolerance_rate):
                             block += 1
 
                         self.data.loc[lines.groups[n_line], 'block'] = block
