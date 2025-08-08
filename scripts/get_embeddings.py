@@ -210,6 +210,12 @@ class GetEmbeddingsCLI(CLI):
         else:
             embeddings = None
 
+        info = {
+            'sentences': sentences,
+            'metadatas': metadatas,
+            'embeddings': embeddings,
+        }
+
         if self.print_to_console:
             print('sentences,metadatas,embeddings')
             for sent, meta, emb in zip(sentences, metadatas, embeddings):
@@ -220,7 +226,7 @@ class GetEmbeddingsCLI(CLI):
             else:
                 name = self._args.collection
 
-            self.storage.save_info(name, sentences, metadatas, embeddings, id_prefix=f'{output}_')
+            self.storage.save_info(name, info, id_prefix=f'{output}_')
             self._logger.info("Embeddings saved to '%s'", name)
 
     def __action_structure(self, splitter:TreeSplitter, output:str):

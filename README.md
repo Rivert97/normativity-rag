@@ -271,5 +271,8 @@ to load PDF file and combine plain text and OCR information to get the embedding
 
     # Store embeddings
     storage = ChromaDBStorage('all-MiniLM-L6-v2', './db')
-    storage.save_info("CollectionName", sentences, metadatas)
+    storage.save_info("CollectionName", {
+        'sentences': sentences,
+        'metadatas': metadatas
+    })
 

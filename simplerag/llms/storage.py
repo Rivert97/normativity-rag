@@ -12,8 +12,7 @@ class Storage(ABC):
     """Interface that defines methods that should be implemented by a storage."""
 
     @abstractmethod
-    def save_info(self, name:str, sentences:list[str], metadatas:list[str],
-                  embeddings:list[str]=None, id_prefix: str = ''):
+    def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):
         """Save information into the corresponding storage."""
 
     @abstractmethod
@@ -27,8 +26,7 @@ class ChromaDBStorage(Storage):
         self.client = chromadb.PersistentClient(path=db_path)
         self.em_func = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model)
 
-    def save_info(self, name:str, sentences:list[str], metadatas:list[str],
-                  embeddings:list[str]=None, id_prefix: str = ''):
+    def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):
         """Save the provided data into a collection inside a chromadb database."""
         try:
             collection = self.client.get_collection(name, embedding_function=self.em_func)
@@ -36,9 +34,9 @@ class ChromaDBStorage(Storage):
             collection = self.client.create_collection(name, embedding_function=self.em_func)
 
         collection.add(
-            documents=sentences,
-            metadatas=metadatas,
-            ids = [f'{id_prefix}{i+1}' for i in range(len(sentences))]
+            documents=info.get('sentences'),
+            metadatas=info.get('metadatas'),
+            ids = [f'{id_prefix}{i+1}' for i in range(len(info.get('sentences')))]
         )
 
     def query_sentence(self, collection, sentence, n_results) -> list[Document]:
@@ -120,17 +118,16 @@ class ChromaDBStorage(Storage):
 class CSVStorage(Storage):
     """Class to store embeddings in a CSV file."""
 
-    def save_info(self, name:str, sentences:list[str], metadatas:list[str],
-                  embeddings:list[str]=None, id_prefix: str = ''):
+    def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):
         """Save the provided data into a CSV file."""
         df_dict = {
-            'sentences': sentences,
-            'metadatas': metadatas,
+            'sentences': info.get('sentences'),
+            'metadatas': info.get('metadatas'),
         }
-        for dim in range(len(embeddings[0])):
+        for dim in range(len(info.get('embeddings')[0])):
             col_name = f'emb{dim}'
             df_dict[col_name] = []
-            for e in embeddings:
+            for e in info.get('embeddings'):
                 df_dict[col_name].append(e[dim])
 
         df = pd.DataFrame(df_dict)
