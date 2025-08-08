@@ -228,7 +228,7 @@ class ExtractorCLI(CLI):
 
         self._logger.info('Storing file info into Chromadb')
         storage = ChromaDBStorage(params.embedder, settings.database_dir)
-        storage.save_info(collection, sentences, metadatas)
+        storage.save_info(collection, sentences, metadatas, id_prefix=f'{filename}_')
 
         self._logger.info('File %s processed', filename)
 

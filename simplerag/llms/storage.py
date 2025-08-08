@@ -13,7 +13,7 @@ class Storage(ABC):
 
     @abstractmethod
     def save_info(self, name:str, sentences:list[str], metadatas:list[str],
-                  embeddings:list[str]=None):
+                  embeddings:list[str]=None, id_prefix: str = ''):
         """Save information into the corresponding storage."""
 
     @abstractmethod
@@ -28,7 +28,7 @@ class ChromaDBStorage(Storage):
         self.em_func = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model)
 
     def save_info(self, name:str, sentences:list[str], metadatas:list[str],
-                  embeddings:list[str]=None):
+                  embeddings:list[str]=None, id_prefix: str = ''):
         """Save the provided data into a collection inside a chromadb database."""
         try:
             collection = self.client.get_collection(name, embedding_function=self.em_func)
@@ -38,7 +38,7 @@ class ChromaDBStorage(Storage):
         collection.add(
             documents=sentences,
             metadatas=metadatas,
-            ids = [str(i+1) for i in range(len(sentences))]
+            ids = [f'{id_prefix}{i+1}' for i in range(len(sentences))]
         )
 
     def query_sentence(self, collection, sentence, n_results) -> list[Document]:
@@ -121,7 +121,7 @@ class CSVStorage(Storage):
     """Class to store embeddings in a CSV file."""
 
     def save_info(self, name:str, sentences:list[str], metadatas:list[str],
-                  embeddings:list[str]=None):
+                  embeddings:list[str]=None, id_prefix: str = ''):
         """Save the provided data into a CSV file."""
         df_dict = {
             'sentences': sentences,
