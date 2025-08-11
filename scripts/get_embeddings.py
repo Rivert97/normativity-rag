@@ -222,7 +222,7 @@ class GetEmbeddingsCLI(CLI):
                 print(f'{sent},{meta},{emb}')
         else:
             if self._args.storage == 'csv':
-                name = os.path.splitext(output)[0] + '-embeddings.csv'
+                name = output
             else:
                 name = self._args.collection
 

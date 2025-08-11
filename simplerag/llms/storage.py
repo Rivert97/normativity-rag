@@ -132,7 +132,7 @@ class CSVStorage(Storage):
 
         df = pd.DataFrame(info.get('metadatas'))
         df['sentences'] = info.get('sentences')
-        df.to_csv(name, sep=',', index=False)
+        df.to_csv(f"{name}.csv", sep=',', index=False)
 
     def query_sentence(self, collection:str, sentence:str, n_results:int) -> list[dict]:
         """Find similar sentences. Not implemented."""
