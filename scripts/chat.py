@@ -48,7 +48,6 @@ class CLIChatController(CLI):
             query_config = RAGQueryConfig(
                 collection=self._args.collection,
                 num_docs=10,
-                max_distance=self._args.max_distance
             )
             response, context = rag.query(self._args.query, query_config)
 
@@ -87,13 +86,6 @@ class CLIChatController(CLI):
                                     Base model to use as a conversational agent.
                                     Defaults to {DEFAULTS['model']}
                                     ''')
-        self.parser.add_argument('--max-distance',
-                                 default=1.0,
-                                 type=float,
-                                 help='''
-                                    Maximum cosine distance for a document to be considered
-                                    relevant.
-                                    ''')
         self.parser.add_argument('--query',
                                  default='',
                                  type=str,
@@ -111,9 +103,6 @@ class CLIChatController(CLI):
 
         if args.database_dir != '' and not os.path.exists(args.database_dir):
             raise CLIException(f"Database directory '{args.database_dir}' not found")
-
-        if args.max_distance <= 0:
-            raise CLIException("Invalid maximum distance")
 
         self._args = args
 
@@ -134,7 +123,6 @@ class CLIChatController(CLI):
             query_config = RAGQueryConfig(
                 collection=self._args.collection,
                 num_docs=10,
-                max_distance=self._args.max_distance
             )
             response, context = rag.query(query, query_config)
 

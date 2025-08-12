@@ -1,6 +1,8 @@
 """Module to define classes to store embeddings in different ways."""
 
+import os
 from abc import ABC, abstractmethod
+
 import chromadb
 import chromadb.errors
 from chromadb.utils import embedding_functions
@@ -26,12 +28,20 @@ class ChromaDBStorage(Storage):
         self.client = chromadb.PersistentClient(path=db_path)
         self.em_func = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model)
 
+        self.hnsw_space = "ip" if 'dot' in model else 'cosine'
+
     def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):
         """Save the provided data into a collection inside a chromadb database."""
         try:
             collection = self.client.get_collection(name, embedding_function=self.em_func)
         except chromadb.errors.NotFoundError:
-            collection = self.client.create_collection(name, embedding_function=self.em_func)
+            collection = self.client.create_collection(name,
+                                                       embedding_function=self.em_func,
+                                                       configuration={
+                                                           "hnsw": {
+                                                               "space": self.hnsw_space,
+                                                           }
+                                                       })
 
         collection.add(
             documents=info.get('sentences'),
@@ -116,23 +126,21 @@ class ChromaDBStorage(Storage):
         return documents
 
 class CSVStorage(Storage):
-    """Class to store embeddings in a CSV file."""
+    """Class to store embeddings and in a CSV file."""
 
     def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):
-        """Save the provided data into a CSV file."""
-        df_dict = {
-            'sentences': info.get('sentences'),
-            'metadatas': info.get('metadatas'),
-        }
-        for dim in range(len(info.get('embeddings')[0])):
-            col_name = f'emb{dim}'
-            df_dict[col_name] = []
-            for e in info.get('embeddings'):
-                df_dict[col_name].append(e[dim])
+        """
+        Save the provided data into a CSV file for the embeddings and another
+        file for everything else.
+        """
+        basepath, basename = os.path.split(name)
+        basename = os.path.splitext(basename)[0]
+        df = pd.DataFrame(info.get('embeddings'))
+        df.to_csv(os.path.join(basepath, f"{basename}_embeddings.csv"), sep=',', index=False)
 
-        df = pd.DataFrame(df_dict)
-
-        df.to_csv(name, sep=',', index=False)
+        df = pd.DataFrame(info.get('metadatas'))
+        df['sentences'] = info.get('sentences')
+        df.to_csv(f"{name}.csv", sep=',', index=False)
 
     def query_sentence(self, collection:str, sentence:str, n_results:int) -> list[dict]:
         """Find similar sentences. Not implemented."""

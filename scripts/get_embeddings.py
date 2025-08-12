@@ -31,7 +31,6 @@ class GetEmbeddingsCLI(CLI):
 
         self.print_to_console = True
         self.storage = None
-        self.embedder = None
         self._args = None
         self.parse_params = None
 
@@ -202,11 +201,11 @@ class GetEmbeddingsCLI(CLI):
 
         if self._args.storage == 'csv':
             try:
-                self.embedder = STEmbedder(self._args.embedder)
+                embedder = STEmbedder(self._args.embedder)
             except OSError as e:
                 raise CLIException(f"Invalid embedder '{self._args.embedder}'") from e
 
-            embeddings = self.embedder.get_embeddings(sentences)
+            embeddings = embedder.get_embeddings(sentences)
         else:
             embeddings = None
 
@@ -222,7 +221,7 @@ class GetEmbeddingsCLI(CLI):
                 print(f'{sent},{meta},{emb}')
         else:
             if self._args.storage == 'csv':
-                name = os.path.splitext(output)[0] + '-embeddings.csv'
+                name = output
             else:
                 name = self._args.collection
 
