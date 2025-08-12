@@ -33,6 +33,8 @@ class EvalRetrievalCLI(EvalCLI):
         questions = dataset['train']
         results = storage.batch_query(self._args.collection, questions['question'],
                                      self._args.number_results)
+        if not results:
+            return
 
         precision, recall, f1 = self.__calculate_metrics_at_k(questions, results, storage,
                                                               self._args.number_results)
