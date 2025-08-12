@@ -17,7 +17,6 @@ class TestModels(unittest.TestCase):
         self.query_config = RAGQueryConfig(
             collection='',
             num_docs=5,
-            max_distance=1.0,
             add_to_history=False
         )
 

@@ -9,7 +9,6 @@ class RAGQueryConfig:
     """Configuration parameters for making a RAG Query."""
     collection: str = ''
     num_docs: int = 5
-    max_distance: float = 1.0
     add_to_history: bool = True
 
 class RAG:
@@ -22,26 +21,19 @@ class RAG:
     def query(self, query:str, query_config: RAGQueryConfig) -> str:
         """Retrieve an answer if a collection is specified it passes relevant
         documents as context."""
-        if query_config.collection == ''or self.storage is None:
+        if query_config.collection == '' or self.storage is None:
             return self.model.query(query, query_config.add_to_history), []
 
         documents = self.storage.query_sentence(query_config.collection,
                                                 query, query_config.num_docs)
 
-        relevant_docs = []
-        for doc in documents:
-            if doc.get_distance() > query_config.max_distance:
-                continue
-
-            relevant_docs.append(doc)
-
-        if len(relevant_docs) > 0:
-            response = self.model.query_with_documents(query, relevant_docs,
+        if len(documents) > 0:
+            response = self.model.query_with_documents(query, documents,
                                                        query_config.add_to_history)
         else:
             response = self.model.query(query, query_config.add_to_history)
 
-        return response, relevant_docs
+        return response, documents
 
     def batch_query(self, queries:list[str], query_config: RAGQueryConfig) -> list[dict]:
         """Query multiple sentences to the model with or without context."""
@@ -70,17 +62,10 @@ class RAG:
         documents = self.storage.query_sentence(query_config.collection, last_query,
                                                 query_config.num_docs)
 
-        relevant_docs = []
-        for doc in documents:
-            if doc.get_distance() > query_config.max_distance:
-                continue
-
-            relevant_docs.append(doc)
-
-        if len(relevant_docs) > 0:
+        if len(documents) > 0:
             response = self.model.query_with_conversation_and_documents(messages,
-                                                                        relevant_docs)
+                                                                        documents)
         else:
             response = self.model.query_with_conversation(messages)
 
-        return response, relevant_docs
+        return response, documents

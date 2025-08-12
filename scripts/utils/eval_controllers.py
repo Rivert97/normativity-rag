@@ -74,13 +74,6 @@ class EvalCLI(CLI):
                                 for all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
                                 ). Defaults to all-MiniLM-L6-v2''')
-        self.parser.add_argument('--max-distance',
-                                 default=1.0,
-                                 type=float,
-                                 help='''
-                                    Maximum cosine distance for a document to be considered
-                                    relevant.
-                                    ''')
         self.parser.add_argument('-n', '--number-results',
                                 default=5,
                                 type=int,
@@ -98,6 +91,3 @@ class EvalCLI(CLI):
 
         if not os.path.exists(self._args.database_dir):
             raise CLIException(f"Database folder '{self._args.database_dir}' not found")
-
-        if self._args.max_distance <= 0:
-            raise CLIException("Invalid maximum distance")

@@ -34,7 +34,6 @@ class EvalRAGCLI(EvalCLI):
         query_config = RAGQueryConfig(
             collection=self._args.collection,
             num_docs=self._args.number_results,
-            max_distance=self._args.max_distance,
             add_to_history=False
         )
         responses = rag.batch_query(train['question'], query_config)
