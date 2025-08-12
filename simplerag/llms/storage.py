@@ -28,12 +28,20 @@ class ChromaDBStorage(Storage):
         self.client = chromadb.PersistentClient(path=db_path)
         self.em_func = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model)
 
+        self.hnsw_space = "ip" if 'dot' in model else 'cosine'
+
     def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):
         """Save the provided data into a collection inside a chromadb database."""
         try:
             collection = self.client.get_collection(name, embedding_function=self.em_func)
         except chromadb.errors.NotFoundError:
-            collection = self.client.create_collection(name, embedding_function=self.em_func)
+            collection = self.client.create_collection(name,
+                                                       embedding_function=self.em_func,
+                                                       configuration={
+                                                           "hnsw": {
+                                                               "space": self.hnsw_space,
+                                                           }
+                                                       })
 
         collection.add(
             documents=info.get('sentences'),
