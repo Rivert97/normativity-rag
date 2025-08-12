@@ -2,7 +2,9 @@
 
 from sentence_transformers import SentenceTransformer
 
-class STEmbedder():
+from simplerag.singleton import Singleton
+
+class STEmbedder(metaclass=Singleton):
     """Class to create embeddings using SentenceTransformers from HuggingFace."""
 
     def __init__(self, model:str = 'all-MiniLM-L6-v2'):
