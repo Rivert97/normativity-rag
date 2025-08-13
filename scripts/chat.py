@@ -14,6 +14,7 @@ DEFAULTS = {
     'embedder': 'all-MiniLM-L6-v2',
     'model': 'QWEN',
     'variant': '3-0.6B',
+    'num_docs': 5,
 }
 
 PROGRAM_NAME = 'RAG'
@@ -47,7 +48,7 @@ class CLIChatController(CLI):
         else:
             query_config = RAGQueryConfig(
                 collection=self._args.collection,
-                num_docs=10,
+                num_docs=self._args.num_docs,
             )
             response, context = rag.query(self._args.query, query_config)
 
@@ -86,6 +87,13 @@ class CLIChatController(CLI):
                                     Base model to use as a conversational agent.
                                     Defaults to {DEFAULTS['model']}
                                     ''')
+        self.parser.add_argument('-n', '--num-docs',
+                                 default=DEFAULTS['num_docs'],
+                                 type=int,
+                                 help=f'''
+                                    Number of context documents used to answer the question.
+                                    Defaults to {DEFAULTS['num_docs']}
+                                    ''')
         self.parser.add_argument('--query',
                                  default='',
                                  type=str,
@@ -103,6 +111,9 @@ class CLIChatController(CLI):
 
         if args.database_dir != '' and not os.path.exists(args.database_dir):
             raise CLIException(f"Database directory '{args.database_dir}' not found")
+
+        if args.num_docs < 0:
+            raise CLIException(f"Invalid number of context documents")
 
         self._args = args
 
@@ -122,7 +133,7 @@ class CLIChatController(CLI):
 
             query_config = RAGQueryConfig(
                 collection=self._args.collection,
-                num_docs=10,
+                num_docs=self._args.num_docs,
             )
             response, context = rag.query(query, query_config)
 
