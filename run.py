@@ -17,6 +17,10 @@ options:
 import sys
 import importlib
 
+import dotenv
+
+dotenv.load_dotenv()
+
 def main():
     """Run the script."""
     if len(sys.argv) < 2:

@@ -10,6 +10,14 @@ import pandas as pd
 
 from .data import Document
 
+class CustomSentenceTransformerEmbeddingFunction(
+        embedding_functions.SentenceTransformerEmbeddingFunction
+    ):
+    """Custom class to load SentenceTransformer model with special params."""
+
+    def __call__(self, sentences):
+        return self._model.encode(sentences, batch_size=1, convert_to_numpy=True).tolist()
+
 class Storage(ABC):
     """Interface that defines methods that should be implemented by a storage."""
 
@@ -24,9 +32,13 @@ class Storage(ABC):
 class ChromaDBStorage(Storage):
     """Class to store data in a chromadb database."""
 
-    def __init__(self, model:str='all-MiniLM-L6-v2', db_path:str='./db'):
+    def __init__(self, model:str='all-MiniLM-L6-v2', db_path:str='./db', device:str = 'cuda'):
         self.client = chromadb.PersistentClient(path=db_path)
-        self.em_func = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model)
+        self.em_func = CustomSentenceTransformerEmbeddingFunction(
+            model_name=model,
+            device=device,
+            model_kwargs={'device_map': 'auto'},
+        )
 
         self.hnsw_space = "ip" if 'dot' in model else 'cosine'
 

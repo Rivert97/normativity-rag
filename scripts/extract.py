@@ -20,11 +20,11 @@ VERSION = '1.00.00'
 DEFAULTS = {
     'cache_dir': './.cache',
     'keep_cache': False,
-    'loader': 'mixed',
-    'extraction_type': 'text',
+    'loader': 'pdfplumber',
+    'extraction_type': 'data',
     'database_dir': './db',
-    'embedder': 'all-MiniLM-L6-v2',
-    'inner_splitter': 'paragraph',
+    'embedder': 'Qwen/Qwen3-Embedding-0.6B',
+    'inner_splitter': 'section',
     'parse_params_file': 'simplerag/settings/params-default.yml',
 }
 LOADERS = {

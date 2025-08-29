@@ -4,15 +4,12 @@ from abc import abstractmethod
 import sys
 from enum import Enum
 
-import dotenv
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
 from transformers import BitsAndBytesConfig, Gemma3ForConditionalGeneration, Gemma3ForCausalLM
 import torch
 
 from .data import Document
-
-dotenv.load_dotenv()
 
 # It's needed to run in the RTX4000
 torch.backends.cuda.enable_mem_efficient_sdp(False)
@@ -152,7 +149,7 @@ class Model:
         docs_str = ''
         for doc in documents:
             docs_str += f"{doc.get_reference()}:\n\n{doc.get_metadata()['title']}\n\n"\
-                        f"{doc.get_content()}\n\n-----------------------------\n\n"
+                        f"{doc.get_content()}\n\n"
 
         return docs_str
 
@@ -233,7 +230,7 @@ class Llama3(Model):
         response = self.__get_response_from_model(messages)
 
         if add_to_history:
-            self.messages += messages + self.response_to_message(response)
+            self.messages += self.str_to_message(query) + self.response_to_message(response)
 
         return response
 
@@ -329,7 +326,7 @@ class Gemma3(Model):
             response = self.__process_text(messages)
 
         if add_to_history:
-            self.messages += messages + self.response_to_message(response)
+            self.messages += self.str_to_message(query) + self.response_to_message(response)
 
         return response
 
@@ -439,7 +436,7 @@ class Qwen3(Model):
         response = self.__get_response_from_model(messages)
 
         if add_to_history:
-            self.messages += messages + self.response_to_message(response)
+            self.messages += self.str_to_message(query) + self.response_to_message(response)
 
         return response
 
@@ -530,7 +527,7 @@ class Mistral(Model):
         response = self.__get_response_from_model(messages)
 
         if add_to_history:
-            self.messages += messages + self.response_to_message(response)
+            self.messages += self.str_to_message(query) + self.response_to_message(response)
 
         return response
 

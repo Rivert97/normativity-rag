@@ -11,10 +11,11 @@ from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
 
 DEFAULTS = {
-    'embedder': 'all-MiniLM-L6-v2',
+    'embedder': 'Qwen/Qwen3-Embedding-0.6B',
     'model': 'QWEN',
     'variant': '3-0.6B',
     'num_docs': 5,
+    'db': './db',
 }
 
 PROGRAM_NAME = 'RAG'
@@ -40,7 +41,8 @@ class CLIChatController(CLI):
             self._logger.info("Querying without RAG")
             rag = RAG(model=model)
         else:
-            storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir)
+            storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir,
+                                      device='cpu')
             rag = RAG(model=model, storage=storage)
 
         if self._args.query == '':
@@ -52,7 +54,7 @@ class CLIChatController(CLI):
             )
             response, context = rag.query(self._args.query, query_config)
 
-            self.__show_response(response, context, self._args.context)
+            self.__show_response(response, context, self._args.show_context)
 
     def process_args(self) -> argparse.Namespace:
         super().process_args()
@@ -61,7 +63,7 @@ class CLIChatController(CLI):
                                  default='',
                                  type=str,
                                  help='Name of the collection to use. Must exist in the database')
-        self.parser.add_argument('--context',
+        self.parser.add_argument('--show-context',
                                  default=False,
                                  action='store_true',
                                  help='''
@@ -69,9 +71,12 @@ class CLIChatController(CLI):
                                     the question.
                                     ''')
         self.parser.add_argument('-d', '--database-dir',
-                                default='',
-                                type=str,
-                                help='Directory where the database is stored')
+                                 default=DEFAULTS['db'],
+                                 type=str,
+                                 help=f'''
+                                    Directory where the database is stored.
+                                    Defaults to {DEFAULTS['db']}
+                                    ''')
         self.parser.add_argument('-e', '--embedder',
                                  default=DEFAULTS['embedder'],
                                  type=str,
@@ -113,7 +118,7 @@ class CLIChatController(CLI):
             raise CLIException(f"Database directory '{args.database_dir}' not found")
 
         if args.num_docs < 0:
-            raise CLIException(f"Invalid number of context documents")
+            raise CLIException("Invalid number of context documents")
 
         self._args = args
 
@@ -137,7 +142,7 @@ class CLIChatController(CLI):
             )
             response, context = rag.query(query, query_config)
 
-            self.__show_response(response, context, self._args.context)
+            self.__show_response(response, context, self._args.show_context)
 
     def __show_response(self, response:str, context:list[Document], show_context:bool):
         if show_context:

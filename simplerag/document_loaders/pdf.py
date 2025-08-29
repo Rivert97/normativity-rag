@@ -641,7 +641,7 @@ class PDFPlumberLoader():
         return page_text
 
     def get_document_data(self):
-        """Return the relevant OCR data of the hole document."""
+        """Return the relevant data of the hole document."""
         document_data = PdfDocumentData()
         for page in self.parser.get_pages():
             document_data.add_page(page.get_data())
