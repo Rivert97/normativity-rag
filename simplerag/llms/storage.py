@@ -7,22 +7,13 @@ import chromadb
 import chromadb.errors
 from chromadb.utils import embedding_functions
 import pandas as pd
-from sentence_transformers import SentenceTransformer
 
 from .data import Document
 
 class CustomSentenceTransformerEmbeddingFunction(
         embedding_functions.SentenceTransformerEmbeddingFunction
     ):
-    def __init__(self, model_name: str, device: str|None = None):
-        if device is None:
-            model_kwargs = {
-                'device_map': 'auto'
-            }
-        else:
-            model_kwargs = None
-
-        self._model = SentenceTransformer(model_name, device=device, model_kwargs=model_kwargs)
+    """Custom class to load SentenceTransformer model with special params."""
 
     def __call__(self, sentences):
         return self._model.encode(sentences, batch_size=1, convert_to_numpy=True).tolist()
@@ -41,9 +32,13 @@ class Storage(ABC):
 class ChromaDBStorage(Storage):
     """Class to store data in a chromadb database."""
 
-    def __init__(self, model:str='all-MiniLM-L6-v2', db_path:str='./db', device:str|None = None):
+    def __init__(self, model:str='all-MiniLM-L6-v2', db_path:str='./db', device:str = 'cuda'):
         self.client = chromadb.PersistentClient(path=db_path)
-        self.em_func = CustomSentenceTransformerEmbeddingFunction(model, device)
+        self.em_func = CustomSentenceTransformerEmbeddingFunction(
+            model_name=model,
+            device=device,
+            model_kwargs={'device_map': 'auto'},
+        )
 
         self.hnsw_space = "ip" if 'dot' in model else 'cosine'
 
