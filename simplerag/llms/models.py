@@ -4,15 +4,12 @@ from abc import abstractmethod
 import sys
 from enum import Enum
 
-import dotenv
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
 from transformers import BitsAndBytesConfig, Gemma3ForConditionalGeneration, Gemma3ForCausalLM
 import torch
 
 from .data import Document
-
-dotenv.load_dotenv()
 
 # It's needed to run in the RTX4000
 torch.backends.cuda.enable_mem_efficient_sdp(False)

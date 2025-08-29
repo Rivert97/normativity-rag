@@ -113,7 +113,7 @@ class CLIChatController(CLI):
             raise CLIException(f"Database directory '{args.database_dir}' not found")
 
         if args.num_docs < 0:
-            raise CLIException(f"Invalid number of context documents")
+            raise CLIException("Invalid number of context documents")
 
         self._args = args
 

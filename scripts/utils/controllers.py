@@ -4,13 +4,10 @@ import argparse
 import os
 import sys
 
-import dotenv
 import yaml
 
 from .logger import AppLogger
 from .exceptions import CLIException
-
-dotenv.load_dotenv()
 
 class CLI:
     """Base class for CLI scripts that handle logging."""
