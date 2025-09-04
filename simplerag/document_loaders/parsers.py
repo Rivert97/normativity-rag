@@ -600,7 +600,8 @@ class OcrPdfParser():
 
     def get_page(self, page_num: int) -> OcrPage:
         """Return a spific page of the document."""
-        basepath = f'{self.cache_subfolder}/0001-{page_num+1:02d}'
+        num_page_digits = len(str(len(self.reader.pages)))
+        basepath = f'{self.cache_subfolder}/0001-{page_num+1:0{num_page_digits}d}'
         return OcrPage(Image.open(f'{basepath}.jpg'), f'{basepath}.csv')
 
     def clear_cache(self):
@@ -728,7 +729,10 @@ class PdfPlumberPage():
 
     def __get_lines_from_image(self):
         if not os.path.exists(self.cache_file):
-            return None
+            return {
+                'horizontal': np.array([], dtype=int),
+                'vertical': np.array([], dtype=int),
+            }
 
         image = cv2.imread(self.cache_file, cv2.IMREAD_GRAYSCALE)
         words_data = self.data.copy()
@@ -808,9 +812,10 @@ class PdfPlumberParser():
         :return: A string of all the text from the document
         :rtype: str
         """
+        num_page_digits = len(str(len(self.reader.pages)))
         text = ''
         for i, page in enumerate(self.reader.pages, start=1):
-            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
+            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg')
             text += page.get_raw_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -826,9 +831,10 @@ class PdfPlumberParser():
         :return: A string of all the text from the document
         :rtype: str
         """
+        num_page_digits = len(str(len(self.reader.pages)))
         text = ''
         for i, page in enumerate(self.reader.pages, start=1):
-            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
+            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg')
             text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -843,13 +849,15 @@ class PdfPlumberParser():
         :return: An Iterator that yields the text of each page at a time
         :rtype: Iterator[PdfPlumberPage]
         """
+        num_page_digits = len(str(len(self.reader.pages)))
         for i, page in enumerate(self.reader.pages, start=1):
-            yield PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
+            yield PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg')
 
     def get_page(self, page_num: int):
         """Return a specific page of the document."""
+        num_page_digits = len(str(len(self.reader.pages)))
         return PdfPlumberPage(self.reader.pages[page_num],
-                              f'{self.cache_subfolder}/0001-{page_num+1:02d}.jpg')
+                              f'{self.cache_subfolder}/0001-{page_num+1:0{num_page_digits}d}.jpg')
 
     def clear_cache(self):
         """Delete the cache sub-directory for this file. If main directory is empty then
