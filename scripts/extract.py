@@ -69,7 +69,11 @@ class ExtractorCLI(CLI):
                 self._args.cache_dir,
                 self._args.database_dir,
                 self._args.keep_cache,
-                {},
+                {
+                    '*': {
+                        'parse_params_file': self._args.parse_params_file,
+                    }
+                },
             )
             collection_params = CollectionParams(
                 self._args.embedder,
@@ -151,7 +155,14 @@ class ExtractorCLI(CLI):
                             default=DEFAULTS['loader'],
                             type=str,
                             choices=LOADERS.keys(),
-                            help='Type of loader to use. Defaults to mixed')
+                            help=f'Type of loader to use. Defaults to {DEFAULTS['loader']}')
+        self.parser.add_argument('--parse-params-file',
+                            default='simplerag/settings/params-default.yml',
+                            type=str,
+                            help='''
+                                YAML file with custom parse parameters to be used
+                                during extraction
+                                ''')
         self.parser.add_argument('--raw',
                                  default=False,
                                  action='store_true',
@@ -194,6 +205,9 @@ class ExtractorCLI(CLI):
 
         if args.collection == '':
             raise CLIException("Please specify a collection name")
+
+        if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
+            raise CLIException("Parse parameters file does not exist")
 
         self._args = args
 
@@ -359,7 +373,8 @@ class ExtractorCLI(CLI):
             raise CLIException(f"Invalid loader '{params['loader']}'")
 
     def __get_file_settings(self, filename:str, settings:ExecSettings) -> dict[str,str]:
-        settings = settings.file_settings.get(os.path.split(filename)[-1], {})
+        default_settings = settings.file_settings.get('*', {})
+        settings = settings.file_settings.get(os.path.split(filename)[-1], default_settings)
 
         return settings
 
