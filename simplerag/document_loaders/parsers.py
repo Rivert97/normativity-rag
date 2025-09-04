@@ -165,6 +165,7 @@ class DataReconstructor():
         self.__assign_column_number()
         self.__assign_column_position()
         self.__assign_group_number()
+        self.__merge_columns()
 
         return self.data
 
@@ -378,6 +379,17 @@ class DataReconstructor():
             for l_col in line_cols:
                 if l_col not in group_cols:
                     group_cols[l_col] = line_cols[l_col]
+
+    def __merge_columns(self):
+        tolerance = self.writable_width * 0.01
+        for group, values in self.data.groupby('group'):
+            columns_edges = values.groupby('col_position').agg({'left': 'min', 'right': 'max'})
+            if len(columns_edges) > 1:
+                pivot = columns_edges.iloc[0]
+                for col_position in columns_edges.index[1:]:
+                    if ((pivot['left'] - tolerance) < columns_edges.loc[col_position, 'left'] and
+                        (pivot['right'] + tolerance) > columns_edges.loc[col_position]['right']):
+                        self.data.loc[self.data['group'] == group, 'col_position'] = pivot.name
 
 class OcrPage():
     """This class stores the information contained in a single page
