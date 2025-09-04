@@ -381,14 +381,12 @@ class DataReconstructor():
                     group_cols[l_col] = line_cols[l_col]
 
     def __merge_columns(self):
-        tolerance = self.writable_width * 0.01
         for group, values in self.data.groupby('group'):
             columns_edges = values.groupby('col_position').agg({'left': 'min', 'right': 'max'})
             if len(columns_edges) > 1:
                 pivot = columns_edges.iloc[0]
                 for col_position in columns_edges.index[1:]:
-                    if ((pivot['left'] - tolerance) < columns_edges.loc[col_position, 'left'] and
-                        (pivot['right'] + tolerance) > columns_edges.loc[col_position]['right']):
+                    if pivot['right'] > columns_edges.loc[col_position, 'left']:
                         self.data.loc[self.data['group'] == group, 'col_position'] = pivot.name
 
 class OcrPage():
