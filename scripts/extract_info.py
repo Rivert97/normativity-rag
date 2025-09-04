@@ -60,10 +60,10 @@ class ExtractInfoCLI(CLI):
                                  help='''Keep Tesseract cache after processing. Usefull when the
                                      same file is going to be processed multiple times''')
         self.parser.add_argument('-l', '--loader',
-                                 default='mixed',
+                                 default='pdfplumber',
                                  type=str,
                                  choices=['mixed', 'text', 'ocr', 'pdfplumber'],
-                                 help='Type of loader to use. Defaults to mixed')
+                                 help='Type of loader to use. Defaults to pdfplumber')
         self.parser.add_argument('-o', '--output',
                                  default='',
                                  type=str,
