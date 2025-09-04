@@ -42,17 +42,18 @@ class PyPDFMixedLoader():
     :type keep_cache: bool
     """
 
-    def __init__(self, cache_dir: str = './.cache', keep_cache: bool=False):
+    def __init__(self, cache_dir: str = './.cache', keep_cache: bool=False, visual_aid: bool=False):
         """Mixed loader that combines text and OCR information to produce text or location data."""
         self.cache_dir = cache_dir
         self.keep_cache = keep_cache
+        self.visual_aid = visual_aid
 
         self.document_data = PdfDocumentData()
 
     def load(self, pdf_path: str, parallel: bool = False):
         """Load a full PDF document."""
         text_parser = PypdfParser(pdf_path)
-        ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
+        ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache, self.visual_aid)
 
         if parallel:
             pypdf_pages = list(text_parser.get_pages())
@@ -67,7 +68,7 @@ class PyPDFMixedLoader():
     def load_page(self, pdf_path:str, page_num: int):
         """Load a single page of a PDF document."""
         text_parser = PypdfParser(pdf_path)
-        ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache)
+        ocr_parser = OcrPdfParser(pdf_path, self.cache_dir, self.keep_cache, self.visual_aid)
 
         pypdf_page = text_parser.get_page(page_num)
         ocr_page = ocr_parser.get_page(page_num)
@@ -579,9 +580,10 @@ class PyPDFLoader():
 
 class OCRLoader():
     """Class to load a PDF file using pytesseract to extract the text through OCR."""
-    def __init__(self, file_path:str, cache_dir: str='./.cache', keep_cache: bool = False):
+    def __init__(self, file_path:str, cache_dir: str='./.cache', keep_cache: bool = False,
+                 visual_aid: bool = False):
         """Open the document."""
-        self.parser = OcrPdfParser(file_path, cache_dir, keep_cache)
+        self.parser = OcrPdfParser(file_path, cache_dir, keep_cache, visual_aid)
 
     def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:
         """Return the full text of the PDF file."""
@@ -612,8 +614,8 @@ class OCRLoader():
 class PDFPlumberLoader():
     """Class to load a PDF file using pdfplumber with custom text reconstruction."""
     def __init__(self, file_path:str, raw:bool=False, cache_dir: str='./.cache',
-                 keep_cache: bool = False):
-        self.parser = PdfPlumberParser(file_path, cache_dir, keep_cache)
+                 keep_cache: bool = False, visual_aid: bool = False):
+        self.parser = PdfPlumberParser(file_path, cache_dir, keep_cache, visual_aid)
         self.raw = raw
 
     def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:

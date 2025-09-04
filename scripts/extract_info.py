@@ -100,6 +100,13 @@ class ExtractInfoCLI(CLI):
                                  help='''Uses the total number of cores - 2,
                                      for concurrent processing
                                  ''')
+        self.parser.add_argument('--visual-aid',
+                                 default=False,
+                                 action="store_true",
+                                 help='''
+                                     Enables image processing for additional detections,
+                                     such as line section separations. Slower.
+                                 ''')
 
         args = self.parser.parse_args()
 
@@ -158,7 +165,8 @@ class ExtractInfoCLI(CLI):
         self._logger.info("Using '%s' loader", self._args.loader)
 
         if self._args.loader == 'mixed':
-            loader = PyPDFMixedLoader(self._args.cache_dir, self._args.keep_cache)
+            loader = PyPDFMixedLoader(self._args.cache_dir, self._args.keep_cache,
+                                      self._args.visual_aid)
             if self._args.page is not None:
                 self._logger.info('Processing page %s', self._args.page)
 
@@ -168,10 +176,11 @@ class ExtractInfoCLI(CLI):
         elif self._args.loader == 'text':
             loader = PyPDFLoader(filename)
         elif self._args.loader == 'ocr':
-            loader = OCRLoader(filename, self._args.cache_dir, self._args.keep_cache)
+            loader = OCRLoader(filename, self._args.cache_dir, self._args.keep_cache,
+                               self._args.visual_aid)
         elif self._args.loader == 'pdfplumber':
             loader = PDFPlumberLoader(filename, self._args.raw, self._args.cache_dir,
-                                      self._args.keep_cache)
+                                      self._args.keep_cache, self._args.visual_aid)
         else:
             raise CLIException("Invalid type of loader")
 

@@ -52,6 +52,7 @@ class CollectionParams:
     inner_splitter: str
     loader: str
     raw: bool = False
+    visual_aid: bool
 
 class ExtractorCLI(CLI):
     """This class controls the execution of the program when using
@@ -81,6 +82,7 @@ class ExtractorCLI(CLI):
                 self._args.inner_splitter,
                 self._args.loader,
                 self._args.raw,
+                self._args.visual_aid,
             )
 
             if self._args.file != '':
@@ -174,6 +176,13 @@ class ExtractorCLI(CLI):
                             default='',
                             type=str,
                             help='File with all the options to build a database')
+        self.parser.add_argument('--visual-aid',
+                            default=False,
+                            action="store_true",
+                            help='''
+                                Enables image processing for additional detections,
+                                such as line section separations. Slower.
+                            ''')
 
         args = self.parser.parse_args()
 
@@ -285,15 +294,17 @@ class ExtractorCLI(CLI):
         self._logger.info("Using '%s' loader", params.loader)
 
         if params.loader == 'mixed':
-            pdf_loader = PyPDFMixedLoader(settings.cache_dir, settings.keep_cache)
+            pdf_loader = PyPDFMixedLoader(settings.cache_dir, settings.keep_cache,
+                                          params.visual_aid)
             pdf_loader.load(filename)
         elif params.loader == 'text':
             pdf_loader = PyPDFLoader(filename)
         elif params.loader == 'ocr':
-            pdf_loader = OCRLoader(filename, settings.cache_dir, settings.keep_cache)
+            pdf_loader = OCRLoader(filename, settings.cache_dir, settings.keep_cache,
+                                   params.visual_aid)
         elif params.loader == 'pdfplumber':
             pdf_loader = PDFPlumberLoader(filename, params.raw, settings.cache_dir,
-                                          settings.keep_cache)
+                                          settings.keep_cache, params.visual_aid)
         else:
             raise CLIException("Invalid type of loader")
 
