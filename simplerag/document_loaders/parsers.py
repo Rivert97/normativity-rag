@@ -63,10 +63,7 @@ class PypdfPage():
             )
         else:
             # PDF Y-axis is inverted
-            try:
-                left, top, right, bottom = self.page[pdf_box_key]
-            except KeyError as e:
-                import pdb; pdb.set_trace()
+            left, top, right, bottom = self.page[pdf_box_key]
             self.visitor.set_boundaries(left=left, top=bottom, right=right, bottom=top)
         text = self.page.extract_text(visitor_text=self.visitor.visitor_text)
 
