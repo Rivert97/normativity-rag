@@ -68,6 +68,13 @@ class GetEmbeddingsCLI(CLI):
                                 tree: Show an image of the tree of titles of the file.
                                 Defaults to embeddings
                                 ''')
+        self.parser.add_argument('--absolute-center',
+                            default=False,
+                            action='store_true',
+                            help='''
+                                Set this flag when the center of the text is aligned
+                                with the page
+                            ''')
         self.parser.add_argument('-c', '--collection',
                             default='',
                             type=str,
@@ -271,13 +278,17 @@ class GetEmbeddingsCLI(CLI):
                     document_data.get_page_data(self._args.page, remove_headers=True,
                                                 boundaries=self.parse_params['pdf_margins']),
                     basename,
-                    self._args.loader)
+                    self._args.loader,
+                    self.parse_params.get('titles_regex', None),
+                    self._args.absolute_center)
         else:
             splitter = DataTreeSplitter(document_data.get_data(
                                             remove_headers=True,
                                             boundaries=self.parse_params['pdf_margins']),
                                         basename,
-                                        self._args.loader)
+                                        self._args.loader,
+                                        self.parse_params.get('titles_regex', None),
+                                        self._args.absolute_center)
 
         splitter.analyze()
 

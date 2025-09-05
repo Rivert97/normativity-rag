@@ -218,15 +218,17 @@ class DataTreeSplitter(TreeSplitter):
     Uses an array of data obtained with OCR to identify titles and centered texts.
     """
 
-    def __init__(self, data: pd.DataFrame, document_name: str = '', loader: str = 'any'):
+    def __init__(self, data: pd.DataFrame, document_name: str = '', loader: str = 'any',
+                 titles_regex: dict[str|int,str] = None, absolute_center: bool = False):
         super().__init__(document_name)
 
         self.data = data.copy().dropna()
         self.loader = loader
+        self.absolute_center = absolute_center
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
-        self.detector = TitleDetector()
-        self.block_tolerance_rate = 1.6 if self.loader == 'mixed' else 1.1
+        self.detector = TitleDetector(titles_regex)
+        self.block_tolerance_rate = 1.6 if self.loader == 'mixed' else 1.0
 
     def analyze(self):
         """Analyze the data to generate the tree."""
@@ -272,11 +274,15 @@ class DataTreeSplitter(TreeSplitter):
 
         sorted_lines = self.data.sort_values(['page', 'line', 'col_position', 'left'])
         for n_page, page_words in sorted_lines.groupby('page'):
-            page_center = self.__calculate_center(page_words, 'left', 'right')
-            if n_page == 0:
-                page_writable_width = self.writable_width
+            if self.absolute_center:
+                reference_x = (0.0, 1.0)
+                max_column_percentage = 0.95 - (1.0 - page_words['right'].max()) * 2.0
+            elif len(page_words.groupby('line')) < 10:
+                reference_x = (self.data['left'].min(), self.data['right'].max())
+                max_column_percentage = 0.95
             else:
-                page_writable_width = page_words['right'].max() - page_words['left'].min()
+                reference_x = (page_words['left'].min(), page_words['right'].max())
+                max_column_percentage = 0.95
 
             for _, block_words in page_words.groupby('block'):
                 state.block_words = block_words
@@ -285,8 +291,8 @@ class DataTreeSplitter(TreeSplitter):
                 line_height = block_words.groupby('line')[['bottom', 'top']].apply(
                     lambda g: g['bottom'].max() - g['top'].min()
                 ).min()
-                is_centered = self.__element_is_centered((left, right), page_center,
-                                                         page_writable_width, tolerance_rate=0.1)
+                is_centered = self.__element_is_centered((left, right), reference_x,
+                                                         0.1, max_column_percentage)
                 lines_are_larger = line_height > mean_line_height*1.15
 
                 if is_centered or lines_are_larger:
@@ -294,15 +300,12 @@ class DataTreeSplitter(TreeSplitter):
                 else:
                     self.__handle_non_title_block(state)
 
-    def __calculate_center(self, df:pd.DataFrame, left_col:float, right_col:float) -> float:
-        left = df[left_col].min()
-        right = df[right_col].max()
-        return left + (right - left) * 0.5
-
-    def __element_is_centered(self, x_limits:tuple[float,float], reference_center:float,
-                              reference_width:float, tolerance_rate:float=0.2) -> bool:
+    def __element_is_centered(self, x_limits:tuple[float,float], reference_x:tuple[float,float],
+                              tolerance_rate:float=0.2, max_column_percentage:float=0.95) -> bool:
         min_x = x_limits[0]
         max_x = x_limits[1]
+        reference_width = reference_x[1] - reference_x[0]
+        reference_center = reference_x[0] + reference_width * 0.5
         center_rate = (reference_center - min_x) / (max_x - reference_center)
         column_percentage = (max_x - min_x) / reference_width
         offset_left = min_x - (reference_center - reference_width * 0.5)
@@ -310,17 +313,20 @@ class DataTreeSplitter(TreeSplitter):
 
         return (min_x < reference_center < max_x and
                 abs(1.0 - center_rate) < tolerance_rate and
-                column_percentage < 0.95 and
+                column_percentage < max_column_percentage and
                 offset_left > 0.01 and
                 offset_right > 0.01)
 
     def __handle_title_block(self, state:TreeState):
         block_text = self.__get_dehypenated_text(state.block_words)
         title_level = self.detector.get_title_level(block_text)
-        parent = self.find_nearest_parent(state.current_nodes, title_level)
-        state.last_node = DocNode(block_text, parent=parent)
-        state.current_nodes[title_level] = state.last_node
-        self.clear_lower_children(state.current_nodes, title_level)
+        if title_level == 0:
+            self.__handle_non_title_block(state)
+        else:
+            parent = self.find_nearest_parent(state.current_nodes, title_level)
+            state.last_node = DocNode(block_text, parent=parent)
+            state.current_nodes[title_level] = state.last_node
+            self.clear_lower_children(state.current_nodes, title_level)
 
     def __handle_non_title_block(self, state:TreeState):
         subtitle, block_content = self.__find_block_subtitle(state.block_words)
@@ -355,8 +361,6 @@ class DataTreeSplitter(TreeSplitter):
         content_idx = []
         left = block_words['left'].min()
         right = block_words['right'].max()
-        width = right - left
-        center = left + width * 0.5
 
         has_reached_content = False
         for _, line_words in block_words.groupby('line'):
@@ -367,12 +371,18 @@ class DataTreeSplitter(TreeSplitter):
             line_left = line_words['left'].min()
             line_right = line_words['right'].max()
             is_centered = self.__element_is_centered((line_left, line_right),
-                                                     center,
-                                                     width,
+                                                     (left, right),
                                                      tolerance_rate=0.1)
             if is_centered:
                 subtitle_idx.extend(line_words.index)
                 continue
+            else:
+                is_right_aligned = self.__element_is_right_aligned((line_left, line_right),
+                                                                   (left, right),
+                                                                   max_percentage=0.9)
+                if is_right_aligned:
+                    subtitle_idx.extend(line_words.index)
+                    continue
 
             content_idx.extend(line_words.index)
             has_reached_content = True
@@ -388,6 +398,12 @@ class DataTreeSplitter(TreeSplitter):
 
         return joined_lines_text
 
+    def __element_is_right_aligned(self, x_limits:tuple[float,float],
+                                   ref_x_limits:tuple[float,float], max_percentage:float=0.6):
+        offset_right = ref_x_limits[1] - x_limits[1]
+        occupancy_percentage = (x_limits[1] - x_limits[0]) / (ref_x_limits[1] - ref_x_limits[0])
+        return offset_right < 0.001 and occupancy_percentage < max_percentage
+
 class TextTreeSplitter(TreeSplitter):
     """Class to split a document in sections to generate a tree structure.
 
@@ -399,7 +415,7 @@ class TextTreeSplitter(TreeSplitter):
 
         self.text = text
 
-        self.detector = TitleDetector('not_permissive_titles')
+        self.detector = TitleDetector()
 
     def analyze(self):
         """Analyze the raw text to generate the tree."""
