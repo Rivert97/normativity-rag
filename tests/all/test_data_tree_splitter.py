@@ -10,7 +10,7 @@ from simplerag.document_splitters.hierarchical import DataSplitterOptions
 class TestDataTreeSplitter(unittest.TestCase):
     """Class to test the hierarchical spliter based on data."""
 
-    def test_same_block_in_secuence_of_titles(self):
+    def test_same_block_in_sequence_of_titles(self):
         """
         Test that when multiple centered lines are together all have the same
         block.
@@ -49,7 +49,7 @@ class TestDataTreeSplitter(unittest.TestCase):
         assert "block" in splitter.data
         assert list(splitter.data[splitter.data['block'] == 0].index) == [0, 1, 2, 3]
 
-    def test_same_block_in_secuence_of_titles_with_lowercase(self):
+    def test_same_block_in_sequence_of_titles_with_lowercase(self):
         """
         Test that when multiple centered lines are together and the seccond
         is all lowercace (hence smaller line height), all have the same
@@ -83,13 +83,13 @@ class TestDataTreeSplitter(unittest.TestCase):
             "line": 1, "column": 0, "col_position": 0, "group": 0},
         ])
 
-        splitter = DataTreeSplitter(data, DataSplitterOptions(loader='mixed'))
+        splitter = DataTreeSplitter(data, options=DataSplitterOptions(loader='mixed'))
         splitter.analyze()
 
         assert "block" in splitter.data
         assert list(splitter.data[splitter.data['block'] == 0].index) == [0, 1, 2, 3]
 
-    def test_same_block_in_secuence_of_lines(self):
+    def test_same_block_in_sequence_of_lines(self):
         """
         Test that when multiple lines are together all have the same block.
         """
