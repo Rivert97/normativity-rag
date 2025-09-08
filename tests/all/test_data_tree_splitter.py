@@ -5,6 +5,7 @@ import pandas as pd
 
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import DocNode
+from simplerag.document_splitters.hierarchical import DataSplitterOptions
 
 class TestDataTreeSplitter(unittest.TestCase):
     """Class to test the hierarchical spliter based on data."""
@@ -82,7 +83,7 @@ class TestDataTreeSplitter(unittest.TestCase):
             "line": 1, "column": 0, "col_position": 0, "group": 0},
         ])
 
-        splitter = DataTreeSplitter(data, loader='mixed')
+        splitter = DataTreeSplitter(data, DataSplitterOptions(loader='mixed'))
         splitter.analyze()
 
         assert "block" in splitter.data

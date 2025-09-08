@@ -125,6 +125,14 @@ class TreeState:
     last_node: DocNode|None = None
     block_words: pd.DataFrame|None = None
 
+@dataclass
+class DataSplitterOptions:
+    """Options for DataTreeSplitter class."""
+
+    loader: str = 'any'
+    titles_regex: dict[str|int,str] = None
+    absolute_center: bool = False
+
 class TreeSplitter():
     """Base class for splitters that genrate a tree of a document."""
 
@@ -218,16 +226,18 @@ class DataTreeSplitter(TreeSplitter):
     Uses an array of data obtained with OCR to identify titles and centered texts.
     """
 
-    def __init__(self, data: pd.DataFrame, document_name: str = '', loader: str = 'any',
-                 titles_regex: dict[str|int,str] = None, absolute_center: bool = False):
+    def __init__(self, data: pd.DataFrame, document_name: str = '',
+                 options:DataSplitterOptions=None):
         super().__init__(document_name)
+        if options is None:
+            options = DataSplitterOptions()
 
         self.data = data.copy().dropna()
-        self.loader = loader
-        self.absolute_center = absolute_center
+        self.loader = options.loader
+        self.absolute_center = options.absolute_center
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
-        self.detector = TitleDetector(titles_regex)
+        self.detector = TitleDetector(options.titles_regex)
         self.block_tolerance_rate = 1.6 if self.loader == 'mixed' else 1.0
 
     def analyze(self):
@@ -273,7 +283,7 @@ class DataTreeSplitter(TreeSplitter):
         ).mean()
 
         sorted_lines = self.data.sort_values(['page', 'line', 'col_position', 'left'])
-        for n_page, page_words in sorted_lines.groupby('page'):
+        for _, page_words in sorted_lines.groupby('page'):
             if self.absolute_center:
                 reference_x = (0.0, 1.0)
                 max_column_percentage = 0.95 - (1.0 - page_words['right'].max()) * 2.0
@@ -376,13 +386,13 @@ class DataTreeSplitter(TreeSplitter):
             if is_centered:
                 subtitle_idx.extend(line_words.index)
                 continue
-            else:
-                is_right_aligned = self.__element_is_right_aligned((line_left, line_right),
-                                                                   (left, right),
-                                                                   max_percentage=0.9)
-                if is_right_aligned:
-                    subtitle_idx.extend(line_words.index)
-                    continue
+
+            is_right_aligned = self.__element_is_right_aligned((line_left, line_right),
+                                                                (left, right),
+                                                                max_percentage=0.9)
+            if is_right_aligned:
+                subtitle_idx.extend(line_words.index)
+                continue
 
             content_idx.extend(line_words.index)
             has_reached_content = True

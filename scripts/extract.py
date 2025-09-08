@@ -7,9 +7,11 @@ import glob
 
 from simplerag.document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
+from simplerag.document_loaders.pdf import LoaderOptions
 from simplerag.document_splitters.hierarchical import TreeSplitter
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
+from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.llms.storage import ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
@@ -175,10 +177,13 @@ class ExtractorCLI(CLI):
         self.parser.add_argument('--settings-file',
                             default='',
                             type=str,
-                            help='File with all the options to build a database')
+                            help='''
+                                File with all the options to build a database. Use this option to
+                                store all options to process files when it will be repeated.
+                                ''')
         self.parser.add_argument('--visual-aid',
                             default=False,
-                            action="store_true",
+                            action='store_true',
                             help='''
                                 Enables image processing for additional detections,
                                 such as line section separations. Slower.
@@ -241,7 +246,8 @@ class ExtractorCLI(CLI):
             splitter = DataTreeSplitter(
                 data.get_data(remove_headers=True, boundaries=file_parse_params.get('pdf_margins')),
                 basename,
-                params.loader)
+                DataSplitterOptions(loader=params.loader)
+            )
         else:
             raise CLIException(f"Invalid extraction type '{params.extraction_type}'")
 
@@ -294,17 +300,26 @@ class ExtractorCLI(CLI):
         self._logger.info("Using '%s' loader", params.loader)
 
         if params.loader == 'mixed':
-            pdf_loader = PyPDFMixedLoader(settings.cache_dir, settings.keep_cache,
-                                          params.visual_aid)
+            pdf_loader = PyPDFMixedLoader(LoaderOptions(
+                settings.cache_dir,
+                settings.keep_cache,
+                params.visual_aid)
+            )
             pdf_loader.load(filename)
         elif params.loader == 'text':
             pdf_loader = PyPDFLoader(filename)
         elif params.loader == 'ocr':
-            pdf_loader = OCRLoader(filename, settings.cache_dir, settings.keep_cache,
-                                   params.visual_aid)
+            pdf_loader = OCRLoader(filename, LoaderOptions(
+                settings.cache_dir,
+                settings.keep_cache,
+                params.visual_aid)
+            )
         elif params.loader == 'pdfplumber':
-            pdf_loader = PDFPlumberLoader(filename, params.raw, settings.cache_dir,
-                                          settings.keep_cache, params.visual_aid)
+            pdf_loader = PDFPlumberLoader(filename, params.raw, LoaderOptions(
+                settings.cache_dir,
+                settings.keep_cache,
+                params.visual_aid)
+            )
         else:
             raise CLIException("Invalid type of loader")
 

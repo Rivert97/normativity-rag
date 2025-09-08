@@ -11,6 +11,7 @@ from simplerag.document_loaders.representations import PdfDocumentData
 from simplerag.document_splitters.hierarchical import TreeSplitter
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
+from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.llms.embedders import STEmbedder
 from simplerag.llms.storage import CSVStorage, ChromaDBStorage
 from .utils.controllers import CLI, run_cli
@@ -278,17 +279,23 @@ class GetEmbeddingsCLI(CLI):
                     document_data.get_page_data(self._args.page, remove_headers=True,
                                                 boundaries=self.parse_params['pdf_margins']),
                     basename,
-                    self._args.loader,
-                    self.parse_params.get('titles_regex', None),
-                    self._args.absolute_center)
+                    DataSplitterOptions(
+                        self._args.loader,
+                        self.parse_params.get('titles_regex', None),
+                        self._args.absolute_center
+                    )
+            )
         else:
             splitter = DataTreeSplitter(document_data.get_data(
                                             remove_headers=True,
                                             boundaries=self.parse_params['pdf_margins']),
                                         basename,
-                                        self._args.loader,
-                                        self.parse_params.get('titles_regex', None),
-                                        self._args.absolute_center)
+                                        DataSplitterOptions(
+                                            self._args.loader,
+                                            self.parse_params.get('titles_regex', None),
+                                            self._args.absolute_center
+                                        )
+            )
 
         splitter.analyze()
 

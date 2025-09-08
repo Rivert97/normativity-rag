@@ -12,6 +12,7 @@ from simplerag.document_loaders.pdf import PyPDFMixedLoader
 from simplerag.document_loaders.pdf import PyPDFLoader
 from simplerag.document_loaders.pdf import OCRLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
+from simplerag.document_loaders.pdf import LoaderOptions
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
 
@@ -93,7 +94,7 @@ class ExtractInfoCLI(CLI):
                                  choices=['txt', 'csv'],
                                  nargs='+',
                                  type=str,
-                                 help='Type(s) of output(s). Defaults to txt')
+                                 help='Type(s) of output(s). Defaults to txt.')
         self.parser.add_argument('-P', '--Parallel',
                                  default=False,
                                  action="store_true",
@@ -165,8 +166,11 @@ class ExtractInfoCLI(CLI):
         self._logger.info("Using '%s' loader", self._args.loader)
 
         if self._args.loader == 'mixed':
-            loader = PyPDFMixedLoader(self._args.cache_dir, self._args.keep_cache,
-                                      self._args.visual_aid)
+            loader = PyPDFMixedLoader(LoaderOptions(
+                self._args.cache_dir,
+                self._args.keep_cache,
+                self._args.visual_aid)
+            )
             if self._args.page is not None:
                 self._logger.info('Processing page %s', self._args.page)
 
@@ -176,11 +180,17 @@ class ExtractInfoCLI(CLI):
         elif self._args.loader == 'text':
             loader = PyPDFLoader(filename)
         elif self._args.loader == 'ocr':
-            loader = OCRLoader(filename, self._args.cache_dir, self._args.keep_cache,
-                               self._args.visual_aid)
+            loader = OCRLoader(filename, LoaderOptions(
+                self._args.cache_dir,
+                self._args.keep_cache,
+                self._args.visual_aid)
+            )
         elif self._args.loader == 'pdfplumber':
-            loader = PDFPlumberLoader(filename, self._args.raw, self._args.cache_dir,
-                                      self._args.keep_cache, self._args.visual_aid)
+            loader = PDFPlumberLoader(filename, self._args.raw, LoaderOptions(
+                self._args.cache_dir,
+                self._args.keep_cache,
+                self._args.visual_aid)
+            )
         else:
             raise CLIException("Invalid type of loader")
 

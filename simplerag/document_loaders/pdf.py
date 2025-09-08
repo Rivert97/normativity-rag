@@ -22,6 +22,14 @@ class Status(Enum):
     ANNOTATION_CHANGE_END = 5
 
 @dataclass
+class LoaderOptions:
+    """Options to be passed to the different Loaders."""
+
+    cache_dir: str = './.cache'
+    keep_cache: bool = False
+    visual_aid: bool = False
+
+@dataclass
 class DifferenceState:
     """Store state when making matches between differences from the text."""
 
@@ -42,11 +50,14 @@ class PyPDFMixedLoader():
     :type keep_cache: bool
     """
 
-    def __init__(self, cache_dir: str = './.cache', keep_cache: bool=False, visual_aid: bool=False):
+    def __init__(self, options:LoaderOptions=None):
         """Mixed loader that combines text and OCR information to produce text or location data."""
-        self.cache_dir = cache_dir
-        self.keep_cache = keep_cache
-        self.visual_aid = visual_aid
+        if options is None:
+            options = LoaderOptions()
+
+        self.cache_dir = options.cache_dir
+        self.keep_cache = options.keep_cache
+        self.visual_aid = options.visual_aid
 
         self.document_data = PdfDocumentData()
 
@@ -580,10 +591,13 @@ class PyPDFLoader():
 
 class OCRLoader():
     """Class to load a PDF file using pytesseract to extract the text through OCR."""
-    def __init__(self, file_path:str, cache_dir: str='./.cache', keep_cache: bool = False,
-                 visual_aid: bool = False):
+    def __init__(self, file_path:str, options:LoaderOptions=None):
         """Open the document."""
-        self.parser = OcrPdfParser(file_path, cache_dir, keep_cache, visual_aid)
+        if options is None:
+            options = LoaderOptions()
+
+        self.parser = OcrPdfParser(file_path, options.cache_dir, options.keep_cache,
+                                   options.visual_aid)
 
     def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:
         """Return the full text of the PDF file."""
@@ -613,9 +627,12 @@ class OCRLoader():
 
 class PDFPlumberLoader():
     """Class to load a PDF file using pdfplumber with custom text reconstruction."""
-    def __init__(self, file_path:str, raw:bool=False, cache_dir: str='./.cache',
-                 keep_cache: bool = False, visual_aid: bool = False):
-        self.parser = PdfPlumberParser(file_path, cache_dir, keep_cache, visual_aid)
+    def __init__(self, file_path:str, raw:bool=False, options:LoaderOptions=None):
+        if options is None:
+            options = LoaderOptions()
+
+        self.parser = PdfPlumberParser(file_path, options.cache_dir, options.keep_cache,
+                                       options.visual_aid)
         self.raw = raw
 
     def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:
