@@ -108,8 +108,8 @@ def get_lines_from_image(image:np.array, words_data:pd.DataFrame) -> dict[str, n
     and vertical lines from the image of a page of a PDF file.
     """
     lines = {
-        'horizontal': None,
-        'vertical': None,
+        'horizontal': np.array([], dtype=int),
+        'vertical': np.array([], dtype=int),
     }
 
     no_words_img = __erase_words_from_image(image, words_data)

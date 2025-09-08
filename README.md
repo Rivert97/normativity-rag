@@ -81,7 +81,7 @@ In case you want to use the modules directly from code here is a full example us
     data = pdf_loader.get_document_data()
 
     # Create a tree with the structure of the document
-    splitter = DataTreeSplitter(data.get_data(remove_headers=True), "nombre_documento"
+    splitter = DataTreeSplitter(data.get_data(remove_headers=True), "nombre_documento")
     splitter.analyze()
 
     # Split document in sentences

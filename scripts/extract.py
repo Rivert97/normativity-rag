@@ -7,9 +7,11 @@ import glob
 
 from simplerag.document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
+from simplerag.document_loaders.pdf import LoaderOptions
 from simplerag.document_splitters.hierarchical import TreeSplitter
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
+from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.llms.storage import ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
@@ -52,6 +54,7 @@ class CollectionParams:
     inner_splitter: str
     loader: str
     raw: bool = False
+    visual_aid: bool
 
 class ExtractorCLI(CLI):
     """This class controls the execution of the program when using
@@ -69,7 +72,11 @@ class ExtractorCLI(CLI):
                 self._args.cache_dir,
                 self._args.database_dir,
                 self._args.keep_cache,
-                {},
+                {
+                    '*': {
+                        'parse_params_file': self._args.parse_params_file,
+                    }
+                },
             )
             collection_params = CollectionParams(
                 self._args.embedder,
@@ -77,6 +84,7 @@ class ExtractorCLI(CLI):
                 self._args.inner_splitter,
                 self._args.loader,
                 self._args.raw,
+                self._args.visual_aid,
             )
 
             if self._args.file != '':
@@ -151,7 +159,14 @@ class ExtractorCLI(CLI):
                             default=DEFAULTS['loader'],
                             type=str,
                             choices=LOADERS.keys(),
-                            help='Type of loader to use. Defaults to mixed')
+                            help=f'Type of loader to use. Defaults to {DEFAULTS['loader']}')
+        self.parser.add_argument('--parse-params-file',
+                            default='simplerag/settings/params-default.yml',
+                            type=str,
+                            help='''
+                                YAML file with custom parse parameters to be used
+                                during extraction
+                                ''')
         self.parser.add_argument('--raw',
                                  default=False,
                                  action='store_true',
@@ -162,7 +177,17 @@ class ExtractorCLI(CLI):
         self.parser.add_argument('--settings-file',
                             default='',
                             type=str,
-                            help='File with all the options to build a database')
+                            help='''
+                                File with all the options to build a database. Use this option to
+                                store all options to process files when it will be repeated.
+                                ''')
+        self.parser.add_argument('--visual-aid',
+                            default=False,
+                            action='store_true',
+                            help='''
+                                Enables image processing for additional detections,
+                                such as line section separations. Slower.
+                            ''')
 
         args = self.parser.parse_args()
 
@@ -195,6 +220,9 @@ class ExtractorCLI(CLI):
         if args.collection == '':
             raise CLIException("Please specify a collection name")
 
+        if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
+            raise CLIException("Parse parameters file does not exist")
+
         self._args = args
 
     def __process_file(self, filename: str, collection:str, settings:ExecSettings,
@@ -218,7 +246,8 @@ class ExtractorCLI(CLI):
             splitter = DataTreeSplitter(
                 data.get_data(remove_headers=True, boundaries=file_parse_params.get('pdf_margins')),
                 basename,
-                params.loader)
+                DataSplitterOptions(loader=params.loader)
+            )
         else:
             raise CLIException(f"Invalid extraction type '{params.extraction_type}'")
 
@@ -271,15 +300,26 @@ class ExtractorCLI(CLI):
         self._logger.info("Using '%s' loader", params.loader)
 
         if params.loader == 'mixed':
-            pdf_loader = PyPDFMixedLoader(settings.cache_dir, settings.keep_cache)
+            pdf_loader = PyPDFMixedLoader(LoaderOptions(
+                settings.cache_dir,
+                settings.keep_cache,
+                params.visual_aid)
+            )
             pdf_loader.load(filename)
         elif params.loader == 'text':
             pdf_loader = PyPDFLoader(filename)
         elif params.loader == 'ocr':
-            pdf_loader = OCRLoader(filename, settings.cache_dir, settings.keep_cache)
+            pdf_loader = OCRLoader(filename, LoaderOptions(
+                settings.cache_dir,
+                settings.keep_cache,
+                params.visual_aid)
+            )
         elif params.loader == 'pdfplumber':
-            pdf_loader = PDFPlumberLoader(filename, params.raw, settings.cache_dir,
-                                          settings.keep_cache)
+            pdf_loader = PDFPlumberLoader(filename, params.raw, LoaderOptions(
+                settings.cache_dir,
+                settings.keep_cache,
+                params.visual_aid)
+            )
         else:
             raise CLIException("Invalid type of loader")
 
@@ -359,7 +399,8 @@ class ExtractorCLI(CLI):
             raise CLIException(f"Invalid loader '{params['loader']}'")
 
     def __get_file_settings(self, filename:str, settings:ExecSettings) -> dict[str,str]:
-        settings = settings.file_settings.get(os.path.split(filename)[-1], {})
+        default_settings = settings.file_settings.get('*', {})
+        settings = settings.file_settings.get(os.path.split(filename)[-1], default_settings)
 
         return settings
 

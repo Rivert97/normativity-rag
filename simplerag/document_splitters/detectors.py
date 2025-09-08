@@ -2,44 +2,34 @@
 
 import re
 
-METADATA_REGEX = {
-    'permissive_titles' : {
-        'titles': {
-            2: str(r'^([iíÍ]ndice$|art[iíÍ]culos? transitorios?( de reforma)?)|'
-                   r'((t[iíÍ]tulo|[xiv]+\.|[0-9]+\.) .*[^;])$'),
-            3: r'^([0-9]+\.[0-9]|secci[oóÓ]n) .*$',
-            4: r'^cap[iíÍ]tulo .*$',
-        },
-        'contents': {
-            5: str(
-                r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|to|mo|vo|no)|[Úú]nico) ?'
-                r'(bis|ter|qu[aá]ter|quinquies)?\.'),
-        }
+DEFAULT_TITLES_REGEX = {
+    'titles': {
+        1: r'^(?![a-z]\))(?!art[iíÍ]culo [0-9]+\.).*[^;:]$',
+        2: str(r'^([iíÍ]ndice$|art[iíÍ]culos? transitorios?( de reforma)?)|'
+                r'((\(.*\) )?(t[iíÍ]tulo|[xiv]+\.|[0-9]+\.) .*[^;:])$'),
+        3: r'^([0-9]+\.[0-9]|secci[oóÓ]n) .*$',
+        4: r'^(\(.*\) )?cap[iíÍ]tulo .*$',
     },
-    'not_permissive_titles' : {
-        'titles': {
-            2: r'^t[iíÍ]tulo [a-záéíóú]+(ro|do|to|mo|vo|no)$',
-            3: r'^secci[oóÓ]n .*',
-            4: r'^cap[iíÍ]tulo .*',
-        },
-        'contents': {
-            5: str(
-                r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|to|mo|vo|no)|[Úú]nico) ?'
-                r'(bis|ter|qu[aá]ter|quinquies)?\.'),
-        }
-    },
+    'contents': {
+        5: str(
+            r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|to|mo|vo|no)|[Úú]nico) ?'
+            r'(bis|ter|qu[aá]ter|[a-záéíóú]+ies)?\.'),
+    }
 }
 
 class TitleDetector:
     """Class to detect titles of sections and subsections using regular expressions."""
 
-    def __init__(self, regex_type:str='permissive_titles'):
-        self.metadata_regex = METADATA_REGEX.get(regex_type, METADATA_REGEX['permissive_titles'])
+    def __init__(self, titles_regex:dict[str|int,str]|None=None):
+        if titles_regex is None:
+            self.metadata_regex = DEFAULT_TITLES_REGEX
+        else:
+            self.metadata_regex = titles_regex
 
     def get_title_level(self, text:str) -> int:
         """Get the level of the title, the deeper the title the higher the level."""
-        level = 1
-        for lvl in self.metadata_regex['titles']:
+        level = 0
+        for lvl in sorted(self.metadata_regex['titles'].keys(), reverse=True):
             if re.match(self.metadata_regex['titles'][lvl], text.lower()):
                 level = lvl
                 break
@@ -71,7 +61,7 @@ class TitleDetector:
         name = ''
         content = ''
 
-        for lvl in self.metadata_regex['contents'].keys():
+        for lvl in sorted(self.metadata_regex['contents'].keys(), reverse=True):
             matches = re.search(self.metadata_regex['contents'][lvl], text.lower())
             if matches:
                 l_match = len(matches.group(0))

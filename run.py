@@ -37,7 +37,8 @@ def main():
     try:
         # Try to import the script dynamically
         module = importlib.import_module(f"scripts.{command}")
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as e:
+        print(e)
         print(f"Unknown command: {command}")
         sys.exit(1)
 

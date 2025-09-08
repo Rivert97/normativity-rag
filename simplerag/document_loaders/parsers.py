@@ -50,9 +50,10 @@ class PypdfPage():
 
     def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None):
         """Return the text contained within the boundaries of the page."""
+        pdf_box_key = '/ArtBox' if '/ArtBox' in self.page else '/MediaBox'
         if remove_headers and boundaries is not None:
-            page_width = self.page['/ArtBox'][2]
-            page_height = self.page['/ArtBox'][3]
+            page_width = self.page[pdf_box_key][2]
+            page_height = self.page[pdf_box_key][3]
             # PDF Y-axis is inverted
             self.visitor.set_boundaries(
                 boundaries['left'] * page_width,
@@ -62,7 +63,7 @@ class PypdfPage():
             )
         else:
             # PDF Y-axis is inverted
-            left, top, right, bottom = self.page['/ArtBox']
+            left, top, right, bottom = self.page[pdf_box_key]
             self.visitor.set_boundaries(left=left, top=bottom, right=right, bottom=top)
         text = self.page.extract_text(visitor_text=self.visitor.visitor_text)
 
@@ -165,6 +166,7 @@ class DataReconstructor():
         self.__assign_column_number()
         self.__assign_column_position()
         self.__assign_group_number()
+        self.__merge_columns()
 
         return self.data
 
@@ -379,17 +381,31 @@ class DataReconstructor():
                 if l_col not in group_cols:
                     group_cols[l_col] = line_cols[l_col]
 
+    def __merge_columns(self):
+        for group, values in self.data.groupby('group'):
+            columns_edges = values.groupby('col_position').agg({'left': 'min', 'right': 'max'})
+            if len(columns_edges) > 1:
+                pivot = columns_edges.iloc[0]
+                for col_position in columns_edges.index[1:]:
+                    if pivot['right'] > columns_edges.loc[col_position, 'left']:
+                        self.data.loc[self.data['group'] == group, 'col_position'] = pivot.name
+
 class OcrPage():
     """This class stores the information contained in a single page
     of a document and provides functions to process it.
     """
 
-    def __init__(self, image: Image, cache_file:str|None=None):
+    def __init__(self, image: Image, cache_file:str|None=None, visual_aid:bool = False):
         self.image = image
         self.cache_file = cache_file
+        self.visual_aid = visual_aid
 
         self.data = self.__get_data_from_image()
-        self.lines = self.__get_lines_from_image()
+        if self.visual_aid:
+            self.lines = self.__get_lines_from_image()
+        else:
+            self.lines = {'horizontal': np.array([], dtype=int),
+                          'vertical': np.array([], dtype=int)}
         self.width = self.data.loc[0, 'width']
         self.height = self.data.loc[0, 'height']
         self.__normalize_data()
@@ -543,10 +559,12 @@ class OcrPdfParser():
     :type keep_cache: bool
     """
 
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache', keep_cache:bool = False):
+    def __init__(self, pdf_path: str, cache_dir: str = './.cache', keep_cache:bool = False,
+                 visual_aid:bool = False):
         self.pdf_path = pdf_path
         self.cache_dir = cache_dir
         self.keep_cache = keep_cache
+        self.visual_aid = visual_aid
 
         with open(self.pdf_path, 'rb') as f:
             file_md5 = hashlib.md5(f.read()).hexdigest()
@@ -554,6 +572,7 @@ class OcrPdfParser():
 
         if not self.__cache_is_valid():
             self.__create_cache()
+        self.num_images = len(glob.glob(os.path.join(self.cache_subfolder, '0001-*.jpg')))
 
     def __del__(self):
         if not self.keep_cache:
@@ -578,7 +597,8 @@ class OcrPdfParser():
 
         def process_page(page_path):
             basepath = os.path.splitext(page_path)[0]
-            return OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
+            return OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv',
+                           visual_aid=self.visual_aid)
 
         def get_number_of_workers(memory_of_process=700):
             n_physical_cores = psutil.cpu_count(logical=False)
@@ -596,12 +616,14 @@ class OcrPdfParser():
         else:
             for page_path in pages_path:
                 basepath = os.path.splitext(page_path)[0]
-                yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv')
+                yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv',
+                              visual_aid=self.visual_aid)
 
     def get_page(self, page_num: int) -> OcrPage:
         """Return a spific page of the document."""
-        basepath = f'{self.cache_subfolder}/0001-{page_num+1:02d}'
-        return OcrPage(Image.open(f'{basepath}.jpg'), f'{basepath}.csv')
+        num_page_digits = len(str(self.num_images))
+        basepath = f'{self.cache_subfolder}/0001-{page_num+1:0{num_page_digits}d}'
+        return OcrPage(Image.open(f'{basepath}.jpg'), f'{basepath}.csv', self.visual_aid)
 
     def clear_cache(self):
         """Delete the cache sub-directory for this file. If main directory is empty then
@@ -727,8 +749,11 @@ class PdfPlumberPage():
         return data
 
     def __get_lines_from_image(self):
-        if not os.path.exists(self.cache_file):
-            return None
+        if self.cache_file is None or not os.path.exists(self.cache_file):
+            return {
+                'horizontal': np.array([], dtype=int),
+                'vertical': np.array([], dtype=int),
+            }
 
         image = cv2.imread(self.cache_file, cv2.IMREAD_GRAYSCALE)
         words_data = self.data.copy()
@@ -779,22 +804,27 @@ class PdfPlumberParser():
     :param file_path: The path of the file to be parsed.
     :type file_path: str
     """
-    def __init__(self, file_path: str, cache_dir: str = './.cache', keep_cache:bool = False):
+    def __init__(self, file_path: str, cache_dir: str = './.cache', keep_cache:bool = False,
+                 visual_aid:bool = False):
         self.file_path = file_path
         self.cache_dir = cache_dir
         self.keep_cache = keep_cache
+        self.visual_aid = visual_aid
 
         self.reader = pdfplumber.open(file_path)
 
-        with open(self.file_path, 'rb') as f:
-            file_md5 = hashlib.md5(f.read()).hexdigest()
-        self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
+        if self.visual_aid:
+            with open(self.file_path, 'rb') as f:
+                file_md5 = hashlib.md5(f.read()).hexdigest()
+            self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
 
-        if not self.__cache_is_valid():
-            self.__create_cache()
+            if not self.__cache_is_valid():
+                self.__create_cache()
+        else:
+            self.cache_subfolder = None
 
     def __del__(self):
-        if not self.keep_cache:
+        if self.cache_subfolder is not None and not self.keep_cache:
             self.clear_cache()
 
     def get_raw_text(self, page_separator: str = '\n', remove_headers:bool = False,
@@ -808,9 +838,10 @@ class PdfPlumberParser():
         :return: A string of all the text from the document
         :rtype: str
         """
+        num_page_digits = len(str(len(self.reader.pages)))
         text = ''
         for i, page in enumerate(self.reader.pages, start=1):
-            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
+            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg')
             text += page.get_raw_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -826,9 +857,14 @@ class PdfPlumberParser():
         :return: A string of all the text from the document
         :rtype: str
         """
+        num_page_digits = len(str(len(self.reader.pages)))
         text = ''
         for i, page in enumerate(self.reader.pages, start=1):
-            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
+            if self.visual_aid:
+                cache_file = f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg'
+            else:
+                cache_file = None
+            page = PdfPlumberPage(page, cache_file)
             text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -843,13 +879,22 @@ class PdfPlumberParser():
         :return: An Iterator that yields the text of each page at a time
         :rtype: Iterator[PdfPlumberPage]
         """
+        num_page_digits = len(str(len(self.reader.pages)))
         for i, page in enumerate(self.reader.pages, start=1):
-            yield PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:02d}.jpg')
+            if self.visual_aid:
+                cache_file = f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg'
+            else:
+                cache_file = None
+            yield PdfPlumberPage(page, cache_file)
 
     def get_page(self, page_num: int):
         """Return a specific page of the document."""
-        return PdfPlumberPage(self.reader.pages[page_num],
-                              f'{self.cache_subfolder}/0001-{page_num+1:02d}.jpg')
+        num_page_digits = len(str(len(self.reader.pages)))
+        if self.visual_aid:
+            cache_file = f'{self.cache_subfolder}/0001-{page_num+1:0{num_page_digits}d}.jpg'
+        else:
+            cache_file = None
+        return PdfPlumberPage(self.reader.pages[page_num], cache_file)
 
     def clear_cache(self):
         """Delete the cache sub-directory for this file. If main directory is empty then
