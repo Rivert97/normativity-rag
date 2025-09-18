@@ -53,8 +53,8 @@ class CollectionParams:
     extraction_type: str
     inner_splitter: str
     loader: str
-    raw: bool = False
     visual_aid: bool
+    raw: bool = False
 
 class ExtractorCLI(CLI):
     """This class controls the execution of the program when using
@@ -83,8 +83,8 @@ class ExtractorCLI(CLI):
                 self._args.extraction_type,
                 self._args.inner_splitter,
                 self._args.loader,
-                self._args.raw,
                 self._args.visual_aid,
+                self._args.raw,
             )
 
             if self._args.file != '':
