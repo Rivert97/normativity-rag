@@ -74,7 +74,7 @@ class DocNode(NodeMixin):
         """Get the string of text of the document"""
         return re.sub(r' ?- ?\n', '', self.content)
 
-    def split_content(self, split_type:str='paragraph'):
+    def split_content(self, split_type:str='paragraph', max_characters:int=7500):
         """Split the string of text of the document in multiple strings."""
         content = self.get_content()
         content = re.sub(r'([^.:;\n])(\n)', r'\1 ', content)
@@ -82,7 +82,10 @@ class DocNode(NodeMixin):
         if split_type == 'paragraph':
             splits = filter(lambda l: l != '', content.split('\n'))
         elif split_type == 'section':
-            splits = [content]
+            if len(content) > max_characters:
+                splits = self.__split_on_nearest_dot(content, max_characters)
+            else:
+                splits = [content]
         else:
             splits = [content]
 
@@ -108,6 +111,19 @@ class DocNode(NodeMixin):
         args = [f'{(self.separator.join([""] + [str(node.name) for node in self.path]))}']
         return _repr(self, args=args, nameblacklist=["name"])
 
+    def __split_on_nearest_dot(self, sentence:str, max_characters:int):
+        splited_sentence = sentence.split('.\n')
+        sentences = ['']
+        current_length = 0
+        for s in splited_sentence:
+            current_length += len(s + ".")
+            if current_length < max_characters:
+                sentences[-1] += s + "."
+            else:
+                sentences.append(s + ".")
+
+        return sentences
+
 @dataclass
 class LineState:
     """Store state while checking the types of titles in the document."""
@@ -132,12 +148,14 @@ class DataSplitterOptions:
     loader: str = 'any'
     titles_regex: dict[str|int,str] = None
     absolute_center: bool = False
+    max_characters: int = 7500
 
 class TreeSplitter():
     """Base class for splitters that genrate a tree of a document."""
 
-    def __init__(self, document_name: str):
+    def __init__(self, document_name: str, max_characters: int):
         self.document_name = document_name
+        self.max_characters = max_characters
 
         self.root = DocNode("root")
 
@@ -156,8 +174,8 @@ class TreeSplitter():
             if node.get_content() == '':
                 continue
 
-            splits = node.split_content(split_type=inner_splitter)
-            for split in splits:
+            splits = node.split_content(inner_splitter, self.max_characters)
+            for idx, split in enumerate(splits):
                 doc = {
                     'content': split,
                     'metadata': {
@@ -165,6 +183,7 @@ class TreeSplitter():
                         'title': node.get_full_title(),
                         'path': node.get_path(),
                         'parent': node.get_path().split('/')[-1],
+                        'num': idx,
                     }
                 }
                 documents.append(doc)
@@ -228,7 +247,7 @@ class DataTreeSplitter(TreeSplitter):
 
     def __init__(self, data: pd.DataFrame, document_name: str = '',
                  options:DataSplitterOptions=None):
-        super().__init__(document_name)
+        super().__init__(document_name, options.max_characters)
         if options is None:
             options = DataSplitterOptions()
 
@@ -404,7 +423,7 @@ class DataTreeSplitter(TreeSplitter):
     def __get_dehypenated_text(self, block_words:pd.DataFrame):
         text_lines = '\n'.join(block_words.groupby('line')['text'].apply(' '.join))
         dehypenated_text = re.sub(r' ?- ?\n', '', text_lines)
-        joined_lines_text = re.sub(r'([^.])(\n)', r'\1 ', dehypenated_text)
+        joined_lines_text = re.sub(r'([^.:;])(\n)', r'\1 ', dehypenated_text)
 
         return joined_lines_text
 
@@ -420,8 +439,8 @@ class TextTreeSplitter(TreeSplitter):
     Uses raw text to identify titles.
     """
 
-    def __init__(self, text: str, document_name: str = ''):
-        super().__init__(document_name)
+    def __init__(self, text: str, document_name: str = '', max_characters: int = 7500):
+        super().__init__(document_name, max_characters)
 
         self.text = text
 

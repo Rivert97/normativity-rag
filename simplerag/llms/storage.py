@@ -148,11 +148,11 @@ class CSVStorage(Storage):
         basepath, basename = os.path.split(name)
         basename = os.path.splitext(basename)[0]
         df = pd.DataFrame(info.get('embeddings'))
-        df.to_csv(os.path.join(basepath, f"{basename}_embeddings.csv"), sep=',', index=False)
+        df.to_csv(os.path.join(basepath, f"{basename}_embeddings.csv"), sep=',', index=True)
 
         df = pd.DataFrame(info.get('metadatas'))
         df['sentences'] = info.get('sentences')
-        df.to_csv(f"{name}.csv", sep=',', index=False)
+        df.to_csv(f"{name}.csv", sep=',', index=True)
 
     def query_sentence(self, collection:str, sentence:str, n_results:int) -> list[dict]:
         """Find similar sentences. Not implemented."""

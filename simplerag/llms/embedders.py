@@ -12,6 +12,6 @@ class STEmbedder(metaclass=Singleton):
 
     def get_embeddings(self, sentences):
         """Calculate and get the embeddings for a list of sentences."""
-        embeddings = self.model.encode(sentences)
+        embeddings = self.model.encode(sentences, batch_size=1)
 
         return embeddings
