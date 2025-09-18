@@ -5,7 +5,7 @@ and a dataset of questions and answers.
 """
 import argparse
 
-import evaluate
+from rouge_score import rouge_scorer, scoring
 
 from simplerag.llms.models import Builders
 from simplerag.llms.rag import RAGQueryConfig
@@ -70,11 +70,16 @@ class EvalRAGCLI(EvalCLI):
         self._args = self.parser.parse_args()
 
     def __calculate_rouge(self, responses, answers):
-        rouge = evaluate.load('rouge')
-        score = rouge.compute(predictions=responses,
-                              references=answers)
+        scorer = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL", "rougeLsum"],
+                                          use_stemmer=True)
+        aggregator = scoring.BootstrapAggregator()
 
-        return score
+        for pred, ref in zip(responses, answers):
+            score = scorer.score(ref, pred)
+            aggregator.add_scores(score)
+        result = aggregator.aggregate()
+
+        return {metric: value.mid.fmeasure for metric, value in result.items()}
 
 def main():
     """Run the script."""

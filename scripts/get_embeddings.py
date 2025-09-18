@@ -112,6 +112,13 @@ class GetEmbeddingsCLI(CLI):
                                 Optional type of loader used to extract the data. This helps to
                                 stablish different tolerances for interpretation. Defaults to 'any'
                                 ''')
+        self.parser.add_argument('--max-chars',
+                            default=7500,
+                            type=int,
+                            help='''
+                                Maximum number of characters per chunk. It will find nearest dot.
+                                Defaults to 7500.
+                                ''')
         self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
@@ -282,7 +289,8 @@ class GetEmbeddingsCLI(CLI):
                     DataSplitterOptions(
                         self._args.loader,
                         self.parse_params.get('titles_regex', None),
-                        self._args.absolute_center
+                        self._args.absolute_center,
+                        self._args.max_chars,
                     )
             )
         else:
@@ -293,7 +301,8 @@ class GetEmbeddingsCLI(CLI):
                                         DataSplitterOptions(
                                             self._args.loader,
                                             self.parse_params.get('titles_regex', None),
-                                            self._args.absolute_center
+                                            self._args.absolute_center,
+                                            self._args.max_chars,
                                         )
             )
 
@@ -308,7 +317,7 @@ class GetEmbeddingsCLI(CLI):
         with open(filename, 'r', encoding='utf-8') as f:
             file_content = f.read()
 
-        splitter = TextTreeSplitter(file_content, basename)
+        splitter = TextTreeSplitter(file_content, basename, self._args.max_chars)
         splitter.analyze()
 
         return splitter

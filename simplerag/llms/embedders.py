@@ -8,10 +8,10 @@ class STEmbedder(metaclass=Singleton):
     """Class to create embeddings using SentenceTransformers from HuggingFace."""
 
     def __init__(self, model:str = 'all-MiniLM-L6-v2'):
-        self.model = SentenceTransformer(model)
+        self.model = SentenceTransformer(model, model_kwargs={'device_map': 'auto'})
 
     def get_embeddings(self, sentences):
         """Calculate and get the embeddings for a list of sentences."""
-        embeddings = self.model.encode(sentences)
+        embeddings = self.model.encode(sentences, batch_size=1)
 
         return embeddings
