@@ -148,7 +148,7 @@ class DataSplitterOptions:
     loader: str = 'any'
     titles_regex: dict[str|int,str] = None
     absolute_center: bool = False
-    max_characters: int = 7500
+    max_characters: int = 8000
 
 class TreeSplitter():
     """Base class for splitters that genrate a tree of a document."""
@@ -247,9 +247,9 @@ class DataTreeSplitter(TreeSplitter):
 
     def __init__(self, data: pd.DataFrame, document_name: str = '',
                  options:DataSplitterOptions=None):
-        super().__init__(document_name, options.max_characters)
         if options is None:
             options = DataSplitterOptions()
+        super().__init__(document_name, options.max_characters)
 
         self.data = data.copy().dropna()
         self.loader = options.loader
