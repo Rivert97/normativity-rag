@@ -77,7 +77,7 @@ class DocNode(NodeMixin):
     def split_content(self, split_type:str='paragraph', max_characters:int=7500):
         """Split the string of text of the document in multiple strings."""
         content = self.get_content()
-        content = re.sub(r'([^.:;\n])(\n)', r'\1 ', content)
+        content = re.sub(r'([^.:;(; y)\n])(\n)', r'\1 ', content)
 
         if split_type == 'paragraph':
             splits = filter(lambda l: l != '', content.split('\n'))
@@ -116,9 +116,9 @@ class DocNode(NodeMixin):
         sentences = ['']
         current_length = 0
         for s in splited_sentence:
-            current_length += len(s + ".")
+            current_length += len(s) + 2
             if current_length < max_characters:
-                sentences[-1] += s + "."
+                sentences[-1] += "\n" + s + "."
             else:
                 sentences.append(s + ".")
 
@@ -423,7 +423,7 @@ class DataTreeSplitter(TreeSplitter):
     def __get_dehypenated_text(self, block_words:pd.DataFrame):
         text_lines = '\n'.join(block_words.groupby('line')['text'].apply(' '.join))
         dehypenated_text = re.sub(r' ?- ?\n', '', text_lines)
-        joined_lines_text = re.sub(r'([^.:;])(\n)', r'\1 ', dehypenated_text)
+        joined_lines_text = re.sub(r'([^.:;(; y)])(\n)', r'\1 ', dehypenated_text)
 
         return joined_lines_text
 
