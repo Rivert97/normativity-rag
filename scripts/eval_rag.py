@@ -79,7 +79,7 @@ class EvalRAGCLI(EvalCLI):
             aggregator.add_scores(score)
         result = aggregator.aggregate()
 
-        return {metric: result[metric].mid.fmeasure for metric in result}
+        return {metric: value.mid.fmeasure for metric, value in result.items()}
 
 def main():
     """Run the script."""
