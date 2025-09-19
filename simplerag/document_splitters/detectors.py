@@ -12,7 +12,7 @@ DEFAULT_TITLES_REGEX = {
     },
     'contents': {
         5: str(
-            r'^art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|to|mo|vo|no)|[Úú]nico) ?'
+            r'art[iíÍ]culo ([0-9]+|[a-záéíóú]+(ro|do|to|mo|vo|no)|[Úú]nico)[ \-]?'
             r'(bis|ter|qu[aá]ter|[a-záéíóú]+ies)?\.'),
     }
 }
@@ -62,7 +62,7 @@ class TitleDetector:
         content = ''
 
         for lvl in sorted(self.metadata_regex['contents'].keys(), reverse=True):
-            matches = re.search(self.metadata_regex['contents'][lvl], text.lower())
+            matches = re.search(r'^' + self.metadata_regex['contents'][lvl], text.lower())
             if matches:
                 l_match = len(matches.group(0))
                 level = lvl
@@ -73,3 +73,24 @@ class TitleDetector:
             content = text
 
         return level, name, content
+
+    def detect_content_header_with_subtitle(self, text, max_subtitle_lines):
+        """Get the level of the section according to the text when the text has a subtitle.
+
+        Return -1 when the string is not a section header.
+        """
+        subtitle = ''
+        content = ''
+
+        for lvl in sorted(self.metadata_regex['contents'].keys(), reverse=True):
+            regex = r'^([^\n]*\n{1,' + str(max_subtitle_lines) + r'})(' + self.metadata_regex['contents'][lvl] + r'.+)'
+            matches = re.search(regex, text.lower())
+            if matches:
+                l_match_0 = len(matches.group(1))
+                subtitle = text[:l_match_0].strip()
+                content = text[l_match_0:]
+                break
+        else:
+            content = text
+
+        return subtitle, content
