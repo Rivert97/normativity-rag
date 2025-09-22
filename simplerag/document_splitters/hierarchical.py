@@ -74,11 +74,12 @@ class DocNode(NodeMixin):
         """Get the string of text of the document"""
         return re.sub(r' ?- ?\n', '', self.content)
 
-    def split_content(self, split_type:str='paragraph', max_characters:int=7500):
+    def get_splited_content(self, split_type:str='paragraph', max_characters:int=7500):
         """Split the string of text of the document in multiple strings."""
         content = self.get_content()
         content = re.sub(r'([^.:;yo])(\n)', r'\1 ', content)
         content = re.sub(r'((?<!; )y|(?<!; )o)(\n)', r'\1 ', content)
+        content = self.__remove_annotations(content)
 
         if split_type == 'paragraph':
             splits = filter(lambda l: l != '', content.split('\n'))
@@ -125,6 +126,16 @@ class DocNode(NodeMixin):
                 current_length = len(s) + 1
 
         return sentences
+
+    def __remove_annotations(self, text: str):
+        regex = str(
+            r'(Fracción|Artículo|Párrafo|Inciso) '
+            r'(reformado|reformada|reformando|adicionado|adicionada|derogado|derogada) '
+            r'(Gaceta Universitaria|P. O.) '
+            r'((, )?(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[0-2])-[0-9]{3,4})+ ?'
+        )
+
+        return re.sub(regex, '', text)
 
 @dataclass
 class LineState:
@@ -176,7 +187,7 @@ class TreeSplitter():
             if node.get_content() == '':
                 continue
 
-            splits = node.split_content(inner_splitter, self.max_characters)
+            splits = node.get_splited_content(inner_splitter, self.max_characters)
             for idx, split in enumerate(splits):
                 doc = {
                     'content': split,
