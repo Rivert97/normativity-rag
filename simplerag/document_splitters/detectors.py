@@ -83,7 +83,7 @@ class TitleDetector:
         content = ''
 
         for lvl in sorted(self.metadata_regex['contents'].keys(), reverse=True):
-            regex = r'^([^\n]*\n{1,' + str(max_subtitle_lines) + r'})(' + self.metadata_regex['contents'][lvl] + r'.+)'
+            regex = r'^(([^\n]*\n){1,' + str(max_subtitle_lines) + r'})(' + self.metadata_regex['contents'][lvl] + r'.+)'
             matches = re.search(regex, text.lower())
             if matches:
                 l_match_0 = len(matches.group(1))

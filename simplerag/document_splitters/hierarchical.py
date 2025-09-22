@@ -122,6 +122,7 @@ class DocNode(NodeMixin):
                 sentences[-1] += "\n" + s + "."
             else:
                 sentences.append(s + ".")
+                current_length = len(s) + 1
 
         return sentences
 
@@ -258,7 +259,7 @@ class DataTreeSplitter(TreeSplitter):
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
         self.detector = TitleDetector(options.titles_regex)
-        self.block_tolerance_rate = 1.6 if self.loader == 'mixed' else 1.0
+        self.block_tolerance_rate = 1.6 if self.loader == 'mixed' else 0.8
 
     def analyze(self):
         """Analyze the data to generate the tree."""
