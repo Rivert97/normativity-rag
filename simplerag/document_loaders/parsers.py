@@ -746,6 +746,8 @@ class PdfPlumberPage():
             data = data.rename(columns={'x0': 'left', 'x1': 'right'})
             data['level'] = pd.Series([5]*data.shape[0], dtype='int')
 
+        data = self.__regroup_words(data)
+
         return data
 
     def __get_lines_from_image(self):
@@ -795,6 +797,32 @@ class PdfPlumberPage():
 
         return (min_x, min_y, max_x, max_y)
 
+    def __regroup_words(self, data):
+        remove_indices = []
+        for _, values in data.groupby('doctop'):
+            separation = values.iloc[1:]['left'].values - values.iloc[:-1]['right'].values
+            should_merge = np.concatenate((np.array([False]), separation < 0.1))
+            if should_merge.any():
+                for idx in values.index[should_merge]:
+                    data.loc[idx-1] = pd.Series(
+                        {
+                            'text': data.loc[idx-1, 'text'] + data.loc[idx, 'text'],
+                            'left': data.loc[idx-1, 'left'],
+                            'right': data.loc[idx, 'right'],
+                            'top': min(data.loc[idx-1, 'top'], data.loc[idx, 'top']),
+                            'doctop': data.loc[idx, 'doctop'],
+                            'bottom': max(data.loc[idx-1, 'bottom'], data.loc[idx, 'bottom']),
+                            'upright': data.loc[idx, 'upright'],
+                            'height': max(data.loc[idx-1, 'height'], data.loc[idx, 'height']),
+                            'width': data.loc[idx-1, 'width'] + data.loc[idx, 'width'],
+                            'direction': data.loc[idx, 'direction'],
+                            'level': data.loc[idx, 'level'],
+                        }
+                    )
+                    remove_indices.append(idx)
+        data = data.drop(remove_indices).reset_index(drop=True)
+
+        return data
 
 class PdfPlumberParser():
     """This parser uses PdfPlumber to convert a PDF file into text.
