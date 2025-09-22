@@ -78,7 +78,7 @@ class DocNode(NodeMixin):
         """Split the string of text of the document in multiple strings."""
         content = self.get_content()
         content = re.sub(r'([^.:;yo])(\n)', r'\1 ', content)
-        content = re.sub(r'([^;] y|[^;] o)(\n)', r'\1 ', content)
+        content = re.sub(r'((?<!; )y|(?<!; )o)(\n)', r'\1 ', content)
 
         if split_type == 'paragraph':
             splits = filter(lambda l: l != '', content.split('\n'))
@@ -360,18 +360,18 @@ class DataTreeSplitter(TreeSplitter):
             self.clear_lower_children(state.current_nodes, title_level)
 
     def __handle_non_title_block(self, state:TreeState):
-        subtitle, block_text = self.__find_block_subtitle(state.block_words)
-        if subtitle:
-            title_level = self.detector.get_title_level(subtitle)
-            if title_level > 1:
-                parent = self.find_nearest_parent(state.current_nodes, title_level)
-                state.last_node = DocNode(subtitle, parent=parent, name_sep='. ')
-                state.current_nodes[title_level] = state.last_node
-                self.clear_lower_children(state.current_nodes, title_level)
-        else:
-            subtitle, block_text = self.__find_block_subtitle_by_regex(state.block_words)
+        subtitle, block_text = self.__find_block_subtitle_by_regex(state.block_words)
 
-            if not subtitle:
+        if not subtitle:
+            subtitle, block_text = self.__find_block_subtitle(state.block_words)
+            if subtitle:
+                title_level = self.detector.get_title_level(subtitle)
+                if title_level > 1:
+                    parent = self.find_nearest_parent(state.current_nodes, title_level)
+                    state.last_node = DocNode(subtitle, parent=parent, name_sep='. ')
+                    state.current_nodes[title_level] = state.last_node
+                    self.clear_lower_children(state.current_nodes, title_level)
+            else:
                 block_text = self.__get_dehypenated_text(state.block_words)
 
         level, name, content = self.detector.detect_content_header(block_text)
@@ -388,7 +388,7 @@ class DataTreeSplitter(TreeSplitter):
             state.current_nodes[level] = state.last_node
             self.clear_lower_children(state.current_nodes, level)
 
-    def __find_block_subtitle_by_regex(self, block_words, max_subtitle_lines=2):
+    def __find_block_subtitle_by_regex(self, block_words, max_subtitle_lines=3):
         block_str = '\n'.join(
             block_words.sort_values('left').groupby('line')['text'].apply(' '.join)
         )
@@ -445,14 +445,14 @@ class DataTreeSplitter(TreeSplitter):
         text_lines = '\n'.join(block_words.groupby('line')['text'].apply(' '.join))
         dehypenated_text = re.sub(r' ?- ?\n', '', text_lines)
         joined_lines_text = re.sub(r'([^.:;yo])(\n)', r'\1 ', dehypenated_text)
-        joined_lines_text = re.sub(r'([^;] y|[^;] o)(\n)', r'\1 ', joined_lines_text)
+        joined_lines_text = re.sub(r'((?<!; )y|(?<!; )o)(\n)', r'\1 ', joined_lines_text)
 
         return joined_lines_text
 
     def __get_dehypenated_text_with_str(self, text_lines:str):
         dehypenated_text = re.sub(r' ?- ?\n', '', text_lines)
         joined_lines_text = re.sub(r'([^.:;yo])(\n)', r'\1 ', dehypenated_text)
-        joined_lines_text = re.sub(r'([^;] y|[^;] o)(\n)', r'\1 ', joined_lines_text)
+        joined_lines_text = re.sub(r'((?<!; )y|(?<!; )o)(\n)', r'\1 ', joined_lines_text)
 
         return joined_lines_text
 
