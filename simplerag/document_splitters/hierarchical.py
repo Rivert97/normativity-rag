@@ -304,7 +304,7 @@ class DataTreeSplitter(TreeSplitter):
         ).mean()
 
         sorted_lines = self.data.sort_values(['page', 'line', 'col_position', 'left'])
-        for page, page_words in sorted_lines.groupby('page'):
+        for _, page_words in sorted_lines.groupby('page'):
             if self.absolute_center:
                 reference_x = (0.0, 1.0)
                 max_column_percentage = 0.95 - (1.0 - page_words['right'].max()) * 2.0
@@ -389,8 +389,11 @@ class DataTreeSplitter(TreeSplitter):
             self.clear_lower_children(state.current_nodes, level)
 
     def __find_block_subtitle_by_regex(self, block_words, max_subtitle_lines=2):
-        block_str = '\n'.join(block_words.sort_values('left').groupby('line')['text'].apply(' '.join))
-        subtitle, content = self.detector.detect_content_header_with_subtitle(block_str, max_subtitle_lines)
+        block_str = '\n'.join(
+            block_words.sort_values('left').groupby('line')['text'].apply(' '.join)
+        )
+        subtitle, content = self.detector.detect_content_header_with_subtitle(block_str,
+                                                                              max_subtitle_lines)
 
         if subtitle:
             subtitle = self.__get_dehypenated_text_with_str(subtitle)
