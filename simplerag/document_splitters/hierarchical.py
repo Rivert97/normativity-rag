@@ -74,7 +74,7 @@ class DocNode(NodeMixin):
         """Get the string of text of the document"""
         return re.sub(r' ?- ?\n', '', self.content)
 
-    def get_splited_content(self, split_type:str='paragraph', max_characters:int=7500):
+    def get_splited_content(self, split_type:str='paragraph', max_characters:int=8000):
         """Split the string of text of the document in multiple strings."""
         content = self.get_content()
         content = re.sub(r'([^.:;yo])(\n)', r'\1 ', content)
@@ -479,7 +479,7 @@ class TextTreeSplitter(TreeSplitter):
     Uses raw text to identify titles.
     """
 
-    def __init__(self, text: str, document_name: str = '', max_characters: int = 7500):
+    def __init__(self, text: str, document_name: str = '', max_characters: int = 8000):
         super().__init__(document_name, max_characters)
 
         self.text = text
