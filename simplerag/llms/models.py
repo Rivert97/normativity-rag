@@ -94,7 +94,6 @@ class Model(ABC):
     @abstractmethod
     def get_response_from_model(self, messages: list[dict[str, str]]) -> str:
         """Calls the model inference method and returns an answer."""
-        pass
 
     def __get_init_messages(self) -> list[dict[str:str|dict]]:
         instruction = 'Eres un asistente que ayuda a responder preguntas.'
@@ -189,7 +188,7 @@ class ModelBuilder:
         full_name = id_parts[-1]
 
         full_name_parts = full_name.split('-')
-        name = full_name_parts[0]
+        name = full_name_parts[0].upper()
         try:
             return Models[name].value(model_id)
         except KeyError:
@@ -201,11 +200,7 @@ class ModelBuilder:
         if not os.path.exists(gguf_file):
             return None
 
-        try:
-            return GGUFModel(gguf_file)
-        except Exception as e:
-            print(e)
-            return None
+        return GGUFModel(gguf_file)
 
 class Llama3(Model):
     """Class to load Meta Llama 3.1 and 3.2 model."""
@@ -470,7 +465,7 @@ class GGUFModel(Model):
 
 class Models(Enum):
     """Different types of models that are available."""
-    Qwen3 = Qwen3
-    gemma = Gemma
-    Llama = Llama3
-    Mistral = Mistral
+    QWEN3 = Qwen3
+    GEMMA = Gemma
+    LLAMA = Llama3
+    MISTRAL = Mistral
