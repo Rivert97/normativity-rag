@@ -5,7 +5,7 @@ import argparse
 from datasets import load_dataset
 
 from simplerag.llms.storage import ChromaDBStorage
-from simplerag.llms.models import Builders, Model
+from simplerag.llms.models import ModelBuilder, Model
 from simplerag.llms.rag import RAG
 from .controllers import CLI
 from .exceptions import CLIException
@@ -31,14 +31,12 @@ class EvalCLI(CLI):
 
         return storage
 
-    def load_model(self, model_id:str, variant:str) -> Model:
+    def load_model(self, model_id:str) -> Model:
         """Load the LLM model"""
-        self._logger.info("Loading Model '%s (%s)'", model_id, variant)
-        try:
-            model = Builders[model_id].value.build_from_variant(variant=variant)
-        except (AttributeError, OSError) as e:
-            self._logger.error(e)
-            raise CLIException(f"Invalid variant '{variant}' for model") from e
+        self._logger.info("Loading Model '%s'", model_id)
+        model = ModelBuilder.get_from_id(model_id)
+        if model is None:
+            raise CLIException(f"Invalid model '{model_id}'")
 
         return model
 

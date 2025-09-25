@@ -7,7 +7,6 @@ import argparse
 
 from rouge_score import rouge_scorer, scoring
 
-from simplerag.llms.models import Builders
 from simplerag.llms.rag import RAGQueryConfig
 from .utils.controllers import run_cli
 from .utils.eval_controllers import EvalCLI
@@ -26,7 +25,7 @@ class EvalRAGCLI(EvalCLI):
         """Run the script logic."""
         dataset = self.load_dataset(self._args.dataset)
         storage = self.get_storage(self._args.embedder, self._args.database_dir)
-        model = self.load_model(self._args.model, self._args.variant)
+        model = self.load_model(self._args.model_id)
         rag = self.get_rag(model, storage)
 
         self._logger.info("Getting Responses")
@@ -51,20 +50,12 @@ class EvalRAGCLI(EvalCLI):
     def process_args(self) -> argparse.Namespace:
         super().process_args()
 
-        self.parser.add_argument('-m', '--model',
-                                 default='GEMMA',
-                                 type=str,
-                                 choices=[b.name for b in Builders],
-                                 help='''
-                                    Base model to use as a conversational agent.
-                                    Defaults to GEMMA.
-                                    ''')
-        self.parser.add_argument('--variant',
-                                 default='',
+        self.parser.add_argument('-m', '--model-id',
+                                 default='Qwen/Qwen3-0.6B',
                                  type=str,
                                  help='''
-                                    Variant of model. See HuggingFace list of models
-                                    (https://huggingface.co/models). Ej: 4b-it
+                                    Model to use as a conversational agent.
+                                    Defaults to Qwen/Qwen3-0.6B.
                                     ''')
 
         self._args = self.parser.parse_args()
