@@ -12,7 +12,7 @@ from simplerag.document_splitters.hierarchical import TreeSplitter
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
 from simplerag.document_splitters.hierarchical import DataSplitterOptions
-from simplerag.llms.embedders import STEmbedder
+from simplerag.llms.embedders import EmbedderBuilder
 from simplerag.llms.storage import CSVStorage, ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
@@ -113,11 +113,11 @@ class GetEmbeddingsCLI(CLI):
                                 stablish different tolerances for interpretation. Defaults to 'any'
                                 ''')
         self.parser.add_argument('--max-chars',
-                            default=7500,
+                            default=8000,
                             type=int,
                             help='''
                                 Maximum number of characters per chunk. It will find nearest dot.
-                                Defaults to 7500.
+                                Defaults to 8000.
                                 ''')
         self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
@@ -215,12 +215,11 @@ class GetEmbeddingsCLI(CLI):
         sentences, metadatas = self.__extract_info(splitter)
 
         if self._args.storage == 'csv':
-            try:
-                embedder = STEmbedder(self._args.embedder)
-            except OSError as e:
-                raise CLIException(f"Invalid embedder '{self._args.embedder}'") from e
+            embedder = EmbedderBuilder.get_from_model_name(self._args.embedder)
+            if embedder is None:
+                raise CLIException(f"Invalid embedder '{self._args.embedder}'")
 
-            embeddings = embedder.get_embeddings(sentences)
+            embeddings = embedder(sentences)
         else:
             embeddings = None
 

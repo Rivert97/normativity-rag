@@ -20,17 +20,17 @@ Full list of options of the script can be obtained using the -h option.
 
 Single-query mode, get the answer to a simple question:
 
-    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m qwen --variant "3-0.6B" --query "Que tipos de profesores hay?"
+    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m Qwen/Qwen3-0.6B --query "Que tipos de profesores hay?"
 
-> __NOTE:__ To know the variant for the model visit HuggingFace models collection (https://huggingface.co/models). A variant is the identifier of the model starting from the version. For model 'google/gemma-3-4b-it' the model is 'GEMMA' and the variant is '3-4b-it'.
+> __NOTE:__ To know the id for the model visit HuggingFace models collection (https://huggingface.co/models). Consider that not al models are available.
 
 Interactive mode:
 
-    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m GEMMA --variant "3-4b-it"
+    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m google/gemma-3-1b-it
 
 Interactive mode with context. This option shows the relevant documents before the answer:
 
-    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m llama --variant "3.2-iB" --context
+    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m meta-llama/Llama-3.2-1B-Instruct --context
 
 Full list of tested models:
 

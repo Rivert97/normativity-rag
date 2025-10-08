@@ -5,18 +5,10 @@ from abc import ABC, abstractmethod
 
 import chromadb
 import chromadb.errors
-from chromadb.utils import embedding_functions
 import pandas as pd
 
 from .data import Document
-
-class CustomSentenceTransformerEmbeddingFunction(
-        embedding_functions.SentenceTransformerEmbeddingFunction
-    ):
-    """Custom class to load SentenceTransformer model with special params."""
-
-    def __call__(self, sentences):
-        return self._model.encode(sentences, batch_size=1, convert_to_numpy=True).tolist()
+from .embedders import EmbedderBuilder
 
 class Storage(ABC):
     """Interface that defines methods that should be implemented by a storage."""
@@ -34,12 +26,7 @@ class ChromaDBStorage(Storage):
 
     def __init__(self, model:str='all-MiniLM-L6-v2', db_path:str='./db', device:str = 'cuda'):
         self.client = chromadb.PersistentClient(path=db_path)
-        self.em_func = CustomSentenceTransformerEmbeddingFunction(
-            model_name=model,
-            device=device,
-            model_kwargs={'device_map': 'auto'},
-        )
-
+        self.em_func = EmbedderBuilder.get_from_model_name(model, device=device)
         self.hnsw_space = "ip" if 'dot' in model else 'cosine'
 
     def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):

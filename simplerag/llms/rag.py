@@ -18,11 +18,12 @@ class RAG:
         self.model = model
         self.storage = storage
 
-    def query(self, query:str, query_config: RAGQueryConfig) -> str:
+    def query(self, query:str, query_config: RAGQueryConfig) -> tuple[str, list]:
         """Retrieve an answer if a collection is specified it passes relevant
         documents as context."""
         if query_config.collection == '' or self.storage is None:
-            return self.model.query(query, query_config.add_to_history), []
+            response = self.model.query(query, query_config.add_to_history)
+            return response['message'], []
 
         documents = self.storage.query_sentence(query_config.collection,
                                                 query, query_config.num_docs)
@@ -33,7 +34,7 @@ class RAG:
         else:
             response = self.model.query(query, query_config.add_to_history)
 
-        return response, documents
+        return response['message'], documents
 
     def batch_query(self, queries:list[str], query_config: RAGQueryConfig) -> list[dict]:
         """Query multiple sentences to the model with or without context."""
@@ -43,7 +44,7 @@ class RAG:
         for _, query in enumerate(queries):
             response, docs = self.query(query, query_config)
             d = {
-                'response': response,
+                'response': response['message'],
                 'relevant_docs': docs
             }
             responses.append(d)
@@ -53,7 +54,7 @@ class RAG:
         return responses
 
     def query_with_conversation(self, messages:list[dict[str,str]],
-                                query_config:RAGQueryConfig) -> list[dict]:
+                                query_config:RAGQueryConfig) -> tuple[list[dict], list]:
         """Makes a RAG query with a full conversation."""
         if query_config.collection == '' or self.storage is None:
             return self.model.query_with_conversation(messages), []

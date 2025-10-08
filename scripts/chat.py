@@ -5,17 +5,17 @@ import os
 
 from simplerag.llms.storage import ChromaDBStorage
 from simplerag.llms.rag import RAG, RAGQueryConfig
-from simplerag.llms.models import Builders
+from simplerag.llms.models import ModelBuilder
 from simplerag.llms.data import Document
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
 
 DEFAULTS = {
     'embedder': 'Qwen/Qwen3-Embedding-0.6B',
-    'model': 'QWEN',
-    'variant': '3-0.6B',
+    'model': 'Qwen/Qwen3-0.6B',
     'num_docs': 5,
     'db': './db',
+    'prompt_file': './prompts/system.txt',
 }
 
 PROGRAM_NAME = 'RAG'
@@ -27,15 +27,18 @@ class CLIChatController(CLI):
         super().__init__(PROGRAM_NAME, __doc__, VERSION)
 
         self._args = None
+        self.system_prompt = None
 
     def run(self):
         """Run the script logic."""
-        self._logger.info("Loading Model '%s (%s)'", self._args.model, self._args.variant)
-        try:
-            model = Builders[self._args.model].value.build_from_variant(variant=self._args.variant)
-        except (AttributeError, OSError) as e:
-            self._logger.error(e)
-            raise CLIException(f"Invalid variant '{self._args.variant}' for model") from e
+        self._logger.info("Loading Model '%s'", self._args.model)
+        model = ModelBuilder.get_from_model_name(
+            self._args.model,
+            system_prompt=self.system_prompt
+        )
+
+        if model is None:
+            raise CLIException(f"Invalid model '{self._args.model}'")
 
         if self._args.collection == '':
             self._logger.info("Querying without RAG")
@@ -87,9 +90,8 @@ class CLIChatController(CLI):
         self.parser.add_argument('-m', '--model',
                                  default=DEFAULTS['model'],
                                  type=str,
-                                 choices=[b.name for b in Builders],
                                  help=f'''
-                                    Base model to use as a conversational agent.
+                                    Model to use as a conversational agent.
                                     Defaults to {DEFAULTS['model']}
                                     ''')
         self.parser.add_argument('-n', '--num-docs',
@@ -99,18 +101,15 @@ class CLIChatController(CLI):
                                     Number of context documents used to answer the question.
                                     Defaults to {DEFAULTS['num_docs']}
                                     ''')
+        self.parser.add_argument('-p', '--prompt-file',
+                                 default=DEFAULTS['prompt_file'],
+                                 type=str,
+                                 help=f'''File of a custom system prompt to be passed to the model.
+                                    Defaults to {DEFAULTS['prompt_file']}''')
         self.parser.add_argument('--query',
                                  default='',
                                  type=str,
                                  help='Sentence query to be answered by the model')
-        self.parser.add_argument('--variant',
-                                 default=DEFAULTS['variant'],
-                                 type=str,
-                                 help=f'''
-                                    Variant of model. See HuggingFace list of models
-                                    (https://huggingface.co/models).
-                                    Defaults to {DEFAULTS['variant']}
-                                    ''')
 
         args = self.parser.parse_args()
 
@@ -119,6 +118,10 @@ class CLIChatController(CLI):
 
         if args.num_docs < 0:
             raise CLIException("Invalid number of context documents")
+
+        if os.path.exists(args.prompt_file):
+            with open(args.prompt_file, 'r', encoding='utf-8') as f:
+                self.system_prompt = f.read()
 
         self._args = args
 
