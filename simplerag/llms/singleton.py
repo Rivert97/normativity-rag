@@ -1,6 +1,7 @@
 """Module to implement Singleton pattern."""
+from abc import ABCMeta
 
-class Singleton(type):
+class SingletonABCMeta(ABCMeta):
     """Singleton metaclass."""
 
     _instances = {}

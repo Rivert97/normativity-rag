@@ -1,5 +1,5 @@
 """Module to define classes to generate embeddings from sentences."""
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from enum import Enum
 
 from sentence_transformers import SentenceTransformer
@@ -8,12 +8,13 @@ import torch
 import torch.nn.functional as F
 from llama_cpp import Llama
 
-from .singleton import Singleton
+from .singleton import SingletonABCMeta
 
 # pylint: disable=redefined-builtin
 
-class Embedder(ABC):
+class Embedder():
     """Base class for embedding functions of different sources."""
+    __metaclass__ = SingletonABCMeta
 
     @abstractmethod
     def __call__(self, input: list[str]):
@@ -46,7 +47,6 @@ class EmbedderBuilder:
 
 class STEmbedder(Embedder):
     """Class to create embeddings using SentenceTransformers from HuggingFace."""
-    __metaclass__ = Singleton
 
     def __init__(self, model_name:str = 'all-MiniLM-L6-v2', device: str = 'cpu'):
         """Initialize a sentence_transformer embedder."""
@@ -63,7 +63,6 @@ class STEmbedder(Embedder):
 
 class TREmbedder(Embedder):
     """Class to create embeddings using Transformers library."""
-    __metaclass__ = Singleton
 
     def __init__(self, model_name:str = 'Qwen/Qwen3-Embedding-0.6B', device: str = 'cpu'):
         """Initialize the transformers model to obtain embeddings."""
@@ -116,7 +115,6 @@ class TREmbedder(Embedder):
 
 class GGUFEmbedder(Embedder):
     """Class to create embeddings from GGUF models using llama_cpp."""
-    __metaclass__ = Singleton
 
     def __init__(self, model_name:str):
         """Initialize the llama_cpp model to obtain embeddings."""
