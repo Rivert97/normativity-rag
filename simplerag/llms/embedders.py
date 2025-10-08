@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from llama_cpp import Llama
 
-from simplerag.singleton import Singleton
+from .singleton import Singleton
 
 # pylint: disable=redefined-builtin
 
