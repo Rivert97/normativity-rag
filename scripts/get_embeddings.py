@@ -113,11 +113,11 @@ class GetEmbeddingsCLI(CLI):
                                 stablish different tolerances for interpretation. Defaults to 'any'
                                 ''')
         self.parser.add_argument('--max-chars',
-                            default=7500,
+                            default=8000,
                             type=int,
                             help='''
                                 Maximum number of characters per chunk. It will find nearest dot.
-                                Defaults to 7500.
+                                Defaults to 8000.
                                 ''')
         self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')

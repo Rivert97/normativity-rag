@@ -21,12 +21,13 @@ VERSION = '1.00.00'
 
 DEFAULTS = {
     'cache_dir': './.cache',
-    'keep_cache': False,
-    'loader': 'pdfplumber',
-    'extraction_type': 'data',
     'database_dir': './db',
     'embedder': 'Qwen/Qwen3-Embedding-0.6B',
+    'extraction_type': 'data',
     'inner_splitter': 'section',
+    'keep_cache': False,
+    'loader': 'pdfplumber',
+    'max_chars': 8000,
     'parse_params_file': 'simplerag/settings/params-default.yml',
 }
 LOADERS = {
@@ -53,8 +54,9 @@ class CollectionParams:
     extraction_type: str
     inner_splitter: str
     loader: str
-    visual_aid: bool
+    visual_aid: bool = False
     raw: bool = False
+    max_chars: int = 8000
 
 class ExtractorCLI(CLI):
     """This class controls the execution of the program when using
@@ -85,6 +87,7 @@ class ExtractorCLI(CLI):
                 self._args.loader,
                 self._args.visual_aid,
                 self._args.raw,
+                self._args.max_chars,
             )
 
             if self._args.file != '':
@@ -135,7 +138,8 @@ class ExtractorCLI(CLI):
                             default=DEFAULTS['extraction_type'],
                             choices=EXTRACTION_TYPES,
                             type=str,
-                            help='Type of extraction to be performed. Defaults to text')
+                            help=f'''Type of extraction to be performed.
+                                Defaults to {DEFAULTS['extraction_type']}''')
         self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
@@ -160,6 +164,13 @@ class ExtractorCLI(CLI):
                             type=str,
                             choices=LOADERS.keys(),
                             help=f'Type of loader to use. Defaults to {DEFAULTS['loader']}')
+        self.parser.add_argument('--max-chars',
+                            default=8000,
+                            type=int,
+                            help=f'''
+                                Maximum number of characters per chunk. It will find nearest dot.
+                                Defaults to {DEFAULTS['max_chars']}.
+                                ''')
         self.parser.add_argument('--parse-params-file',
                             default='simplerag/settings/params-default.yml',
                             type=str,
@@ -238,7 +249,7 @@ class ExtractorCLI(CLI):
         if params.extraction_type == 'text':
             self._logger.info('Extracting text from file')
             text = pdf_loader.get_text(boundaries=file_parse_params.get('pdf_margins'))
-            splitter = TextTreeSplitter(text, basename)
+            splitter = TextTreeSplitter(text, basename, params.max_chars)
         elif params.extraction_type == 'data':
             self._logger.info('Extracting data from file')
 
@@ -246,7 +257,7 @@ class ExtractorCLI(CLI):
             splitter = DataTreeSplitter(
                 data.get_data(remove_headers=True, boundaries=file_parse_params.get('pdf_margins')),
                 basename,
-                DataSplitterOptions(loader=params.loader)
+                DataSplitterOptions(loader=params.loader,max_characters=params.max_chars)
             )
         else:
             raise CLIException(f"Invalid extraction type '{params.extraction_type}'")
