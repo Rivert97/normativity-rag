@@ -13,7 +13,7 @@ class Embedder(ABC):
     """Base class for embedding functions of different sources."""
 
     @abstractmethod
-    def __call__(self, sentences: list[str]):
+    def __call__(self, input: list[str]):
         """Return the embeddings."""
 
 class EmbedderBuilder:
@@ -44,8 +44,12 @@ class STEmbedder(Embedder):
     def __init__(self, model_name:str = 'all-MiniLM-L6-v2', device: str = 'cpu'):
         self.model = SentenceTransformer(model_name, device=device)
 
-    def __call__(self, sentences: list[str]):
-        return self.model.encode(sentences, batch_size=1, convert_to_numpy=True).tolist()
+    def __call__(self, input: list[str]):
+        return self.model.encode(input, batch_size=1, convert_to_numpy=True).tolist()
+
+    @staticmethod
+    def name() -> str:
+        return "sentence_transformer"
 
 class TREmbedder(Embedder):
     """Class to create embeddings using Transformers library."""
@@ -55,13 +59,13 @@ class TREmbedder(Embedder):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         self.model = AutoModel.from_pretrained(model_name).to(device)
 
-    def __call__(self, sentences: list[str]):
+    def __call__(self, input: list[str]):
         batch_size = 1
         max_length = 2048
 
         embeddings = []
-        for start in range(0, len(sentences), batch_size):
-            batch = sentences[start:start+batch_size]
+        for start in range(0, len(input), batch_size):
+            batch = input[start:start+batch_size]
             # Tokenize the input texts
             batch_dict = self.tokenizer(
                 batch,
@@ -92,6 +96,10 @@ class TREmbedder(Embedder):
             batch_size = last_hidden_states.shape[0]
             return last_hidden_states[torch.arange(batch_size, device=last_hidden_states.device), sequence_lengths]
 
+    @staticmethod
+    def name() -> str:
+        return "transformer"
+
 class GGUFEmbedder(Embedder):
     """Class to create embeddings from GGUF models using llama_cpp."""
     __metaclass__ = Singleton
@@ -105,12 +113,16 @@ class GGUFEmbedder(Embedder):
             verbose=False,
         )
 
-    def __call__(self, sentences):
+    def __call__(self, input):
         embeddings = []
-        for sentence in sentences:
+        for sentence in input:
             embeddings.append(self.model.embed(sentence))
 
         return embeddings
+
+    @staticmethod
+    def name() -> str:
+        return "llama_cpp"
 
 class Embedders(Enum):
     """Different types of embedders"""
