@@ -25,7 +25,7 @@ class EvalRAGCLI(EvalCLI):
         """Run the script logic."""
         dataset = self.load_dataset(self._args.dataset)
         storage = self.get_storage(self._args.embedder, self._args.database_dir)
-        model = self.load_model(self._args.model_id)
+        model = self.load_model(self._args.model)
         rag = self.get_rag(model, storage)
 
         self._logger.info("Getting Responses")
@@ -50,7 +50,7 @@ class EvalRAGCLI(EvalCLI):
     def process_args(self) -> argparse.Namespace:
         super().process_args()
 
-        self.parser.add_argument('-m', '--model-id',
+        self.parser.add_argument('-m', '--model',
                                  default='Qwen/Qwen3-0.6B',
                                  type=str,
                                  help='''

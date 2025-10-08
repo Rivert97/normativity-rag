@@ -37,7 +37,6 @@ class ChromaDBStorage(Storage):
         self.em_func = CustomSentenceTransformerEmbeddingFunction(
             model_name=model,
             device=device,
-            model_kwargs={'device_map': 'auto'},
         )
 
         self.hnsw_space = "ip" if 'dot' in model else 'cosine'

@@ -31,12 +31,12 @@ class EvalCLI(CLI):
 
         return storage
 
-    def load_model(self, model_id:str) -> Model:
+    def load_model(self, model_name:str) -> Model:
         """Load the LLM model"""
-        self._logger.info("Loading Model '%s'", model_id)
-        model = ModelBuilder.get_from_id(model_id)
+        self._logger.info("Loading Model '%s'", model_name)
+        model = ModelBuilder.get_from_model_name(model_name)
         if model is None:
-            raise CLIException(f"Invalid model '{model_id}'")
+            raise CLIException(f"Invalid model '{model_name}'")
 
         return model
 

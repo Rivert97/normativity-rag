@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from enum import Enum
 import os
+import json
 
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
@@ -19,8 +20,12 @@ torch.backends.cuda.enable_flash_sdp(False)
 class Model(ABC):
     """Base class for all the models."""
 
-    def __init__(self, multimodal:bool=False):
+    def __init__(self, multimodal:bool=False, system_prompt:str=None):
         self.multimodal = multimodal
+        if system_prompt is None:
+            self.system_prompt = 'Eres un asistente que ayuda a responder preguntas.'
+        else:
+            self.system_prompt = system_prompt
 
         self.messages = self.__get_init_messages()
 
@@ -31,7 +36,7 @@ class Model(ABC):
         response = self.get_response_from_model(messages)
 
         if add_to_history:
-            self.messages += messages + self.response_to_message(response)
+            self.messages += messages + self.response_to_message(response['message'])
 
         return response
 
@@ -42,7 +47,8 @@ class Model(ABC):
         response = self.get_response_from_model(messages)
 
         if add_to_history:
-            self.messages += self.str_to_message(query) + self.response_to_message(response)
+            self.messages += self.str_to_message(query)
+            self.messages += self.response_to_message(response['message'])
 
         return response
 
@@ -50,7 +56,7 @@ class Model(ABC):
         """Query an answer based on a full conversation."""
         response = self.get_response_from_model(messages)
 
-        return self.response_to_message(response)
+        return self.response_to_message(response['message'])
 
     def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
                                               documents:list[Document]) -> str:
@@ -62,7 +68,7 @@ class Model(ABC):
         messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
         response = self.get_response_from_model(messages)
 
-        return self.response_to_message(response)
+        return self.response_to_message(response['message'])
 
     def str_to_message(self, query:str):
         """Add a new message to be sent to the model."""
@@ -92,23 +98,22 @@ class Model(ABC):
         return [response]
 
     @abstractmethod
-    def get_response_from_model(self, messages: list[dict[str, str]]) -> str:
+    def get_response_from_model(self, messages: list[dict[str, str]]) -> dict[str, str]:
         """Calls the model inference method and returns an answer."""
 
     def __get_init_messages(self) -> list[dict[str:str|dict]]:
-        instruction = 'Eres un asistente que ayuda a responder preguntas.'
         if self.multimodal:
             messages = [
                 {
                     "role": "system",
-                    "content": [{"type": "text", "text": instruction}],
+                    "content": [{"type": "text", "text": self.system_prompt}],
                 },
             ]
         else:
             messages = [
                 {
                     "role": "system",
-                    "content": instruction,
+                    "content": self.system_prompt,
                 },
             ]
 
@@ -131,55 +136,48 @@ class Model(ABC):
         return new_message
 
     def __get_multimodal_message_with_context(self, query:str, documents:list[Document]):
-        documents_context = self.__format_documents(documents)
+        documents_context = self.__format_documents_json(documents)
 
         new_messages = [
             {
-                "role": "system",
-                "content": [{
-                    "type": "text",
-                    "text": "Responde la siguiente pregunta. Utiliza únicamente los "\
-                            f"fragmentos de documentos siguientes:\n\n{documents_context}"
-                }]
-            },
-            {
                 "role": "user",
-                "content": [{"type": "text", "text": query}]
+                "content": [{"type": "text", "text": f"<pregunta>{query}</pregunta>\n\n"\
+                             f"<contexto>{documents_context}</contexto>"}]
             }
         ]
 
         return new_messages
 
     def __get_text_message_with_context(self, query:str, documents:list[Document]):
-        documents_context = self.__format_documents(documents)
+        documents_context = self.__format_documents_json(documents)
 
         new_messages = [
             {
-                "role": "system",
-                "content": "Responde la siguiente pregunta. Utiliza únicamente los "\
-                           f"fragmentos de documentos siguientes:\n\n{documents_context}"
-            },
-            {
                 "role": "user",
-                "content": query
+                "content": f"<pregunta>{query}<pregunta>\n\n"\
+                            f"<contexto{documents_context}</contexto>",
             }
         ]
 
         return new_messages
 
-    def __format_documents(self, documents:list[Document]) -> str:
-        docs_str = ''
+    def __format_documents_json(self, documents:list[Document]) -> list[dict[str,str]]:
+        docs = []
         for doc in documents:
-            docs_str += f"{doc.get_reference()}:\n\n{doc.get_metadata()['title']}\n\n"\
-                        f"{doc.get_content()}\n\n"
+            d = {
+                "documento": doc.get_metadata()['document_name'],
+                "nombre": doc.get_metadata()['title'],
+                "contenido": doc.get_content()
+            }
+            docs.append(d)
 
-        return docs_str
+        return json.dumps(docs)
 
 class ModelBuilder:
-    """Factory class to create the different types of models"""
+    """Factory method to create models and its variants."""
 
     @classmethod
-    def get_from_id(cls, model_id:str) -> Model:
+    def get_from_id(cls, model_id:str, **model_args) -> Model:
         """Return an object of the corresponding class depending of the type of model."""
         if model_id == '':
             return None
@@ -188,25 +186,45 @@ class ModelBuilder:
         full_name = id_parts[-1]
 
         full_name_parts = full_name.split('-')
-        name = full_name_parts[0].upper()
+        name = full_name_parts[0]
         try:
-            return Models[name].value(model_id)
+            return Models[name.upper()].value(model_id, **model_args)
         except KeyError:
             return None
 
     @classmethod
-    def get_from_gguf_file(cls, gguf_file:str) -> Model:
+    def get_from_gguf_file(cls, gguf_file:str, **model_args) -> Model:
         """Return an object of the corresponding class to use a GGUF model"""
         if not os.path.exists(gguf_file):
+            print(f"Model file '{gguf_file}' not found")
             return None
 
-        return GGUFModel(gguf_file)
+        try:
+            return GGUFModel(gguf_file, **model_args)
+        except Exception as e:
+            print(e)
+            return None
+
+    @classmethod
+    def get_from_model_name(cls, model_name:str, **model_args) -> Model:
+        """Return an object of the corresponding class depending on the name."""
+        if model_name == '':
+            return None
+
+        if model_name.endswith('.gguf'):
+            try:
+                return GGUFModel(model_name, **model_args)
+            except Exception as e:
+                print(e)
+                return None
+
+        return ModelBuilder.get_from_id(model_name, **model_args)
 
 class Llama3(Model):
-    """Class to load Meta Llama 3.1 and 3.2 model."""
+    """Class to load Meta Llama 3.1 and 3.2 model and its variants."""
 
-    def __init__(self, model_id:str):
-        super().__init__(multimodal=True)
+    def __init__(self, model_id:str, system_prompt:str=None):
+        super().__init__(multimodal=True, system_prompt=system_prompt)
 
         self.model_id = model_id
 
@@ -220,20 +238,23 @@ class Llama3(Model):
             device_map="auto"
         )
 
-    def get_response_from_model(self, messages:list[dict[str, str]]) -> str:
+    def get_response_from_model(self, messages:list[dict[str, str]]) -> dict[str, str]:
         all_messages = self.messages + messages
         output = self.pipeline(all_messages, max_new_tokens=1024)
 
-        response = output[0].get('generated_text')[-1].get('content', '')
+        response = {
+            'message': output[0].get('generated_text')[-1].get('content', ''),
+            'reasoning': '',
+        }
 
         return response
 
 class Gemma(Model):
-    """Class to load Gemma3 model."""
+    """Class to load Gemma3 model and its variants."""
 
-    def __init__(self, model_id: str):
+    def __init__(self, model_id: str, system_prompt:str=None):
         multimodal = not(model_id.endswith('1b-it') or model_id.endswith('-gguf'))
-        super().__init__(multimodal=multimodal)
+        super().__init__(multimodal=multimodal, system_prompt=system_prompt)
 
         self.model_id = model_id
         self.processor = None
@@ -283,9 +304,12 @@ class Gemma(Model):
             generation = self.model.generate(**inputs, max_new_tokens=1024, do_sample=False)
             generation = generation[0][input_len:]
 
-        decoded = self.processor.decode(generation, skip_special_tokens=True)
+        response = {
+            'message': self.processor.decode(generation, skip_special_tokens=True),
+            'reasoning': '',
+        }
 
-        return decoded
+        return response
 
     def __process_text(self, messages:list[dict]):
         all_messages = self.messages + messages
@@ -313,15 +337,19 @@ class Gemma(Model):
         sot_pos = sot + 21 if sot > -1 else 0
         eot = response.find('<end_of_turn>', sot_pos)
         eot_pos = eot if eot > -1 else None
-        response = response[sot_pos:eot_pos]
+
+        response = {
+            'message': response[sot_pos:eot_pos],
+            'reasoning': '',
+        }
 
         return response
 
 class Qwen3(Model):
     """Class to load Qwen models."""
 
-    def __init__(self, model_id:str, thinking:bool=False):
-        super().__init__(multimodal=False)
+    def __init__(self, model_id:str, thinking:bool=False, system_prompt:str=None):
+        super().__init__(multimodal=False, system_prompt=system_prompt)
         self.model_id = model_id
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
@@ -342,7 +370,6 @@ class Qwen3(Model):
             enable_thinking=self.thinking, # Switches between thinking and non-thinking modes
         )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
-        print("Tokens input:", len(model_inputs['input_ids'][0]))
 
         # Conduct text completion
         generated_tokens = self.model.generate(
@@ -358,18 +385,23 @@ class Qwen3(Model):
         except ValueError:
             index = 0
 
-        #thinking_content =
-        #    self.tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
-        print("Tokens output:", len(output_ids[index:]))
-        content = self.tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+        message = self.tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+        if index > 0:
+            reasoning = self.tokenizer.decode(output_ids[1:index-1], skip_special_tokens=True).strip("\n")
+        else:
+            reasoning = ''
+        response = {
+            'message': message,
+            'reasoning': reasoning,
+        }
 
-        return content
+        return response
 
 class Mistral(Model):
     """Class to load Mistral AI models."""
 
-    def __init__(self, model_id:str):
-        super().__init__(multimodal=False)
+    def __init__(self, model_id:str, system_prompt:str=None):
+        super().__init__(multimodal=False, system_prompt=system_prompt)
 
         self.model_id = model_id
 
@@ -387,15 +419,18 @@ class Mistral(Model):
         all_messages = self.messages + messages
         output = self.pipeline(all_messages, max_new_tokens=1024)
 
-        response = output[0].get('generated_text')[-1].get('content', '')
+        response = {
+            'message': output[0].get('generated_text')[-1].get('content', ''),
+            'reasoning': '',
+        }
 
         return response
 
 class GPT(Model):
     """Class to load GPT-OSS models."""
 
-    def __init__(self, model_id:str):
-        super().__init__(multimodal=False)
+    def __init__(self, model_id:str, system_prompt:str=None):
+        super().__init__(multimodal=False, system_prompt=system_prompt)
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -416,26 +451,29 @@ class GPT(Model):
 
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=1024,
+            max_new_tokens=2048,
             temperature=0.7
         )
 
-        content = self.tokenizer.decode(outputs[0])
+        response = {
+            'message': self.tokenizer.decode(outputs[0]),
+            'reasoning': '',
+        }
 
-        return content
+        return response
 
 class GGUFModel(Model):
     """Class to load models with GGUF format."""
 
-    def __init__(self, ggu_file:str, thinking:bool=False):
-        super().__init__(multimodal=False)
+    def __init__(self, ggu_file:str, thinking:bool=False, system_prompt:str=None):
+        super().__init__(multimodal=False, system_prompt=system_prompt)
         self.thinking = thinking
 
         self.model = Llama(
             model_path=ggu_file,
             embedding=False,
             n_gpu_layers=-1,
-            n_ctx=8192,
+            n_ctx=16384,
             verbose=False,
         )
 
@@ -449,19 +487,40 @@ class GGUFModel(Model):
                 } for m in all_messages
             ]
 
-        response = self.model.create_chat_completion(
+        res = self.model.create_chat_completion(
             messages=all_messages,
-            max_tokens=1024
+            max_tokens=2048
         )
-        response_str = response['choices'][0]['message']['content']
-        index = response_str.find('</think>\n\n')
-        if index >= 0:
-            response_str = response_str[index + 10:]
+        response_str, reasoning = self.__split_reasoning_content(
+            res['choices'][0]['message']['content']
+        )
 
-        print("Tokens input:", response['usage']['prompt_tokens'])
-        print("Tokens output:", response['usage']['completion_tokens'])
+        response = {
+            'message': response_str,
+            'reasoning': reasoning
+        }
 
-        return response_str
+        return response
+
+    def __split_reasoning_content(self, model_out:str):
+        reasoning = None
+        response = model_out
+
+        index = response.find('</think>')
+        if index > 0:
+            reasoning = response[7:index].strip()
+            response = response[index + 9:].strip()
+
+        index = response.find('<|channel|>final<|message|>')
+        if index > 0:
+            reasoning = response[30:index-25]
+            response = response[index+27:]
+
+        index = response.find("'text': '")
+        if index > 0:
+            response = response[index+9:].rstrip("']}")
+
+        return response, reasoning
 
 class Models(Enum):
     """Different types of models that are available."""
@@ -469,3 +528,4 @@ class Models(Enum):
     GEMMA = Gemma
     LLAMA = Llama3
     MISTRAL = Mistral
+    GPT = GPT

@@ -25,56 +25,56 @@ class TestModels(unittest.TestCase):
         model = ModelBuilder.get_from_id("Qwen/Qwen3-0.6B")
         response = model.query("Qué es un LLM?", self.query_config)
 
-        self.assertIsInstance(response, str, "Model response is not a string")
-        self.assertTrue(len(response) > 0, "Model response is empty")
+        self.assertIsInstance(response['message'], str, "Model response is not a string")
+        self.assertTrue(len(response['message']) > 0, "Model response is empty")
 
     def test_gemma_3_1b(self):
         """Test for Gemma-3-1b-it model. Smallest model for Gemma."""
         model = ModelBuilder.get_from_id("google/gemma-3-1b-it")
         response = model.query("Qué es un LLM?", self.query_config)
 
-        self.assertIsInstance(response, str, "Model response is not a string")
-        self.assertTrue(len(response) > 0, "Model response is empty")
+        self.assertIsInstance(response['message'], str, "Model response is not a string")
+        self.assertTrue(len(response['message']) > 0, "Model response is empty")
 
     def test_gemma_3_4b(self):
         """Test for Gemma-3-4b-it model. 2nd bigger model for Gemma."""
         model = ModelBuilder.get_from_id("google/gemma-3-4b-it")
         response = model.query("Qué es un LLM?", self.query_config)
 
-        self.assertIsInstance(response, str, "Model response is not a string")
-        self.assertTrue(len(response) > 0, "Model response is empty")
+        self.assertIsInstance(response['message'], str, "Model response is not a string")
+        self.assertTrue(len(response['message']) > 0, "Model response is empty")
 
     def test_gemma_3_1b_qat(self):
         """Test for Gemma-3-1b-it-qat-q4_0 model. Smallest qantized model for Gemma."""
         model = ModelBuilder.get_from_id("google/gemma-3-1b-it-qat-q4_0-gguf")
         response = model.query("Qué es un LLM?", self.query_config)
 
-        self.assertIsInstance(response, str, "Model response is not a string")
-        self.assertTrue(len(response) > 0, "Model response is empty")
+        self.assertIsInstance(response['message'], str, "Model response is not a string")
+        self.assertTrue(len(response['message']) > 0, "Model response is empty")
 
     def test_llama_32_1b(self):
         """Test for Llama-3.2-1B-Instruct model. Smallest model for Llama."""
         model = ModelBuilder.get_from_id("meta-llama/Llama-3.2-1B-Instruct")
         response = model.query("Qué es un LLM?", self.query_config)
 
-        self.assertIsInstance(response, str, "Model response is not a string")
-        self.assertTrue(len(response) > 0, "Model response is empty")
+        self.assertIsInstance(response['message'], str, "Model response is not a string")
+        self.assertTrue(len(response['message']) > 0, "Model response is empty")
 
     def test_llama_31_8b(self):
         """Test for Llama-3.1-8B-Instruct model. Biggest model for Llama."""
         model = ModelBuilder.get_from_id("meta-llama/Llama-3.1-8B-Instruct")
         response = model.query("Qué es un LLM?", self.query_config)
 
-        self.assertIsInstance(response, str, "Model response is not a string")
-        self.assertTrue(len(response) > 0, "Model response is empty")
+        self.assertIsInstance(response['message'], str, "Model response is not a string")
+        self.assertTrue(len(response['message']) > 0, "Model response is empty")
 
     def test_mistral_7b(self):
         """Test for Mistral-7b-instruct-v0.3 model."""
         model = ModelBuilder.get_from_id("mistralai/Mistral-7B-Instruct-v0.3")
         response = model.query("Qué es un LLM?", self.query_config)
 
-        self.assertIsInstance(response, str, "Model response is not a string")
-        self.assertTrue(len(response) > 0, "Model response is empty")
+        self.assertIsInstance(response['message'], str, "Model response is not a string")
+        self.assertTrue(len(response['message']) > 0, "Model response is empty")
 
 if __name__ == '__main__':
     unittest.main()
