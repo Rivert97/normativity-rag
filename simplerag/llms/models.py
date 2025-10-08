@@ -201,7 +201,7 @@ class ModelBuilder:
 
         try:
             return GGUFModel(gguf_file, **model_args)
-        except Exception as e:
+        except OSError as e:
             print(e)
             return None
 
@@ -214,7 +214,7 @@ class ModelBuilder:
         if model_name.endswith('.gguf'):
             try:
                 return GGUFModel(model_name, **model_args)
-            except Exception as e:
+            except OSError as e:
                 print(e)
                 return None
 
@@ -387,7 +387,9 @@ class Qwen3(Model):
 
         message = self.tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
         if index > 0:
-            reasoning = self.tokenizer.decode(output_ids[1:index-1], skip_special_tokens=True).strip("\n")
+            reasoning = self.tokenizer.decode(
+                output_ids[1:index-1], skip_special_tokens=True
+            ).strip("\n")
         else:
             reasoning = ''
         response = {

@@ -1,5 +1,4 @@
 """Module to define classes to generate embeddings from sentences."""
-from simplerag.singleton import Singleton
 from abc import ABC, abstractmethod
 from enum import Enum
 
@@ -9,12 +8,19 @@ import torch
 import torch.nn.functional as F
 from llama_cpp import Llama
 
+from simplerag.singleton import Singleton
+
+# pylint: disable=redefined-builtin
+
 class Embedder(ABC):
     """Base class for embedding functions of different sources."""
 
     @abstractmethod
     def __call__(self, input: list[str]):
-        """Return the embeddings."""
+        """
+        Return the embeddings.
+        input param needs to be called like that to use it with ChromaDB.
+        """
 
 class EmbedderBuilder:
     """Factory class for different types of embedders."""
@@ -32,23 +38,27 @@ class EmbedderBuilder:
         """Get embedder depending on the model name."""
         if model_name.startswith('sentence-transformers'):
             return STEmbedder(model_name, **model_args)
-        elif model_name.endswith('.gguf'):
+
+        if model_name.endswith('.gguf'):
             return GGUFEmbedder(model_name, **model_args)
-        else:
-            return TREmbedder(model_name, **model_args)
+
+        return TREmbedder(model_name, **model_args)
 
 class STEmbedder(Embedder):
     """Class to create embeddings using SentenceTransformers from HuggingFace."""
     __metaclass__ = Singleton
 
     def __init__(self, model_name:str = 'all-MiniLM-L6-v2', device: str = 'cpu'):
+        """Initialize a sentence_transformer embedder."""
         self.model = SentenceTransformer(model_name, device=device)
 
     def __call__(self, input: list[str]):
+        """Get the embeddings."""
         return self.model.encode(input, batch_size=1, convert_to_numpy=True).tolist()
 
     @staticmethod
     def name() -> str:
+        """Return the name of the embedding function."""
         return "sentence_transformer"
 
 class TREmbedder(Embedder):
@@ -56,10 +66,12 @@ class TREmbedder(Embedder):
     __metaclass__ = Singleton
 
     def __init__(self, model_name:str = 'Qwen/Qwen3-Embedding-0.6B', device: str = 'cpu'):
+        """Initialize the transformers model to obtain embeddings."""
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         self.model = AutoModel.from_pretrained(model_name).to(device)
 
     def __call__(self, input: list[str]):
+        """Get the embeddings."""
         batch_size = 1
         max_length = 2048
 
@@ -91,20 +103,23 @@ class TREmbedder(Embedder):
         left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
         if left_padding:
             return last_hidden_states[:, -1]
-        else:
-            sequence_lengths = attention_mask.sum(dim=1) - 1
-            batch_size = last_hidden_states.shape[0]
-            return last_hidden_states[torch.arange(batch_size, device=last_hidden_states.device), sequence_lengths]
+
+        sequence_lengths = attention_mask.sum(dim=1) - 1
+        batch_size = last_hidden_states.shape[0]
+        batch_range = torch.arange(batch_size, device=last_hidden_states.device)
+        return last_hidden_states[batch_range, sequence_lengths]
 
     @staticmethod
     def name() -> str:
+        """Return the name of the embedding function."""
         return "transformer"
 
 class GGUFEmbedder(Embedder):
     """Class to create embeddings from GGUF models using llama_cpp."""
     __metaclass__ = Singleton
 
-    def __init__(self, model_name:str, device: str = 'cpu'):
+    def __init__(self, model_name:str):
+        """Initialize the llama_cpp model to obtain embeddings."""
         self.model = Llama(
             model_path=model_name,
             embedding=True,
@@ -114,6 +129,7 @@ class GGUFEmbedder(Embedder):
         )
 
     def __call__(self, input):
+        """Get the embeddings."""
         embeddings = []
         for sentence in input:
             embeddings.append(self.model.embed(sentence))
@@ -122,6 +138,7 @@ class GGUFEmbedder(Embedder):
 
     @staticmethod
     def name() -> str:
+        """Return the name of the embedding function."""
         return "llama_cpp"
 
 class Embedders(Enum):
