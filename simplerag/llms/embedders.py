@@ -8,13 +8,12 @@ import torch
 import torch.nn.functional as F
 from llama_cpp import Llama
 
-from .singleton import SingletonABCMeta
+from .singleton import Singleton
 
 # pylint: disable=redefined-builtin
 
 class Embedder():
     """Base class for embedding functions of different sources."""
-    __metaclass__ = SingletonABCMeta
 
     @abstractmethod
     def __call__(self, input: list[str]):
@@ -45,7 +44,7 @@ class EmbedderBuilder:
 
         return TREmbedder(model_name, **model_args)
 
-class STEmbedder(Embedder):
+class STEmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings using SentenceTransformers from HuggingFace."""
 
     def __init__(self, model_name:str = 'all-MiniLM-L6-v2', device: str = 'cpu'):
@@ -61,7 +60,7 @@ class STEmbedder(Embedder):
         """Return the name of the embedding function."""
         return "sentence_transformer"
 
-class TREmbedder(Embedder):
+class TREmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings using Transformers library."""
 
     def __init__(self, model_name:str = 'Qwen/Qwen3-Embedding-0.6B', device: str = 'cpu'):
@@ -113,7 +112,7 @@ class TREmbedder(Embedder):
         """Return the name of the embedding function."""
         return "transformer"
 
-class GGUFEmbedder(Embedder):
+class GGUFEmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings from GGUF models using llama_cpp."""
 
     def __init__(self, model_name:str):
