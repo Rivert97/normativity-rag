@@ -115,7 +115,7 @@ class TREmbedder(Embedder, metaclass=Singleton):
 class GGUFEmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings from GGUF models using llama_cpp."""
 
-    def __init__(self, model_name:str):
+    def __init__(self, model_name:str, device: str = 'cpu'):
         """Initialize the llama_cpp model to obtain embeddings."""
         self.model = Llama(
             model_path=model_name,
@@ -124,6 +124,8 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
             n_ctx=2048,
             verbose=False,
         )
+
+        self.device = device
 
     def __call__(self, input):
         """Get the embeddings."""
