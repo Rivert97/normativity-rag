@@ -1,6 +1,7 @@
 """Module to define classes to generate embeddings from sentences."""
 from abc import abstractmethod
 from enum import Enum
+import os
 
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModel
@@ -14,6 +15,10 @@ from .singleton import Singleton
 
 class Embedder():
     """Base class for embedding functions of different sources."""
+
+    def __init__(self):
+        """Initialize the embedder."""
+        self.embedding_context = int(os.getenv('EMBEDDING_CONTEXT', '2048'))
 
     @abstractmethod
     def __call__(self, input: list[str]):
@@ -49,6 +54,7 @@ class STEmbedder(Embedder, metaclass=Singleton):
 
     def __init__(self, model_name:str = 'all-MiniLM-L6-v2', device: str = 'cpu'):
         """Initialize a sentence_transformer embedder."""
+        super().__init__()
         self.model = SentenceTransformer(model_name, device=device)
 
     def __call__(self, input: list[str]):
@@ -65,13 +71,13 @@ class TREmbedder(Embedder, metaclass=Singleton):
 
     def __init__(self, model_name:str = 'Qwen/Qwen3-Embedding-0.6B', device: str = 'cpu'):
         """Initialize the transformers model to obtain embeddings."""
+        super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         self.model = AutoModel.from_pretrained(model_name).to(device)
 
     def __call__(self, input: list[str]):
         """Get the embeddings."""
         batch_size = 1
-        max_length = 2048
 
         embeddings = []
         for start in range(0, len(input), batch_size):
@@ -81,7 +87,7 @@ class TREmbedder(Embedder, metaclass=Singleton):
                 batch,
                 padding=True,
                 truncation=True,
-                max_length=max_length,
+                max_length=self.embedding_context,
                 return_tensors="pt",
             ).to(self.model.device)
 
@@ -117,11 +123,12 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
 
     def __init__(self, model_name:str, device: str = 'cpu'):
         """Initialize the llama_cpp model to obtain embeddings."""
+        super().__init__()
         self.model = Llama(
             model_path=model_name,
             embedding=True,
             n_gpu_layers=-1,
-            n_ctx=2048,
+            n_ctx=self.embedding_context,
             verbose=False,
         )
 

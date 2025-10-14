@@ -29,6 +29,10 @@ class Model(ABC):
 
         self.messages = self.__get_init_messages()
 
+        self.model_context = int(os.getenv('MODEL_CONTEXT', '16384'))
+        self.max_new_tokens = int(os.getenv('MAX_NEW_TOKENS', '8192'))
+        self.temperature = float(os.getenv('TEMPERATURE', '0.7'))
+
     def query(self, query:str, add_to_history:bool=True):
         """Query an answer based on a question."""
         messages = self.str_to_message(query)
@@ -374,7 +378,7 @@ class Qwen3(Model):
         # Conduct text completion
         generated_tokens = self.model.generate(
             **model_inputs,
-            max_new_tokens=1024
+            max_new_tokens=self.max_new_tokens,
         )
         output_ids = generated_tokens[0][len(model_inputs.input_ids[0]):].tolist()
 
@@ -453,8 +457,8 @@ class GPT(Model):
 
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=2048,
-            temperature=0.7
+            max_new_tokens=self.max_new_tokens,
+            temperature=self.temperature,
         )
 
         response = {
@@ -475,7 +479,7 @@ class GGUFModel(Model):
             model_path=ggu_file,
             embedding=False,
             n_gpu_layers=-1,
-            n_ctx=16384,
+            n_ctx=self.model_context,
             verbose=False,
         )
 
@@ -491,7 +495,7 @@ class GGUFModel(Model):
 
         res = self.model.create_chat_completion(
             messages=all_messages,
-            max_tokens=2048
+            max_tokens=self.max_new_tokens
         )
         response_str, reasoning = self.__split_reasoning_content(
             res['choices'][0]['message']['content']
