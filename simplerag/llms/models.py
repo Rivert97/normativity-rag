@@ -22,10 +22,7 @@ class Model(ABC):
 
     def __init__(self, multimodal:bool=False, system_prompt:str=None):
         self.multimodal = multimodal
-        if system_prompt is None:
-            self.system_prompt = 'Eres un asistente que ayuda a responder preguntas.'
-        else:
-            self.system_prompt = system_prompt
+        self.system_prompt = system_prompt
 
         self.messages = self.__get_init_messages()
 
@@ -58,9 +55,9 @@ class Model(ABC):
 
     def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
         """Query an answer based on a full conversation."""
-        response = self.get_response_from_model(messages)
+        response = self.get_response_from_model(messages, raw=True)
 
-        return self.response_to_message(response['message'])
+        return self.response_to_message(response)
 
     def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
                                               documents:list[Document]) -> str:
@@ -70,9 +67,9 @@ class Model(ABC):
         """
         last_query = messages[-1]['content']
         messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
-        response = self.get_response_from_model(messages)
+        response = self.get_response_from_model(messages, raw=True)
 
-        return self.response_to_message(response['message'])
+        return self.response_to_message(response)
 
     def str_to_message(self, query:str):
         """Add a new message to be sent to the model."""
@@ -102,10 +99,14 @@ class Model(ABC):
         return [response]
 
     @abstractmethod
-    def get_response_from_model(self, messages: list[dict[str, str]]) -> dict[str, str]:
+    def get_response_from_model(self, messages: list[dict[str, str]],
+                                raw:bool=False) -> dict[str, str]|str:
         """Calls the model inference method and returns an answer."""
 
     def __get_init_messages(self) -> list[dict[str:str|dict]]:
+        if self.system_prompt is None:
+            return []
+
         if self.multimodal:
             messages = [
                 {
@@ -159,7 +160,7 @@ class Model(ABC):
             {
                 "role": "user",
                 "content": f"<pregunta>{query}<pregunta>\n\n"\
-                            f"<contexto{documents_context}</contexto>",
+                            f"<contexto>{documents_context}</contexto>",
             }
         ]
 
@@ -242,9 +243,13 @@ class Llama3(Model):
             device_map="auto"
         )
 
-    def get_response_from_model(self, messages:list[dict[str, str]]) -> dict[str, str]:
+    def get_response_from_model(self, messages:list[dict[str, str]],
+                                raw:bool=False) -> dict[str, str]|str:
         all_messages = self.messages + messages
         output = self.pipeline(all_messages, max_new_tokens=1024)
+
+        if raw:
+            return output[0].get('generated_text')[-1].get('content', '')
 
         response = {
             'message': output[0].get('generated_text')[-1].get('content', ''),
@@ -287,15 +292,15 @@ class Gemma(Model):
             ).eval()
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, gguf_file=gguf_file)
 
-    def get_response_from_model(self, messages):
+    def get_response_from_model(self, messages, raw=False):
         if self.multimodal:
-            response = self.__process_multimodal(messages)
+            response = self.__process_multimodal(messages, raw=raw)
         else:
-            response = self.__process_text(messages)
+            response = self.__process_text(messages, raw=raw)
 
         return response
 
-    def __process_multimodal(self, messages:list[dict]):
+    def __process_multimodal(self, messages:list[dict], raw=False):
         all_messages = self.messages + messages
         inputs = self.processor.apply_chat_template(
             all_messages, add_generation_prompt=True, tokenize=True,
@@ -308,6 +313,9 @@ class Gemma(Model):
             generation = self.model.generate(**inputs, max_new_tokens=1024, do_sample=False)
             generation = generation[0][input_len:]
 
+        if raw:
+            return self.processor.decode(generation, skip_special_tokens=True)
+
         response = {
             'message': self.processor.decode(generation, skip_special_tokens=True),
             'reasoning': '',
@@ -315,10 +323,9 @@ class Gemma(Model):
 
         return response
 
-    def __process_text(self, messages:list[dict]):
-        all_messages = self.messages + messages
+    def __process_text(self, messages:list[dict], raw=False):
         inputs = self.tokenizer.apply_chat_template(
-            all_messages,
+            self.messages + messages,
             add_generation_prompt=True,
             tokenize=True,
             return_dict=True,
@@ -342,6 +349,9 @@ class Gemma(Model):
         eot = response.find('<end_of_turn>', sot_pos)
         eot_pos = eot if eot > -1 else None
 
+        if raw:
+            return response[sot_pos:eot_pos]
+
         response = {
             'message': response[sot_pos:eot_pos],
             'reasoning': '',
@@ -352,7 +362,7 @@ class Gemma(Model):
 class Qwen3(Model):
     """Class to load Qwen models."""
 
-    def __init__(self, model_id:str, thinking:bool=False, system_prompt:str=None):
+    def __init__(self, model_id:str, thinking:bool|None=None, system_prompt:str=None):
         super().__init__(multimodal=False, system_prompt=system_prompt)
         self.model_id = model_id
 
@@ -365,7 +375,7 @@ class Qwen3(Model):
 
         self.thinking = thinking
 
-    def get_response_from_model(self, messages:list[dict[str, str]]) -> str:
+    def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
         all_messages = self.messages + messages
         text = self.tokenizer.apply_chat_template(
             all_messages,
@@ -381,6 +391,9 @@ class Qwen3(Model):
             max_new_tokens=self.max_new_tokens,
         )
         output_ids = generated_tokens[0][len(model_inputs.input_ids[0]):].tolist()
+
+        if raw:
+            return self.tokenizer.decode(output_ids, skip_special_tokens=False).strip("\n")
 
         # parsing thinking content
         try:
@@ -421,9 +434,12 @@ class Mistral(Model):
             device_map="auto"
         )
 
-    def get_response_from_model(self, messages:list[dict[str, str]]) -> str:
+    def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
         all_messages = self.messages + messages
         output = self.pipeline(all_messages, max_new_tokens=1024)
+
+        if raw:
+            return output[0].get('generated_text')[-1].get('content', '')
 
         response = {
             'message': output[0].get('generated_text')[-1].get('content', ''),
@@ -445,7 +461,7 @@ class GPT(Model):
             device_map="auto"
         )
 
-    def get_response_from_model(self, messages:list[dict[str, str]]) -> str:
+    def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
         all_messages = self.messages + messages
 
         inputs = self.tokenizer.apply_chat_template(
@@ -461,6 +477,9 @@ class GPT(Model):
             temperature=self.temperature,
         )
 
+        if raw:
+            return self.tokenizer.decode(outputs[0])
+
         response = {
             'message': self.tokenizer.decode(outputs[0]),
             'reasoning': '',
@@ -471,7 +490,7 @@ class GPT(Model):
 class GGUFModel(Model):
     """Class to load models with GGUF format."""
 
-    def __init__(self, ggu_file:str, thinking:bool=False, system_prompt:str=None):
+    def __init__(self, ggu_file:str, thinking:bool|None=None, system_prompt:str=None):
         super().__init__(multimodal=False, system_prompt=system_prompt)
         self.thinking = thinking
 
@@ -483,20 +502,24 @@ class GGUFModel(Model):
             verbose=False,
         )
 
-    def get_response_from_model(self, messages):
+    def get_response_from_model(self, messages, raw:bool=False):
+        if self.thinking is None:
+            pre_message = ''
+        elif self.thinking:
+            pre_message = '/think '
+        else:
+            pre_message = '/no_think '
+
+        messages[-1]['content'] = f"{pre_message}{messages[-1]['content']}"
         all_messages = self.messages + messages
-        if not self.thinking:
-            all_messages = [
-                {
-                    'role': m['role'],
-                    'content': f"/no_think {m['content']}"
-                } for m in all_messages
-            ]
 
         res = self.model.create_chat_completion(
             messages=all_messages,
             max_tokens=self.max_new_tokens
         )
+        if raw:
+            return res['choices'][0]['message']['content']
+
         response_str, reasoning = self.__split_reasoning_content(
             res['choices'][0]['message']['content']
         )
