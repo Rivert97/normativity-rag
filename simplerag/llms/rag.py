@@ -10,6 +10,7 @@ class RAGQueryConfig:
     collection: str = ''
     num_docs: int = 5
     add_to_history: bool = True
+    num_related_questions: int = 1
 
 class RAG:
     """A class to perform basic RAG."""
@@ -59,7 +60,8 @@ class RAG:
         if query_config.collection == '' or self.storage is None:
             return self.model.query_with_conversation(messages), []
 
-        last_query = messages[-1]['content']
+        user_messages_content = [m['content'] for m in messages if m['role'] == 'user']
+        last_query = '\n'.join(user_messages_content[-query_config.num_related_questions:])
         documents = self.storage.query_sentence(query_config.collection, last_query,
                                                 query_config.num_docs)
 
