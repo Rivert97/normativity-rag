@@ -523,3 +523,16 @@ class TextTreeSplitter(TreeSplitter):
     def __clear_lower_children(self, nodes:list[DocNode], from_level:int):
         for i in range(from_level + 1, len(nodes)):
             nodes[i] = None
+
+class TextSplitter(TreeSplitter):
+    """Class to split a document in paragraphs without structure.
+    """
+
+    def __init__(self, text: str, document_name: str = '', max_characters: int = 8000):
+        super().__init__(document_name, max_characters)
+        self.text = text
+
+    def analyze(self):
+        """Analyze the raw text to generate the tree."""
+        new_node = DocNode(self.document_name, self.root)
+        new_node.append_content(self.text)

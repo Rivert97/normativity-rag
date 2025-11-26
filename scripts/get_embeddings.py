@@ -12,6 +12,7 @@ from simplerag.document_splitters.hierarchical import TreeSplitter
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
 from simplerag.document_splitters.hierarchical import DataSplitterOptions
+from simplerag.document_splitters.hierarchical import TextSplitter
 from simplerag.llms.embedders import EmbedderBuilder
 from simplerag.llms.storage import CSVStorage, ChromaDBStorage
 from .utils.controllers import CLI, run_cli
@@ -92,13 +93,13 @@ class GetEmbeddingsCLI(CLI):
                             type=str,
                             help='Directory to store the database. Defaults to ./db')
         self.parser.add_argument('-e', '--embedder',
-                            default='all-MiniLM-L6-v2',
+                            default='sentence-transformers/all-MiniLM-L6-v2',
                             type=str,
                             help='''
                                 Embeddings model to be used. Check SentenceTransformers doc for
                                 all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
-                                ). Defaults to all-MiniLM-L6-v2
+                                ). Defaults to sentence-transformers/all-MiniLM-L6-v2
                                 ''')
         self.parser.add_argument('-f', '--file',
                             default='',
@@ -145,6 +146,12 @@ class GetEmbeddingsCLI(CLI):
                             choices=['csv', 'txt'],
                             type=str,
                             help='Type of input. Defaults to csv')
+        self.parser.add_argument('--ignore-titles',
+                            default=False,
+                            action='store_true',
+                            help='''
+                                Set this flag to process raw txt files without title detection.
+                            ''')
 
         args = self.parser.parse_args()
 
@@ -316,7 +323,10 @@ class GetEmbeddingsCLI(CLI):
         with open(filename, 'r', encoding='utf-8') as f:
             file_content = f.read()
 
-        splitter = TextTreeSplitter(file_content, basename, self._args.max_chars)
+        if self._args.ignore_titles:
+            splitter = TextSplitter(file_content, basename, self._args.max_chars)
+        else:
+            splitter = TextTreeSplitter(file_content, basename, self._args.max_chars)
         splitter.analyze()
 
         return splitter

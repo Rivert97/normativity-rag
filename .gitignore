@@ -5,7 +5,7 @@ __pycache__/
 .env
 .cache/
 .vscode/
-outs/
+outs*/
 logs/
 db/
 settings_files/
