@@ -5,7 +5,6 @@ import argparse
 import os
 import glob
 
-from simplerag.document_loaders.pdf import PyPDFLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
 from simplerag.document_splitters.hierarchical import TreeSplitter
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
@@ -23,13 +22,8 @@ DEFAULTS = {
     'embedder': 'Qwen/Qwen3-Embedding-0.6B',
     'extraction_type': 'data',
     'inner_splitter': 'section',
-    'loader': 'pdfplumber',
     'max_chars': 8000,
     'parse_params_file': 'simplerag/settings/params-default.yml',
-}
-LOADERS = {
-    'text': PyPDFLoader,
-    'pdfplumber': PDFPlumberLoader,
 }
 INNER_SPLITTERS = ['paragraph', 'section']
 EXTRACTION_TYPES = ['text', 'data']
@@ -46,7 +40,6 @@ class CollectionParams:
     embedder: str
     extraction_type: str
     inner_splitter: str
-    loader: str
     raw: bool = False
     max_chars: int = 8000
 
@@ -74,7 +67,6 @@ class ExtractorCLI(CLI):
                 self._args.embedder,
                 self._args.extraction_type,
                 self._args.inner_splitter,
-                self._args.loader,
                 self._args.raw,
                 self._args.max_chars,
             )
@@ -134,11 +126,6 @@ class ExtractorCLI(CLI):
                                 sections should be subdivided. Defaults to
                                 {DEFAULTS['inner_splitter']}
                                 ''')
-        self.parser.add_argument('-l', '--loader',
-                            default=DEFAULTS['loader'],
-                            type=str,
-                            choices=LOADERS.keys(),
-                            help=f'Type of loader to use. Defaults to {DEFAULTS['loader']}')
         self.parser.add_argument('--max-chars',
                             default=8000,
                             type=int,
@@ -157,8 +144,7 @@ class ExtractorCLI(CLI):
                                  default=False,
                                  action='store_true',
                                  help='''
-                                     When using 'pdfplumber' loader use this option to use text
-                                     as returned by the library.
+                                     Use this option to use text as returned by the library.
                                  ''')
         self.parser.add_argument('--settings-file',
                             default='',
@@ -187,10 +173,6 @@ class ExtractorCLI(CLI):
         if args.file == '' and args.directory == '' and args.settings_file == '':
             raise CLIException("Please specify an input file, directory or settings file")
 
-        if args.extraction_type == 'data' and args.loader == 'text':
-            raise CLIException(str(f"Incompatible extraction_type '{args.extraction_type}' "
-                                   "with loader '{args.loader}'"))
-
         if args.collection == '':
             raise CLIException("Please specify a collection name")
 
@@ -208,7 +190,7 @@ class ExtractorCLI(CLI):
                                                              DEFAULTS['parse_params_file']))
 
         basename = os.path.splitext(os.path.split(filename)[-1])[0]
-        pdf_loader = self.__get_loader(filename, settings, params)
+        pdf_loader = PDFPlumberLoader(filename, params.raw)
         if params.extraction_type == 'text':
             self._logger.info('Extracting text from file')
             text = pdf_loader.get_text(boundaries=file_parse_params.get('pdf_margins'))
@@ -268,18 +250,6 @@ class ExtractorCLI(CLI):
         else:
             raise CLIException("No file or directory to process was specified in settings file")
 
-    def __get_loader(self, filename:str, settings:ExecSettings, params:CollectionParams):
-        self._logger.info("Using '%s' loader", params.loader)
-
-        if params.loader == 'text':
-            pdf_loader = PyPDFLoader(filename)
-        elif params.loader == 'pdfplumber':
-            pdf_loader = PDFPlumberLoader(filename, params.raw)
-        else:
-            raise CLIException("Invalid type of loader")
-
-        return pdf_loader
-
     def __extract_info(self, splitter:TreeSplitter, params:CollectionParams):
         sentences = []
         metadatas = []
@@ -336,11 +306,6 @@ class ExtractorCLI(CLI):
             params['inner_splitter'] = DEFAULTS['inner_splitter']
         if params['inner_splitter'] not in INNER_SPLITTERS:
             raise CLIException(f"Invalid inner_splitter '{params['inner_splitter']}'")
-
-        if 'loader' not in params:
-            params['loader'] = DEFAULTS['loader']
-        if params['loader'] not in LOADERS:
-            raise CLIException(f"Invalid loader '{params['loader']}'")
 
     def __get_file_settings(self, filename:str, settings:ExecSettings) -> dict[str,str]:
         default_settings = settings.file_settings.get('*', {})

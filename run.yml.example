@@ -13,10 +13,8 @@ db:
       embedder: all-MiniLM-L6-v2
       extraction_type: data
       inner_splitter: paragraph
-      loader: pdplumber
 
     NORM_002:
       embedder: all-MiniLM-L6-v2
       extraction_type: text
       inner_splitter: section
-      loader: pdfplumber

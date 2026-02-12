@@ -5,7 +5,7 @@ This is a project that implements a simple RAG system. It is specially adapted t
 The full project performs the basic RAG steps:
 
 * **PDF document loading:** This project can load either only the plain text or the text+position inside the document. Obtaining the text+position allows the program to detect sections and titles in a better way. It can be performed in different ways:
-    * Load plain text only with pypdf or pdfplumber.
+    * Load plain text only with pdfplumber.
     * Load text+position using pdfplumber.
 * **PDF document splitting:** Creates a tree representation of the document, where each node corresponds to an article or section. It uses positional data and regular expressions to find the different sections. Each section can be
 subdivided in one or more chunks.

@@ -8,7 +8,6 @@ import argparse
 import os
 import glob
 
-from simplerag.document_loaders.pdf import PyPDFLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
@@ -48,11 +47,6 @@ class ExtractInfoCLI(CLI):
                                  default='',
                                  type=str,
                                  help='File to be processed in single file mode')
-        self.parser.add_argument('-l', '--loader',
-                                 default='pdfplumber',
-                                 type=str,
-                                 choices=['text', 'pdfplumber'],
-                                 help='Type of loader to use. Defaults to pdfplumber')
         self.parser.add_argument('-o', '--output',
                                  default='',
                                  type=str,
@@ -74,8 +68,7 @@ class ExtractInfoCLI(CLI):
                                  default=False,
                                  action='store_true',
                                  help='''
-                                     When using 'pdfplumber' loader use this option to use text
-                                     as returned by the library.
+                                     Use this option to use text as returned by the library.
                                  ''')
         self.parser.add_argument('-t', '--type',
                                  default='txt',
@@ -106,9 +99,6 @@ class ExtractInfoCLI(CLI):
             if dirname != '' and not os.path.exists(dirname):
                 raise CLIException("Output path does not exist")
 
-        if args.loader == 'text' and args.type == 'csv':
-            raise CLIException("Type of output not supported for '{args.loader}' loader")
-
         if args.output != '':
             self.print_to_console = False
 
@@ -120,7 +110,7 @@ class ExtractInfoCLI(CLI):
     def __process_file(self, filename: str, output: str = None):
         self._logger.info('Processing file %s', filename)
 
-        pdf_loader = self.__get_loader(filename)
+        pdf_loader = PDFPlumberLoader(filename, self._args.raw)
         self.__make_output(pdf_loader, output)
 
     def __process_directory(self):
@@ -132,18 +122,6 @@ class ExtractInfoCLI(CLI):
                 out_name = f"{self._args.output}/{basename}"
 
             self.__process_file(file, out_name)
-
-    def __get_loader(self, filename:str):
-        self._logger.info("Using '%s' loader", self._args.loader)
-
-        if self._args.loader == 'text':
-            loader = PyPDFLoader(filename)
-        elif self._args.loader == 'pdfplumber':
-            loader = PDFPlumberLoader(filename, self._args.raw)
-        else:
-            raise CLIException("Invalid type of loader")
-
-        return loader
 
     def __make_output(self, pdf_loader, output:str=None):
         base_filename = os.path.splitext(output)[0]

@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from .parsers import PypdfParser, PdfPlumberParser
+from .parsers import PdfPlumberParser
 from .representations import PdfDocumentData
 from .processors import remove_hyphens, replace_ligatures
 
@@ -27,33 +27,6 @@ class DifferenceState:
     missing_removals: list[list]
     visual_idx: int
     status_tracker: list
-
-class PyPDFLoader():
-    """Class to load a PDF file using pypdf library.
-
-    This class was created only for compatibility with the extraction script.
-    """
-    def __init__(self, file_path:str):
-        """Open the document."""
-        self.parser = PypdfParser(file_path)
-
-    def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None):
-        """Return the full text of the PDF file."""
-        text = self.parser.get_text(remove_headers=remove_headers, boundaries=boundaries)
-        text = replace_ligatures(text)
-        text = remove_hyphens(text)
-
-        return text
-
-    def get_page_text(self, page_num: int, remove_headers:bool=True,
-                      boundaries:dict[str,float]=None):
-        """Return the text of a single page of the PDF file."""
-        page = self.parser.get_page(page_num)
-        page_text = page.get_text(remove_headers, boundaries)
-        page_text = replace_ligatures(page_text)
-        page_text = remove_hyphens(page_text)
-
-        return page_text
 
 class PDFPlumberLoader():
     """Class to load a PDF file using pdfplumber with custom text reconstruction."""
