@@ -35,4 +35,4 @@ Process a directory and save the embeddings in a collection from a settings file
                 embedder: all-MiniLM-L6-v2
                 extraction_type: data
                 inner_splitter: section
-                loader: mixed
+                loader: pdfplumber

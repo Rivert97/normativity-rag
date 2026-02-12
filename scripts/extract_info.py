@@ -1,14 +1,13 @@
-"""Script to load a PDF file and converts it to plain text or csv data with the
+"""Script to load PDF file(s) and convert them to plain text or csv data with the
 position information of each word.
 
 When used to extract csv data, this script is intended to be used alogside
-get_embeddings.py to obtain further information of the file.
+get_embeddings to obtain further information of the file.
 """
 import argparse
 import os
 import glob
 
-from simplerag.document_loaders.pdf import PyPDFMixedLoader
 from simplerag.document_loaders.pdf import PyPDFLoader
 from simplerag.document_loaders.pdf import OCRLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
@@ -16,7 +15,7 @@ from simplerag.document_loaders.pdf import LoaderOptions
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
 
-PROGRAM_NAME = 'ExtractorCLI'
+PROGRAM_NAME = 'extract_info'
 VERSION = '1.00.00'
 
 class ExtractInfoCLI(CLI):
@@ -63,7 +62,7 @@ class ExtractInfoCLI(CLI):
         self.parser.add_argument('-l', '--loader',
                                  default='pdfplumber',
                                  type=str,
-                                 choices=['mixed', 'text', 'ocr', 'pdfplumber'],
+                                 choices=['text', 'ocr', 'pdfplumber'],
                                  help='Type of loader to use. Defaults to pdfplumber')
         self.parser.add_argument('-o', '--output',
                                  default='',
@@ -165,19 +164,7 @@ class ExtractInfoCLI(CLI):
     def __get_loader(self, filename:str):
         self._logger.info("Using '%s' loader", self._args.loader)
 
-        if self._args.loader == 'mixed':
-            loader = PyPDFMixedLoader(LoaderOptions(
-                self._args.cache_dir,
-                self._args.keep_cache,
-                self._args.visual_aid)
-            )
-            if self._args.page is not None:
-                self._logger.info('Processing page %s', self._args.page)
-
-                loader.load_page(filename, self._args.page)
-            else:
-                loader.load(filename, parallel=self._args.Parallel)
-        elif self._args.loader == 'text':
+        if self._args.loader == 'text':
             loader = PyPDFLoader(filename)
         elif self._args.loader == 'ocr':
             loader = OCRLoader(filename, LoaderOptions(
@@ -196,7 +183,7 @@ class ExtractInfoCLI(CLI):
 
         return loader
 
-    def __make_output(self, pdf_loader: PyPDFMixedLoader, output:str=None):
+    def __make_output(self, pdf_loader, output:str=None):
         base_filename = os.path.splitext(output)[0]
         if 'txt' in self._args.type:
             self._logger.debug('Generating text output')

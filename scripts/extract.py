@@ -5,7 +5,7 @@ import argparse
 import os
 import glob
 
-from simplerag.document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
+from simplerag.document_loaders.pdf import PyPDFLoader, OCRLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
 from simplerag.document_loaders.pdf import LoaderOptions
 from simplerag.document_splitters.hierarchical import TreeSplitter
@@ -16,7 +16,7 @@ from simplerag.llms.storage import ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
 
-PROGRAM_NAME = 'Extractor'
+PROGRAM_NAME = 'extract'
 VERSION = '1.00.00'
 
 DEFAULTS = {
@@ -31,7 +31,6 @@ DEFAULTS = {
     'parse_params_file': 'simplerag/settings/params-default.yml',
 }
 LOADERS = {
-    'mixed': PyPDFMixedLoader,
     'text': PyPDFLoader,
     'ocr': OCRLoader,
     'pdfplumber': PDFPlumberLoader,
@@ -310,14 +309,7 @@ class ExtractorCLI(CLI):
     def __get_loader(self, filename:str, settings:ExecSettings, params:CollectionParams):
         self._logger.info("Using '%s' loader", params.loader)
 
-        if params.loader == 'mixed':
-            pdf_loader = PyPDFMixedLoader(LoaderOptions(
-                settings.cache_dir,
-                settings.keep_cache,
-                params.visual_aid)
-            )
-            pdf_loader.load(filename)
-        elif params.loader == 'text':
+        if params.loader == 'text':
             pdf_loader = PyPDFLoader(filename)
         elif params.loader == 'ocr':
             pdf_loader = OCRLoader(filename, LoaderOptions(

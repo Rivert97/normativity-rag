@@ -105,14 +105,6 @@ class GetEmbeddingsCLI(CLI):
                             default='',
                             type=str,
                             help='Path to file containing the data or text of the document')
-        self.parser.add_argument('-l', '--loader',
-                            default='any',
-                            type=str,
-                            choices=['any', 'mixed'],
-                            help='''
-                                Optional type of loader used to extract the data. This helps to
-                                stablish different tolerances for interpretation. Defaults to 'any'
-                                ''')
         self.parser.add_argument('--max-chars',
                             default=8000,
                             type=int,
@@ -293,7 +285,6 @@ class GetEmbeddingsCLI(CLI):
                                                 boundaries=self.parse_params['pdf_margins']),
                     basename,
                     DataSplitterOptions(
-                        self._args.loader,
                         self.parse_params.get('titles_regex', None),
                         self._args.absolute_center,
                         self._args.max_chars,
@@ -305,7 +296,6 @@ class GetEmbeddingsCLI(CLI):
                                             boundaries=self.parse_params['pdf_margins']),
                                         basename,
                                         DataSplitterOptions(
-                                            self._args.loader,
                                             self.parse_params.get('titles_regex', None),
                                             self._args.absolute_center,
                                             self._args.max_chars,

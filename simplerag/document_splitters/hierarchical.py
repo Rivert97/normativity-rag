@@ -157,8 +157,6 @@ class TreeState:
 @dataclass
 class DataSplitterOptions:
     """Options for DataTreeSplitter class."""
-
-    loader: str = 'any'
     titles_regex: dict[str|int,str] = None
     absolute_center: bool = False
     max_characters: int = 8000
@@ -265,12 +263,11 @@ class DataTreeSplitter(TreeSplitter):
         super().__init__(document_name, options.max_characters)
 
         self.data = data.copy().dropna()
-        self.loader = options.loader
         self.absolute_center = options.absolute_center
 
         self.writable_width = self.data['right'].max() - self.data['left'].min()
         self.detector = TitleDetector(options.titles_regex)
-        self.block_tolerance_rate = 1.6 if self.loader == 'mixed' else 0.8
+        self.block_tolerance_rate = 0.8
 
     def analyze(self):
         """Analyze the data to generate the tree."""
