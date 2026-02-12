@@ -4,10 +4,6 @@ as text or visual information.
 from typing import Iterator
 from dataclasses import dataclass
 
-import os
-import hashlib
-import shutil
-
 from pypdf import PdfReader
 from pypdf._page import PageObject
 import pandas as pd
