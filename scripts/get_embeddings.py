@@ -106,7 +106,7 @@ class GetEmbeddingsCLI(CLI):
                             type=str,
                             help='Path to file containing the data or text of the document')
         self.parser.add_argument('-l', '--loader',
-                            default=any,
+                            default='any',
                             type=str,
                             choices=['any', 'mixed'],
                             help='''
