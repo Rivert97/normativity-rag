@@ -7,7 +7,6 @@ import glob
 
 from simplerag.document_loaders.pdf import PyPDFLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
-from simplerag.document_loaders.pdf import LoaderOptions
 from simplerag.document_splitters.hierarchical import TreeSplitter
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
@@ -20,12 +19,10 @@ PROGRAM_NAME = 'extract'
 VERSION = '1.00.00'
 
 DEFAULTS = {
-    'cache_dir': './.cache',
     'database_dir': './db',
     'embedder': 'Qwen/Qwen3-Embedding-0.6B',
     'extraction_type': 'data',
     'inner_splitter': 'section',
-    'keep_cache': False,
     'loader': 'pdfplumber',
     'max_chars': 8000,
     'parse_params_file': 'simplerag/settings/params-default.yml',
@@ -40,9 +37,7 @@ EXTRACTION_TYPES = ['text', 'data']
 @dataclass
 class ExecSettings:
     """Class to store settings for running the script."""
-    cache_dir: str
     database_dir: str
-    keep_cache: bool
     file_settings: dict[str,dict[str,str]]
 
 @dataclass
@@ -52,7 +47,6 @@ class CollectionParams:
     extraction_type: str
     inner_splitter: str
     loader: str
-    visual_aid: bool = False
     raw: bool = False
     max_chars: int = 8000
 
@@ -69,9 +63,7 @@ class ExtractorCLI(CLI):
         """Run the script logic."""
         if self._args.settings_file == '':
             settings = ExecSettings(
-                self._args.cache_dir,
                 self._args.database_dir,
-                self._args.keep_cache,
                 {
                     '*': {
                         'parse_params_file': self._args.parse_params_file,
@@ -83,7 +75,6 @@ class ExtractorCLI(CLI):
                 self._args.extraction_type,
                 self._args.inner_splitter,
                 self._args.loader,
-                self._args.visual_aid,
                 self._args.raw,
                 self._args.max_chars,
             )
@@ -106,13 +97,6 @@ class ExtractorCLI(CLI):
                             default='',
                             type=str,
                             help='Name of the collection to be created')
-        self.parser.add_argument('--cache-dir',
-                            default=DEFAULTS['cache_dir'],
-                            type=str,
-                            help=f'''
-                                Directory to be used as cache.
-                                Defaults to {DEFAULTS['cache_dir']}
-                                ''')
         self.parser.add_argument('-d', '--directory',
                             default='',
                             type=str,
@@ -150,13 +134,6 @@ class ExtractorCLI(CLI):
                                 sections should be subdivided. Defaults to
                                 {DEFAULTS['inner_splitter']}
                                 ''')
-        self.parser.add_argument('-k', '--keep-cache',
-                            default=DEFAULTS['keep_cache'],
-                            action='store_true',
-                            help='''
-                                Keep cache after processing. Usefull when the same file
-                                is going to be processed multiple times
-                                ''')
         self.parser.add_argument('-l', '--loader',
                             default=DEFAULTS['loader'],
                             type=str,
@@ -190,13 +167,6 @@ class ExtractorCLI(CLI):
                                 File with all the options to build a database. Use this option to
                                 store all options to process files when it will be repeated.
                                 ''')
-        self.parser.add_argument('--visual-aid',
-                            default=False,
-                            action='store_true',
-                            help='''
-                                Enables image processing for additional detections,
-                                such as line section separations. Slower.
-                            ''')
 
         args = self.parser.parse_args()
 
@@ -216,11 +186,6 @@ class ExtractorCLI(CLI):
 
         if args.file == '' and args.directory == '' and args.settings_file == '':
             raise CLIException("Please specify an input file, directory or settings file")
-
-        args.cache_dir = args.cache_dir.rstrip('/')
-        parent = os.path.split(args.cache_dir)[0]
-        if parent != '' and not os.path.exists(parent):
-            raise CLIException("Parent cache directory must exist")
 
         if args.extraction_type == 'data' and args.loader == 'text':
             raise CLIException(str(f"Incompatible extraction_type '{args.extraction_type}' "
@@ -255,7 +220,7 @@ class ExtractorCLI(CLI):
             splitter = DataTreeSplitter(
                 data.get_data(remove_headers=True, boundaries=file_parse_params.get('pdf_margins')),
                 basename,
-                DataSplitterOptions(loader=params.loader,max_characters=params.max_chars)
+                DataSplitterOptions(max_characters=params.max_chars)
             )
         else:
             raise CLIException(f"Invalid extraction type '{params.extraction_type}'")
@@ -287,9 +252,7 @@ class ExtractorCLI(CLI):
         self.__validate_and_fill_settings(yaml_settings)
 
         settings = ExecSettings(
-            yaml_settings['db']['settings']['cache_dir'],
             yaml_settings['db']['settings']['database_dir'],
-            yaml_settings['db']['settings']['keep_cache'],
             yaml_settings['db'].get('file_settings', {}))
 
         if 'directory' in yaml_settings['db']:
@@ -311,11 +274,7 @@ class ExtractorCLI(CLI):
         if params.loader == 'text':
             pdf_loader = PyPDFLoader(filename)
         elif params.loader == 'pdfplumber':
-            pdf_loader = PDFPlumberLoader(filename, params.raw, LoaderOptions(
-                settings.cache_dir,
-                settings.keep_cache,
-                params.visual_aid)
-            )
+            pdf_loader = PDFPlumberLoader(filename, params.raw)
         else:
             raise CLIException("Invalid type of loader")
 
@@ -350,23 +309,12 @@ class ExtractorCLI(CLI):
         if settings is None:
             raise CLIException("'settings' node not found in settings file")
 
-        # Validate cache directory
-        if 'cache_dir' not in settings:
-            settings['cache_dir'] = DEFAULTS['cache_dir']
-        basedir = os.path.split(settings['cache_dir'])[0]
-        if not os.path.exists(basedir):
-            raise CLIException("Cache parent directory should exist")
-
         # Validate database directory
         if 'database_dir' not in settings:
             settings['database_dir'] = DEFAULTS['database_dir']
         basedir = os.path.split(settings['database_dir'])[0]
         if not os.path.exists(basedir):
             raise CLIException("Database parent directory should exist")
-
-        # Validate keep cache flag
-        if 'keep_cache' not in settings:
-            settings['keep_cache'] = DEFAULTS['keep_cache']
 
         # Validating each collection node
         collections = db.get('collections', None)

@@ -2,9 +2,7 @@ db:
   directory: ~/99_Normativa
 
   settings:
-    cache_dir: ./.cache
     database_dir: ./db
-    keep_cache: True
 
   file_settings:
     file-with-letterhead.pdf:

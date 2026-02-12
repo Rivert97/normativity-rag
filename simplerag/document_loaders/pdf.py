@@ -17,14 +17,6 @@ class Status(Enum):
     ANNOTATION_CHANGE_END = 5
 
 @dataclass
-class LoaderOptions:
-    """Options to be passed to the different Loaders."""
-
-    cache_dir: str = './.cache'
-    keep_cache: bool = False
-    visual_aid: bool = False
-
-@dataclass
 class DifferenceState:
     """Store state when making matches between differences from the text."""
 
@@ -65,12 +57,8 @@ class PyPDFLoader():
 
 class PDFPlumberLoader():
     """Class to load a PDF file using pdfplumber with custom text reconstruction."""
-    def __init__(self, file_path:str, raw:bool=False, options:LoaderOptions=None):
-        if options is None:
-            options = LoaderOptions()
-
-        self.parser = PdfPlumberParser(file_path, options.cache_dir, options.keep_cache,
-                                       options.visual_aid)
+    def __init__(self, file_path:str, raw:bool=False):
+        self.parser = PdfPlumberParser(file_path)
         self.raw = raw
 
     def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None) -> str:

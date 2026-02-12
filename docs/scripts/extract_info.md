@@ -39,7 +39,3 @@ Process all the PDF files in a directory and save a .txt file for each PDF file:
 Process all the PDF files in a directory and save a .csv file for each PDF file. The output csv files can be passed to *run.py get_embeddings* script:
 
     python run.py extract_info -d /path/to/dir/ -t csv -o /path/to/out/
-
-Keep cache of the file, usefull when the same file is going to be processed multiple times. *-k* option is compatible with all the other options:
-
-    python run.py extract_info --loader pdfplumber -f /path/to/file.pdf -t csv -o /path/to/out.csv -k

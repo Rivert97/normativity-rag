@@ -10,14 +10,12 @@ import shutil
 
 from pypdf import PdfReader
 from pypdf._page import PageObject
-import pdf2image
-import cv2
 import pandas as pd
 import numpy as np
 import pdfplumber
 
 from .visitors import PageTextVisitor
-from .processors import get_data_inside_boundaries, get_lines_from_image
+from .processors import get_data_inside_boundaries
 
 @dataclass
 class GroupState:
@@ -134,13 +132,8 @@ class DataReconstructor():
     """
 
     def __init__(self, data: pd.DataFrame,
-                 writable_boundaries: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
-                 lines: dict[str,np.array] = None):
+                 writable_boundaries: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)):
         self.data = data.copy()
-        if lines is None:
-            self.lines = {'horizontal': np.array([]), 'vertical': np.array([])}
-        else:
-            self.lines = lines
 
         if 'right' not in self.data and 'left' in self.data:
             self.data['right'] = self.data['left'] + self.data['width']
@@ -326,12 +319,6 @@ class DataReconstructor():
             state.centered['prev'] is None):
             return False
 
-        for line in self.lines['horizontal']:
-            max_y_group = max(state.group_cols.values(), key=lambda x:x['maxY'])['maxY']
-            min_y_line = min(state.line_cols.values(), key=lambda x:x['minY'])['minY']
-            if max_y_group < line[0,1] < min_y_line:
-                return True
-
         if len(state.group_cols) != len(state.line_cols):
             if state.pass_through_center['curr'] or state.pass_through_center['prev']:
                 return True
@@ -388,17 +375,15 @@ class PdfPlumberPage():
     methods to process it.
     """
 
-    def __init__(self, page:pdfplumber.page.Page, cache_file:str|None=None):
+    def __init__(self, page:pdfplumber.page.Page):
         self.page = page.dedupe_chars()
-        self.cache_file = cache_file
 
         self.data = self.__get_data_from_page()
-        self.lines = self.__get_lines_from_image()
 
         self.__normalize_data()
 
         w_boundaries = self.__get_writable_boundaries()
-        reconstructor = DataReconstructor(self.data, w_boundaries, self.lines)
+        reconstructor = DataReconstructor(self.data, w_boundaries)
         self.data = reconstructor.get_reconstructed()
 
     def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
@@ -472,32 +457,6 @@ class PdfPlumberPage():
 
         return data
 
-    def __get_lines_from_image(self):
-        if self.cache_file is None or not os.path.exists(self.cache_file):
-            return {
-                'horizontal': np.array([], dtype=int),
-                'vertical': np.array([], dtype=int),
-            }
-
-        image = cv2.imread(self.cache_file, cv2.IMREAD_GRAYSCALE)
-        words_data = self.data.copy()
-
-        width_rate = image.shape[1] / self.page.width
-        height_rate = image.shape[0] / self.page.height
-        words_data['left'] = (words_data['left'] * width_rate).astype(int)
-        words_data['right'] = (words_data['right'] * width_rate).astype(int)
-        words_data['width'] = (words_data['width'] * width_rate).astype(int)
-        words_data['top'] = (words_data['top'] * height_rate).astype(int)
-        words_data['bottom'] = (words_data['bottom'] * height_rate).astype(int)
-        words_data['height'] = (words_data['height'] * height_rate).astype(int)
-
-        lines = get_lines_from_image(image, words_data)
-
-        if len(lines['horizontal']) > 0:
-            lines['horizontal'] = lines['horizontal'] / width_rate
-
-        return lines
-
     def __normalize_data(self):
         width = self.page.width
         height = self.page.height
@@ -507,9 +466,6 @@ class PdfPlumberPage():
         self.data['top'] = self.data['top'] / height
         self.data['bottom'] = self.data['bottom'] / height
         self.data['height'] = self.data['height'] / height
-
-        if len(self.lines['horizontal']) > 0:
-            self.lines['horizontal'] = self.lines['horizontal'] / np.array((width, height))
 
     def __get_writable_boundaries(self):
         min_x = self.data['left'].min()
@@ -554,28 +510,10 @@ class PdfPlumberParser():
     :param file_path: The path of the file to be parsed.
     :type file_path: str
     """
-    def __init__(self, file_path: str, cache_dir: str = './.cache', keep_cache:bool = False,
-                 visual_aid:bool = False):
+    def __init__(self, file_path: str):
         self.file_path = file_path
-        self.cache_dir = cache_dir
-        self.keep_cache = keep_cache
-        self.visual_aid = visual_aid
 
         self.reader = pdfplumber.open(file_path)
-
-        if self.visual_aid:
-            with open(self.file_path, 'rb') as f:
-                file_md5 = hashlib.md5(f.read()).hexdigest()
-            self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
-
-            if not self.__cache_is_valid():
-                self.__create_cache()
-        else:
-            self.cache_subfolder = None
-
-    def __del__(self):
-        if self.cache_subfolder is not None and not self.keep_cache:
-            self.clear_cache()
 
     def get_raw_text(self, page_separator: str = '\n', remove_headers:bool = False,
                  boundaries:dict[str,float]=None) -> str:
@@ -588,10 +526,9 @@ class PdfPlumberParser():
         :return: A string of all the text from the document
         :rtype: str
         """
-        num_page_digits = len(str(len(self.reader.pages)))
         text = ''
-        for i, page in enumerate(self.reader.pages, start=1):
-            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg')
+        for _, page in enumerate(self.reader.pages, start=1):
+            page = PdfPlumberPage(page)
             text += page.get_raw_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -607,14 +544,9 @@ class PdfPlumberParser():
         :return: A string of all the text from the document
         :rtype: str
         """
-        num_page_digits = len(str(len(self.reader.pages)))
         text = ''
-        for i, page in enumerate(self.reader.pages, start=1):
-            if self.visual_aid:
-                cache_file = f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg'
-            else:
-                cache_file = None
-            page = PdfPlumberPage(page, cache_file)
+        for _, page in enumerate(self.reader.pages, start=1):
+            page = PdfPlumberPage(page)
             text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -629,55 +561,9 @@ class PdfPlumberParser():
         :return: An Iterator that yields the text of each page at a time
         :rtype: Iterator[PdfPlumberPage]
         """
-        num_page_digits = len(str(len(self.reader.pages)))
-        for i, page in enumerate(self.reader.pages, start=1):
-            if self.visual_aid:
-                cache_file = f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg'
-            else:
-                cache_file = None
-            yield PdfPlumberPage(page, cache_file)
+        for _, page in enumerate(self.reader.pages, start=1):
+            yield PdfPlumberPage(page)
 
     def get_page(self, page_num: int):
         """Return a specific page of the document."""
-        num_page_digits = len(str(len(self.reader.pages)))
-        if self.visual_aid:
-            cache_file = f'{self.cache_subfolder}/0001-{page_num+1:0{num_page_digits}d}.jpg'
-        else:
-            cache_file = None
-        return PdfPlumberPage(self.reader.pages[page_num], cache_file)
-
-    def clear_cache(self):
-        """Delete the cache sub-directory for this file. If main directory is empty then
-        it is deleted aswell."""
-        tmp_cache = f'{self.cache_subfolder}.tmp'
-
-        if os.path.exists(self.cache_subfolder):
-            shutil.rmtree(self.cache_subfolder)
-        if os.path.exists(tmp_cache):
-            shutil.rmtree(tmp_cache)
-
-        if not os.listdir(self.cache_dir):
-            os.rmdir(self.cache_dir)
-
-    def __cache_is_valid(self) -> bool:
-        return os.path.exists(self.cache_subfolder)
-
-    def __create_cache(self):
-        tmp_cache = f'{self.cache_subfolder}.tmp'
-
-        if os.path.exists(self.cache_subfolder):
-            shutil.rmtree(self.cache_subfolder)
-        if os.path.exists(tmp_cache):
-            shutil.rmtree(tmp_cache)
-
-        os.makedirs(tmp_cache, exist_ok=True)
-
-        images = pdf2image.convert_from_path(self.file_path,
-                                        output_folder=tmp_cache,
-                                        fmt='jpeg',
-                                        dpi=1000,
-                                        output_file='')
-        for img in images: # Close images to be able to move the directory
-            img.close()
-
-        os.rename(tmp_cache, self.cache_subfolder) # Just to make sure all information is there
+        return PdfPlumberPage(self.reader.pages[page_num])

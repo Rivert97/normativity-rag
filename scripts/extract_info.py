@@ -10,7 +10,6 @@ import glob
 
 from simplerag.document_loaders.pdf import PyPDFLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
-from simplerag.document_loaders.pdf import LoaderOptions
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
 
@@ -41,10 +40,6 @@ class ExtractInfoCLI(CLI):
     def process_args(self) -> argparse.Namespace:
         super().process_args()
 
-        self.parser.add_argument('--cache-dir',
-                                 default='./.cache',
-                                 type=str,
-                                 help='Directory to be used as cache. Defaults to ./.cache')
         self.parser.add_argument('-d', '--directory',
                                  default='',
                                  type=str,
@@ -53,11 +48,6 @@ class ExtractInfoCLI(CLI):
                                  default='',
                                  type=str,
                                  help='File to be processed in single file mode')
-        self.parser.add_argument('-k', '--keep-cache',
-                                 default=False,
-                                 action='store_true',
-                                 help='''Keep cache after processing. Usefull when the
-                                     same file is going to be processed multiple times''')
         self.parser.add_argument('-l', '--loader',
                                  default='pdfplumber',
                                  type=str,
@@ -93,13 +83,6 @@ class ExtractInfoCLI(CLI):
                                  nargs='+',
                                  type=str,
                                  help='Type(s) of output(s). Defaults to txt.')
-        self.parser.add_argument('--visual-aid',
-                                 default=False,
-                                 action="store_true",
-                                 help='''
-                                     Enables image processing for additional detections,
-                                     such as line section separations. Slower.
-                                 ''')
 
         args = self.parser.parse_args()
 
@@ -111,10 +94,6 @@ class ExtractInfoCLI(CLI):
 
         if args.file == '' and args.directory == '':
             raise CLIException("Please specify an input file or directory")
-
-        args.cache_dir = args.cache_dir.rstrip('/')
-        if not os.path.exists(os.path.split(args.cache_dir)[0]):
-            raise CLIException("Parent cache directory must exist")
 
         if args.directory != '':
             if args.output == '':
@@ -160,11 +139,7 @@ class ExtractInfoCLI(CLI):
         if self._args.loader == 'text':
             loader = PyPDFLoader(filename)
         elif self._args.loader == 'pdfplumber':
-            loader = PDFPlumberLoader(filename, self._args.raw, LoaderOptions(
-                self._args.cache_dir,
-                self._args.keep_cache,
-                self._args.visual_aid)
-            )
+            loader = PDFPlumberLoader(filename, self._args.raw)
         else:
             raise CLIException("Invalid type of loader")
 
