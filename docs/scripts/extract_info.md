@@ -5,12 +5,10 @@ Script to extract information from PDF files, the output can be plain text or CS
 This script loads a PDF file (or multiple files in a directory) and process them:
 
 1. Load text from the PDF.
-2. (Optional) Use Tesseract to extract OCR information from the file.
-3. Output one of the following:
+2. Output one of the following:
     * Plain text (.txt)
-    * Layot information obtained from Tesseract (.csv)
     * Layout information using Pdfplumber
-4. The layout information or the plain text can be passed to the *run.py get_embeddings* script to continue the process.
+3. The layout information or the plain text can be passed to the *run.py get_embeddings* script to continue the process.
 
 Full list of options of the script can be obtained using the -h option.
 
@@ -44,4 +42,4 @@ Process all the PDF files in a directory and save a .csv file for each PDF file.
 
 Keep cache of the file, usefull when the same file is going to be processed multiple times. *-k* option is compatible with all the other options:
 
-    python run.py extract_info --loader ocr -f /path/to/file.pdf -t csv -o /path/to/out.csv -k
+    python run.py extract_info --loader pdfplumber -f /path/to/file.pdf -t csv -o /path/to/out.csv -k

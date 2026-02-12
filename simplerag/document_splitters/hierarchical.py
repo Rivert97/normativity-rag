@@ -253,7 +253,7 @@ class TreeSplitter():
 class DataTreeSplitter(TreeSplitter):
     """Class to split a document in sections to generate a tree structure.
 
-    Uses an array of data obtained with OCR to identify titles and centered texts.
+    Uses an array of data to identify titles and centered texts.
     """
 
     def __init__(self, data: pd.DataFrame, document_name: str = '',

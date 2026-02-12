@@ -5,7 +5,7 @@ This is a project that implements a simple RAG system. It is specially adapted t
 The full project performs the basic RAG steps:
 
 * **PDF document loading:** This project can load either only the plain text or the text+position inside the document. Obtaining the text+position allows the program to detect sections and titles in a better way. It can be performed in different ways:
-    * Load plain text only with pypdf, pdfplumber or pytesseract (OCR).
+    * Load plain text only with pypdf or pdfplumber.
     * Load text+position using pdfplumber.
 * **PDF document splitting:** Creates a tree representation of the document, where each node corresponds to an article or section. It uses positional data and regular expressions to find the different sections. Each section can be
 subdivided in one or more chunks.
@@ -61,7 +61,7 @@ For a detailed documentation on each functionality, please go to the correspondi
 
 In order to allow a better debugging of the processes or to obtain some extra resources, the project provides several script to perform isolated steps of the full process, this is usefull for testing and to understand the process better.
 
-* [Extracting information from PDF file](./docs/scripts/extract_info.md): Script to test the text and OCR information extraction.
+* [Extracting information from PDF file](./docs/scripts/extract_info.md): Script to test the text and visual information extraction.
 * [Getting the embeddings from the information](./docs/scripts/get_embeddings.md): Script to test the extraction of the structure and embeddings of a file previously processed with *extract_info.py*.
 * [Retrieving relevant documents from the database](./docs/scripts/get_relevant.md): Script to test the query capabilities of CromaDB storage by retrieving relevant documents given a query sentence.
 

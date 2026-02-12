@@ -5,7 +5,7 @@ import argparse
 import os
 import glob
 
-from simplerag.document_loaders.pdf import PyPDFLoader, OCRLoader
+from simplerag.document_loaders.pdf import PyPDFLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
 from simplerag.document_loaders.pdf import LoaderOptions
 from simplerag.document_splitters.hierarchical import TreeSplitter
@@ -32,7 +32,6 @@ DEFAULTS = {
 }
 LOADERS = {
     'text': PyPDFLoader,
-    'ocr': OCRLoader,
     'pdfplumber': PDFPlumberLoader,
 }
 INNER_SPLITTERS = ['paragraph', 'section']
@@ -155,7 +154,7 @@ class ExtractorCLI(CLI):
                             default=DEFAULTS['keep_cache'],
                             action='store_true',
                             help='''
-                                Keep Tesseract cache after processing. Usefull when the same file
+                                Keep cache after processing. Usefull when the same file
                                 is going to be processed multiple times
                                 ''')
         self.parser.add_argument('-l', '--loader',
@@ -311,12 +310,6 @@ class ExtractorCLI(CLI):
 
         if params.loader == 'text':
             pdf_loader = PyPDFLoader(filename)
-        elif params.loader == 'ocr':
-            pdf_loader = OCRLoader(filename, LoaderOptions(
-                settings.cache_dir,
-                settings.keep_cache,
-                params.visual_aid)
-            )
         elif params.loader == 'pdfplumber':
             pdf_loader = PDFPlumberLoader(filename, params.raw, LoaderOptions(
                 settings.cache_dir,

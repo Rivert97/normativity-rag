@@ -1,7 +1,7 @@
 FROM llama_cpp_cuda:latest
 
 # Install dependencies for the application
-RUN apt-get install -y poppler-utils tesseract-ocr libtesseract-dev ffmpeg libsm6 libxext6
+RUN apt-get install -y poppler-utils ffmpeg libsm6 libxext6
 
 # Install the application dependencies
 WORKDIR /app

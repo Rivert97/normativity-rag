@@ -9,7 +9,6 @@ import os
 import glob
 
 from simplerag.document_loaders.pdf import PyPDFLoader
-from simplerag.document_loaders.pdf import OCRLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
 from simplerag.document_loaders.pdf import LoaderOptions
 from .utils.controllers import CLI, run_cli
@@ -57,12 +56,12 @@ class ExtractInfoCLI(CLI):
         self.parser.add_argument('-k', '--keep-cache',
                                  default=False,
                                  action='store_true',
-                                 help='''Keep Tesseract cache after processing. Usefull when the
+                                 help='''Keep cache after processing. Usefull when the
                                      same file is going to be processed multiple times''')
         self.parser.add_argument('-l', '--loader',
                                  default='pdfplumber',
                                  type=str,
-                                 choices=['text', 'ocr', 'pdfplumber'],
+                                 choices=['text', 'pdfplumber'],
                                  help='Type of loader to use. Defaults to pdfplumber')
         self.parser.add_argument('-o', '--output',
                                  default='',
@@ -94,12 +93,6 @@ class ExtractInfoCLI(CLI):
                                  nargs='+',
                                  type=str,
                                  help='Type(s) of output(s). Defaults to txt.')
-        self.parser.add_argument('-P', '--Parallel',
-                                 default=False,
-                                 action="store_true",
-                                 help='''Uses the total number of cores - 2,
-                                     for concurrent processing
-                                 ''')
         self.parser.add_argument('--visual-aid',
                                  default=False,
                                  action="store_true",
@@ -166,12 +159,6 @@ class ExtractInfoCLI(CLI):
 
         if self._args.loader == 'text':
             loader = PyPDFLoader(filename)
-        elif self._args.loader == 'ocr':
-            loader = OCRLoader(filename, LoaderOptions(
-                self._args.cache_dir,
-                self._args.keep_cache,
-                self._args.visual_aid)
-            )
         elif self._args.loader == 'pdfplumber':
             loader = PDFPlumberLoader(filename, self._args.raw, LoaderOptions(
                 self._args.cache_dir,
