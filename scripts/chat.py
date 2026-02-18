@@ -18,7 +18,7 @@ DEFAULTS = {
     'prompt_file': './prompts/system.txt',
 }
 
-PROGRAM_NAME = 'RAG'
+PROGRAM_NAME = 'chat'
 VERSION = '1.00.00'
 
 class CLIChatController(CLI):

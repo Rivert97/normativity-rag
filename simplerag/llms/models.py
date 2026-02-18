@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 import os
 import json
+import boto3
 
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
@@ -186,6 +187,10 @@ class ModelBuilder:
         """Return an object of the corresponding class depending of the type of model."""
         if model_id == '':
             return None
+
+        # Check if it is a Bedrock model
+        if model_id.lower().startswith('bedrock/'):
+            return Models.BEDROCK.value(model_id.split('/', 1)[1], **model_args)
 
         id_parts = model_id.split('/')
         full_name = id_parts[-1]
@@ -551,6 +556,55 @@ class GGUFModel(Model):
 
         return response, reasoning
 
+class Bedrock(Model):
+    """Class to load Bedrock models."""
+
+    def __init__(self, model_id:str, system_prompt:str=None):
+        super().__init__(multimodal=False, system_prompt=system_prompt)
+        self.model_id = model_id
+        self.client = boto3.client("bedrock-runtime", region_name=os.getenv("AWS_REGION", "us-east-1"))
+
+    def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
+        all_messages = self.messages + messages
+
+        native_request = {
+            "model": self.model_id,
+            "messages": all_messages,
+            "max_completion_tokens": self.max_new_tokens,
+            "temperature": self.temperature,
+            "top_p": 0.9,
+            "stream": False,
+        }
+
+        response = self.client.invoke_model(
+            modelId=self.model_id,
+            body=json.dumps(native_request),
+        )
+
+        response_body = json.loads(response['body'].read().decode('utf-8'))
+        content = response_body['choices'][0]['message']['content']
+
+        if raw:
+            return content
+
+        response, reasoning = self.__split_reasoning_content(content)
+
+        return {
+            'message': response,
+            'reasoning': reasoning,
+        }
+
+    def __split_reasoning_content(self, model_out:str):
+        reasoning = None
+        response = model_out
+
+        index = response.find('</reasoning>')
+        if index > 0:
+            reasoning = response[11:index].strip()
+            response = response[index+12:].strip()
+
+        return response, reasoning
+
 class Models(Enum):
     """Different types of models that are available."""
     QWEN3 = Qwen3
@@ -558,3 +612,4 @@ class Models(Enum):
     LLAMA = Llama3
     MISTRAL = Mistral
     GPT = GPT
+    BEDROCK = Bedrock
