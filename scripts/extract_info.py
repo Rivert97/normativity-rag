@@ -111,6 +111,9 @@ class ExtractInfoCLI(CLI):
         if args.output != '':
             self.print_to_console = False
 
+        if args.page is not None and args.page < 1:
+            raise CLIException("Page number must be greater than 0")
+
         if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
             raise CLIException("Parse parameters file does not exist")
 

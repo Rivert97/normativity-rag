@@ -172,6 +172,9 @@ class GetEmbeddingsCLI(CLI):
         if args.action == 'embeddings' and args.storage != 'csv' and args.collection == '':
             raise CLIException("Please specify a name for the collection")
 
+        if args.page is not None and args.page < 1:
+            raise CLIException("Page number must be greater than 0")
+
         if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
             raise CLIException("Parse parameters file does not exist")
 
