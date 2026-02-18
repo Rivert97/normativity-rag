@@ -20,17 +20,29 @@ Full list of options of the script can be obtained using the -h option.
 
 Single-query mode, get the answer to a simple question:
 
-    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m Qwen/Qwen3-0.6B --query "Que tipos de profesores hay?"
+    python run.py chat -c CollectionName -d ./db -e sentence-transformers/all-MiniLM-L6-v2 -m Qwen/Qwen3-0.6B --query "Que tipos de profesores hay?"
 
 > __NOTE:__ To know the id for the model visit HuggingFace models collection (https://huggingface.co/models). Consider that not al models are available.
 
 Interactive mode:
 
-    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m google/gemma-3-1b-it
+    python run.py chat -c CollectionName -d ./db -e sentence-transformers/all-MiniLM-L6-v2 -m google/gemma-3-1b-it
 
 Interactive mode with context. This option shows the relevant documents before the answer:
 
-    python run.py chat -c CollectionName -d ./db -e "all-MiniLM-L6-v2" -m meta-llama/Llama-3.2-1B-Instruct --context
+    python run.py chat -c CollectionName -d ./db -e sentence-transformers/all-MiniLM-L6-v2 -m meta-llama/Llama-3.2-1B-Instruct --context
+
+Running AWS Bedrock models:
+
+    python run.py chat -c CollectionName -d ./db -e bedrock/amazon.titan-embed-text-v2:0 -m bedrock/openai.gpt-oss-20b-1:0 --context
+
+> __NOTE:__ To use Bedrock models the variables AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_REGION must be set in the environment variables.
+
+Running Llama_cpp models:
+
+    python run.py chat -c CollectionName -d ./db -e /path/to/embedding-model.gguf -m /path/to/model.gguf --context
+
+> __NOTE:__ To use Llama_cpp models with the GPU, the llama-cpp-python library needs to be installed with GPU support.
 
 Full list of tested models:
 

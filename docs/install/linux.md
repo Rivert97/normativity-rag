@@ -16,6 +16,12 @@ Poppler-Utils must be installed in the system:
 
     sudo apt-get install poppler-utils
 
+## Install Llama-cpp (Optional)
+
+In case you want to use local models in .gguf format, you need to install llama-cpp.
+
+Check the official documentation for more information: https://github.com/abetlen/llama-cpp-python
+
 ## Update pip
 
     pip install --upgrade pip

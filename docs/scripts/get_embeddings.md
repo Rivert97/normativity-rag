@@ -48,3 +48,15 @@ Load TXT, calculate the embeddings of each section and save them in a collection
 using ChromaDB. Database is created by default in *db/*:
 
     python run.py get_embeddings -f /path/to/file.txt -t txt -a embeddings -e "all-MiniLM-L6-v2" -c <CollectionName> -s chromadb --inner-splitter section
+
+Get embeddings with AWS Bedrock model:
+
+    python run.py get_embeddings -f /path/to/file.csv -a embeddings -e "bedrock/amazon.titan-embed-text-v2:0" -c <CollectionName> -s chromadb --inner-splitter section
+
+> __NOTE:__ To use Bedrock models the variables AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_REGION must be set in the environment variables.
+
+Get embeddings with Llama_cpp model:
+
+    python run.py get_embeddings -f /path/to/file.csv -a embeddings -e /path/to/embedding-model.gguf -c <CollectionName> -s chromadb --inner-splitter section
+
+> __NOTE:__ To use Llama_cpp models with the GPU, the llama-cpp-python library needs to be installed with GPU support.

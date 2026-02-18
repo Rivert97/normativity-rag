@@ -4,9 +4,7 @@ This is a project that implements a simple RAG system. It is specially adapted t
 
 The full project performs the basic RAG steps:
 
-* **PDF document loading:** This project can load either only the plain text or the text+position inside the document. Obtaining the text+position allows the program to detect sections and titles in a better way. It can be performed in different ways:
-    * Load plain text only with pdfplumber.
-    * Load text+position using pdfplumber.
+* **PDF document loading:** This project can load either only the plain text or the text+position inside the document. Obtaining the text+position allows the program to detect sections and titles in a better way.
 * **PDF document splitting:** Creates a tree representation of the document, where each node corresponds to an article or section. It uses positional data and regular expressions to find the different sections. Each section can be
 subdivided in one or more chunks.
 * **Embeddings creation:** Uses an embeddings LLM to obtain the vector representations of the chunks. Multiple models available.
@@ -21,6 +19,38 @@ Please refer to the proper installation guide according to your system.
 * Linux: [Linux Installation Guide](./docs/install/linux.md)
 * Windows: Currently not supported
 * MaxOS: N/A
+
+# Configuration
+
+To configure the application, you need to set up the environment variables. A template file `.env.example` is provided.
+
+1. Copy the example file to `.env`:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Open the `.env` file and update the variables as needed:
+
+   * **Logging:**
+     * `LOG_LEVEL`: Set the logging level (e.g., 10 for DEBUG, 20 for INFO).
+     * `LOG_FILE`: Path to the log file.
+     * `LOG_CONSOLE`: Set to 1 to enable console logging.
+
+   * **HuggingFace (Optional):**
+     * `HF_TOKEN`: Your HuggingFace API token. Required for accessing gated models.
+     * `HF_HOME`: Directory to store downloaded models.
+
+   * **Model Settings:**
+     * `EMBEDDING_CONTEXT`: Context size for embeddings.
+     * `MODEL_CONTEXT`: Context size for the LLM.
+
+   * **AWS Bedrock (Optional):**
+     * `AWS_ACCESS_KEY_ID`: Your AWS Access Key.
+     * `AWS_SECRET_ACCESS_KEY`: Your AWS Secret Key.
+     * `AWS_REGION`: AWS Region (e.g., `us-east-1`).
+
+    > __NOTE:__ When using Bedrock models, the model ID needs to be prefixed with 'bedrock/' in the `run.yml` file and in the --model or --embedder options.
 
 # Quick Start
 
