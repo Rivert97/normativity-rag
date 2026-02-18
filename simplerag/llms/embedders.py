@@ -2,6 +2,8 @@
 from abc import abstractmethod
 from enum import Enum
 import os
+import json
+import boto3
 
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModel
@@ -46,6 +48,11 @@ class EmbedderBuilder:
 
         if model_name.endswith('.gguf'):
             return GGUFEmbedder(model_name, **model_args)
+
+        if model_name.startswith('bedrock'):
+            if 'device' in model_args:
+                del model_args['device']
+            return BedrockEmbedder(model_name.replace('bedrock/', ''), **model_args)
 
         return TREmbedder(model_name, **model_args)
 
@@ -147,8 +154,49 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
         """Return the name of the embedding function."""
         return "llama_cpp"
 
+class BedrockEmbedder(Embedder, metaclass=Singleton):
+    """Class to create embeddings using AWS Bedrock."""
+
+    def __init__(self, model_name:str):
+        """Initialize the Bedrock client."""
+        super().__init__()
+        self.model_name = model_name
+        self.client = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=os.getenv('AWS_REGION', 'us-east-1'),
+        )
+
+    def __call__(self, input: list[str]):
+        """Get the embeddings."""
+        embeddings = []
+        for text in input:
+            body = json.dumps({
+                "inputText": text
+            })
+
+            try:
+                response = self.client.invoke_model(
+                    body=body,
+                    modelId=self.model_name,
+                    accept='application/json',
+                    contentType='application/json'
+                )
+                response_body = json.loads(response.get('body').read())
+                embeddings.append(response_body.get('embedding'))
+            except Exception as e:
+                # Pass the error to the user
+                raise e
+
+        return embeddings
+
+    @staticmethod
+    def name() -> str:
+        """Return the name of the embedding function."""
+        return "bedrock"
+
 class Embedders(Enum):
     """Different types of embedders"""
     SENTENCE_TRANSFORMERS = STEmbedder
     TRANSFORMERS = TREmbedder
     GGUF = GGUFEmbedder
+    BEDROCK = BedrockEmbedder
