@@ -15,6 +15,15 @@ from .utils.exceptions import CLIException
 PROGRAM_NAME = 'extract_info'
 VERSION = '1.00.00'
 
+DEFAULT_PARSE_PARAMS = {
+    'pdf_margins': {
+        'top': 0.1,
+        'bottom': 0.95,
+        'left': 0.05,
+        'right': 0.95,
+    }
+}
+
 class ExtractInfoCLI(CLI):
     """This class controls the execution of the program when using
     CLI.
@@ -24,7 +33,7 @@ class ExtractInfoCLI(CLI):
 
         self.print_to_console = True
         self._args = None
-        self.parse_params = None
+        self.parse_params = {}
 
     def run(self):
         """Run the script logic."""
@@ -58,7 +67,7 @@ class ExtractInfoCLI(CLI):
                                  type=int,
                                  help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
-                                 default='simplerag/settings/params-default.yml',
+                                 default='',
                                  type=str,
                                  help='''
                                      YAML file with custom parse parameters to be used
@@ -129,10 +138,18 @@ class ExtractInfoCLI(CLI):
             self._logger.debug('Generating text output')
 
             if self._args.page is not None:
-                text = pdf_loader.get_page_text(self._args.page, True,
-                                                self.parse_params.get('pdf_margins'))
+                text = pdf_loader.get_page_text(
+                    self._args.page,
+                    True,
+                    self.parse_params.get('pdf_margins',
+                                          DEFAULT_PARSE_PARAMS['pdf_margins'])
+                )
             else:
-                text = pdf_loader.get_text(True, self.parse_params.get('pdf_margins'))
+                text = pdf_loader.get_text(
+                    True,
+                    self.parse_params.get('pdf_margins',
+                                          DEFAULT_PARSE_PARAMS['pdf_margins'])
+                )
 
             if self.print_to_console:
                 print(text)

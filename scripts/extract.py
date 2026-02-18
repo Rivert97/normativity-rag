@@ -23,7 +23,14 @@ DEFAULTS = {
     'extraction_type': 'data',
     'inner_splitter': 'section',
     'max_chars': 8000,
-    'parse_params_file': 'simplerag/settings/params-default.yml',
+}
+DEFAULT_PARSE_PARAMS = {
+    'pdf_margins': {
+        'top': 0.1,
+        'bottom': 0.95,
+        'left': 0.05,
+        'right': 0.95,
+    }
 }
 INNER_SPLITTERS = ['paragraph', 'section']
 EXTRACTION_TYPES = ['text', 'data']
@@ -134,7 +141,7 @@ class ExtractorCLI(CLI):
                                 Defaults to {DEFAULTS['max_chars']}.
                                 ''')
         self.parser.add_argument('--parse-params-file',
-                            default='simplerag/settings/params-default.yml',
+                            default='',
                             type=str,
                             help='''
                                 YAML file with custom parse parameters to be used
@@ -186,8 +193,9 @@ class ExtractorCLI(CLI):
         self._logger.info('Processing file %s', filename)
 
         file_settings = self.__get_file_settings(filename, settings)
-        file_parse_params = self.load_yaml(file_settings.get('parse_params_file',
-                                                             DEFAULTS['parse_params_file']))
+        file_parse_params = self.load_yaml(file_settings.get('parse_params_file', ''))
+        if not file_parse_params:
+            file_parse_params = DEFAULT_PARSE_PARAMS
 
         basename = os.path.splitext(os.path.split(filename)[-1])[0]
         pdf_loader = PDFPlumberLoader(filename, params.raw)

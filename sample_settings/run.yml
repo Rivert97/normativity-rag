@@ -6,15 +6,15 @@ db:
 
   file_settings:
     file-with-letterhead.pdf:
-      parse_params_file: ./settings/params-bottom-letterhead.yml
+      parse_params_file: ./sample_settings/params-bottom-letterhead.yml
 
   collections:
     NORM_001:
-      embedder: all-MiniLM-L6-v2
+      embedder: sentence-transformers/all-MiniLM-L6-v2
       extraction_type: data
       inner_splitter: paragraph
 
     NORM_002:
-      embedder: all-MiniLM-L6-v2
+      embedder: sentence-transformers/all-MiniLM-L6-v2
       extraction_type: text
       inner_splitter: section
