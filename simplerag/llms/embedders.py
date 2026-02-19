@@ -5,11 +5,16 @@ import os
 import json
 import boto3
 
-from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer, AutoModel
-import torch
-import torch.nn.functional as F
-from llama_cpp import Llama
+
+# Optional imports
+try:
+    import torch
+    import torch.nn.functional as F
+    from transformers import AutoTokenizer, AutoModel
+    from sentence_transformers import SentenceTransformer
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
 
 from .singleton import Singleton
 
@@ -109,8 +114,8 @@ class TREmbedder(Embedder, metaclass=Singleton):
 
         return embeddings
 
-    def __last_token_pool(self, last_hidden_states: torch.Tensor,
-                    attention_mask: torch.Tensor) -> torch.Tensor:
+    def __last_token_pool(self, last_hidden_states,
+                    attention_mask):
         left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
         if left_padding:
             return last_hidden_states[:, -1]

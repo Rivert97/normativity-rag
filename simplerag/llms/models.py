@@ -6,17 +6,23 @@ import os
 import json
 import boto3
 
-import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
-from transformers import BitsAndBytesConfig, Gemma3ForConditionalGeneration, Gemma3ForCausalLM
-import torch
-from llama_cpp import Llama
+
+# Optional imports
+try:
+    import torch
+    import transformers
+    from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
+    from transformers import BitsAndBytesConfig, Gemma3ForConditionalGeneration, Gemma3ForCausalLM
+    from llama_cpp import Llama
+
+    # It's needed to run in the RTX4000
+    torch.backends.cuda.enable_mem_efficient_sdp(False)
+    torch.backends.cuda.enable_flash_sdp(False)
+except ImportError:
+    Llama = None
 
 from .data import Document
 
-# It's needed to run in the RTX4000
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_flash_sdp(False)
 
 class Model(ABC):
     """Base class for all the models."""
