@@ -5,7 +5,6 @@ import os
 import json
 import boto3
 
-
 # Optional imports
 try:
     import torch
@@ -33,6 +32,10 @@ class Embedder():
         Return the embeddings.
         input param needs to be called like that to use it with ChromaDB.
         """
+
+    @abstractmethod
+    def embed_query(self, query: list[str]):
+        """Embed a query."""
 
 class EmbedderBuilder:
     """Factory class for different types of embedders."""
@@ -72,6 +75,10 @@ class STEmbedder(Embedder, metaclass=Singleton):
     def __call__(self, input: list[str]):
         """Get the embeddings."""
         return self.model.encode(input, batch_size=1, convert_to_numpy=True).tolist()
+
+    def embed_query(self, query: list[str]):
+        """Embed a query."""
+        return self.__call__(query)
 
     @staticmethod
     def name() -> str:
@@ -114,6 +121,10 @@ class TREmbedder(Embedder, metaclass=Singleton):
 
         return embeddings
 
+    def embed_query(self, query: list[str]):
+        """Embed a query."""
+        return self.__call__(query)
+
     def __last_token_pool(self, last_hidden_states,
                     attention_mask):
         left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
@@ -154,6 +165,10 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
 
         return embeddings
 
+    def embed_query(self, query: list[str]):
+        """Embed a query."""
+        return self.__call__(query)
+
     @staticmethod
     def name() -> str:
         """Return the name of the embedding function."""
@@ -193,6 +208,10 @@ class BedrockEmbedder(Embedder, metaclass=Singleton):
                 raise e
 
         return embeddings
+
+    def embed_query(self, query: list[str]):
+        """Embed a query."""
+        return self.__call__(query)
 
     @staticmethod
     def name() -> str:
