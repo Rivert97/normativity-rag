@@ -35,7 +35,7 @@ class Model(ABC):
 
         self.model_context = int(os.getenv('MODEL_CONTEXT', '16384'))
         self.max_new_tokens = int(os.getenv('MAX_NEW_TOKENS', '8192'))
-        self.temperature = float(os.getenv('TEMPERATURE', '0.7'))
+        self.temperature = float(os.getenv('TEMPERATURE', '0.1'))
 
     def query(self, query:str, add_to_history:bool=True):
         """Query an answer based on a question."""
@@ -44,9 +44,9 @@ class Model(ABC):
         response = self.get_response_from_model(messages)
 
         if add_to_history:
-            self.messages += messages + self.response_to_message(response['message'])
+            self.messages += messages + self.response_to_message(response['response']['message'])
 
-        return response
+        return response['response']
 
     def query_with_documents(self, query:str, documents:list[Document], add_to_history:bool=True):
         """Query an answer based on a question and some documents passed as context."""
@@ -56,15 +56,19 @@ class Model(ABC):
 
         if add_to_history:
             self.messages += self.str_to_message(query)
-            self.messages += self.response_to_message(response['message'])
+            self.messages += self.response_to_message(response['response']['message'])
 
-        return response
+        return response['response']
 
     def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
         """Query an answer based on a full conversation."""
         response = self.get_response_from_model(messages, raw=True)
 
-        return self.response_to_message(response)
+        return {
+            "response": self.response_to_message(response['response']),
+            "input_tokens": response['input_tokens'],
+            "output_tokens": response['output_tokens'],
+        }
 
     def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
                                               documents:list[Document]) -> str:
@@ -76,7 +80,11 @@ class Model(ABC):
         messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
         response = self.get_response_from_model(messages, raw=True)
 
-        return self.response_to_message(response)
+        return {
+            "response": self.response_to_message(response['response']),
+            "input_tokens": response['input_tokens'],
+            "output_tokens": response['output_tokens'],
+        }
 
     def str_to_message(self, query:str):
         """Add a new message to be sent to the model."""
@@ -107,7 +115,7 @@ class Model(ABC):
 
     @abstractmethod
     def get_response_from_model(self, messages: list[dict[str, str]],
-                                raw:bool=False) -> dict[str, str]|str:
+                                raw:bool=False) -> dict[dict[str, str]|str|int]:
         """Calls the model inference method and returns an answer."""
 
     def __get_init_messages(self) -> list[dict[str:str|dict]]:
@@ -255,16 +263,20 @@ class Llama3(Model):
         )
 
     def get_response_from_model(self, messages:list[dict[str, str]],
-                                raw:bool=False) -> dict[str, str]|str:
+                                raw:bool=False) -> dict[dict[str, str]|str|int]:
         all_messages = self.messages + messages
         output = self.pipeline(all_messages, max_new_tokens=1024)
 
         if raw:
-            return output[0].get('generated_text')[-1].get('content', '')
+            return {
+                "response": output[0].get('generated_text')[-1].get('content', '')
+            }
 
         response = {
-            'message': output[0].get('generated_text')[-1].get('content', ''),
-            'reasoning': '',
+            "response": {
+                'message': output[0].get('generated_text')[-1].get('content', ''),
+                'reasoning': '',
+            }
         }
 
         return response
@@ -325,11 +337,15 @@ class Gemma(Model):
             generation = generation[0][input_len:]
 
         if raw:
-            return self.processor.decode(generation, skip_special_tokens=True)
+            return {
+                "response": self.processor.decode(generation, skip_special_tokens=True)
+            }
 
         response = {
-            'message': self.processor.decode(generation, skip_special_tokens=True),
-            'reasoning': '',
+            "response": {
+                'message': self.processor.decode(generation, skip_special_tokens=True),
+                'reasoning': '',
+            }
         }
 
         return response
@@ -361,11 +377,15 @@ class Gemma(Model):
         eot_pos = eot if eot > -1 else None
 
         if raw:
-            return response[sot_pos:eot_pos]
+            return {
+                "response": response[sot_pos:eot_pos]
+            }
 
         response = {
-            'message': response[sot_pos:eot_pos],
-            'reasoning': '',
+            "response": {
+                'message': response[sot_pos:eot_pos],
+                'reasoning': '',
+            }
         }
 
         return response
@@ -404,7 +424,9 @@ class Qwen3(Model):
         output_ids = generated_tokens[0][len(model_inputs.input_ids[0]):].tolist()
 
         if raw:
-            return self.tokenizer.decode(output_ids, skip_special_tokens=False).strip("\n")
+            return {
+                "response": self.tokenizer.decode(output_ids, skip_special_tokens=False).strip("\n")
+            }
 
         # parsing thinking content
         try:
@@ -421,8 +443,10 @@ class Qwen3(Model):
         else:
             reasoning = ''
         response = {
-            'message': message,
-            'reasoning': reasoning,
+            "response": {
+                'message': message,
+                'reasoning': reasoning,
+            }
         }
 
         return response
@@ -450,11 +474,15 @@ class Mistral(Model):
         output = self.pipeline(all_messages, max_new_tokens=1024)
 
         if raw:
-            return output[0].get('generated_text')[-1].get('content', '')
+            return {
+                "response": output[0].get('generated_text')[-1].get('content', '')
+            }
 
         response = {
-            'message': output[0].get('generated_text')[-1].get('content', ''),
-            'reasoning': '',
+            "response": {
+                'message': output[0].get('generated_text')[-1].get('content', ''),
+                'reasoning': '',
+            }
         }
 
         return response
@@ -489,11 +517,15 @@ class GPT(Model):
         )
 
         if raw:
-            return self.tokenizer.decode(outputs[0])
+            return {
+                "response": self.tokenizer.decode(outputs[0])
+            }
 
         response = {
-            'message': self.tokenizer.decode(outputs[0]),
-            'reasoning': '',
+            "response": {
+                'message': self.tokenizer.decode(outputs[0]),
+                'reasoning': '',
+            }
         }
 
         return response
@@ -529,15 +561,19 @@ class GGUFModel(Model):
             max_tokens=self.max_new_tokens
         )
         if raw:
-            return res['choices'][0]['message']['content']
+            return {
+                "response": res['choices'][0]['message']['content']
+            }
 
         response_str, reasoning = self.__split_reasoning_content(
             res['choices'][0]['message']['content']
         )
 
         response = {
-            'message': response_str,
-            'reasoning': reasoning
+            "response": {
+                'message': response_str,
+                'reasoning': reasoning
+            }
         }
 
         return response
@@ -578,7 +614,7 @@ class Bedrock(Model):
             "messages": all_messages,
             "max_completion_tokens": self.max_new_tokens,
             "temperature": self.temperature,
-            "top_p": 0.9,
+            "top_p": 0.1,
             "stream": False,
         }
 
@@ -591,13 +627,21 @@ class Bedrock(Model):
         content = response_body['choices'][0]['message']['content']
 
         if raw:
-            return content
+            return {
+                "response": content,
+                "input_tokens": response_body['usage']['prompt_tokens'],
+                "output_tokens": response_body['usage']['completion_tokens'],
+            }
 
         response, reasoning = self.__split_reasoning_content(content)
 
         return {
-            'message': response,
-            'reasoning': reasoning,
+            "response": {
+                'message': response,
+                'reasoning': reasoning,
+            },
+            "input_tokens": response_body['usage']['prompt_tokens'],
+            "output_tokens": response_body['usage']['completion_tokens'],
         }
 
     def __split_reasoning_content(self, model_out:str):

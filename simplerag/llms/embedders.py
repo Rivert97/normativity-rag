@@ -25,6 +25,7 @@ class Embedder():
     def __init__(self):
         """Initialize the embedder."""
         self.embedding_context = int(os.getenv('EMBEDDING_CONTEXT', '2048'))
+        self.last_token_count = 0
 
     @abstractmethod
     def __call__(self, input: list[str]):
@@ -36,6 +37,10 @@ class Embedder():
     @abstractmethod
     def embed_query(self, input: list[str]):
         """Embed a query."""
+
+    def get_last_token_count(self):
+        """Return the token usage of the last query."""
+        return self.last_token_count
 
 class EmbedderBuilder:
     """Factory class for different types of embedders."""
@@ -174,7 +179,7 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
         """Return the name of the embedding function."""
         return "llama_cpp"
 
-class BedrockEmbedder(Embedder, metaclass=Singleton):
+class BedrockEmbedder(Embedder):
     """Class to create embeddings using AWS Bedrock."""
 
     def __init__(self, model_name:str):
@@ -203,6 +208,7 @@ class BedrockEmbedder(Embedder, metaclass=Singleton):
                 )
                 response_body = json.loads(response.get('body').read())
                 embeddings.append(response_body.get('embedding'))
+                self.last_token_count = response_body.get('inputTextTokenCount')
             except Exception as e:
                 # Pass the error to the user
                 raise e

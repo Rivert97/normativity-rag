@@ -28,7 +28,7 @@ class GetRelevantCLI(CLI):
         storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
 
         self._logger.debug('Querying sentences')
-        documents = storage.query_sentence(
+        documents, _ = storage.query_sentence(
             self._args.collection,
             self._args.sentence,
             self._args.number_results)
