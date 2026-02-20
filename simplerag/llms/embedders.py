@@ -34,7 +34,7 @@ class Embedder():
         """
 
     @abstractmethod
-    def embed_query(self, query: list[str]):
+    def embed_query(self, input: list[str]):
         """Embed a query."""
 
 class EmbedderBuilder:
@@ -76,9 +76,9 @@ class STEmbedder(Embedder, metaclass=Singleton):
         """Get the embeddings."""
         return self.model.encode(input, batch_size=1, convert_to_numpy=True).tolist()
 
-    def embed_query(self, query: list[str]):
+    def embed_query(self, input: list[str]):
         """Embed a query."""
-        return self.__call__(query)
+        return self.__call__(input)
 
     @staticmethod
     def name() -> str:
@@ -121,9 +121,9 @@ class TREmbedder(Embedder, metaclass=Singleton):
 
         return embeddings
 
-    def embed_query(self, query: list[str]):
+    def embed_query(self, input: list[str]):
         """Embed a query."""
-        return self.__call__(query)
+        return self.__call__(input)
 
     def __last_token_pool(self, last_hidden_states,
                     attention_mask):
@@ -165,9 +165,9 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
 
         return embeddings
 
-    def embed_query(self, query: list[str]):
+    def embed_query(self, input: list[str]):
         """Embed a query."""
-        return self.__call__(query)
+        return self.__call__(input)
 
     @staticmethod
     def name() -> str:
@@ -209,9 +209,9 @@ class BedrockEmbedder(Embedder, metaclass=Singleton):
 
         return embeddings
 
-    def embed_query(self, query: list[str]):
+    def embed_query(self, input: list[str]):
         """Embed a query."""
-        return self.__call__(query)
+        return self.__call__(input)
 
     @staticmethod
     def name() -> str:
