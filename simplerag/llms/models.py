@@ -66,8 +66,8 @@ class Model(ABC):
 
         return {
             "response": self.response_to_message(response['response']),
-            "input_tokens": response['input_tokens'],
-            "output_tokens": response['output_tokens'],
+            "input_tokens": response.get('input_tokens', 0),
+            "output_tokens": response.get('output_tokens', 0),
         }
 
     def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
@@ -562,7 +562,9 @@ class GGUFModel(Model):
         )
         if raw:
             return {
-                "response": res['choices'][0]['message']['content']
+                "response": res['choices'][0]['message']['content'],
+                "input_tokens": res['usage']['prompt_tokens'],
+                "output_tokens": res['usage']['completion_tokens'],
             }
 
         response_str, reasoning = self.__split_reasoning_content(
@@ -573,7 +575,9 @@ class GGUFModel(Model):
             "response": {
                 'message': response_str,
                 'reasoning': reasoning
-            }
+            },
+            "input_tokens": res['usage']['prompt_tokens'],
+            "output_tokens": res['usage']['completion_tokens'],
         }
 
         return response

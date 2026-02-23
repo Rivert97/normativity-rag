@@ -40,7 +40,7 @@ class ChromaDBStorage(Storage):
                                                        embedding_function=em_func,
                                                        configuration={
                                                            "hnsw": {
-                                                               "space": hnsw_space,
+                                                               "space": self.hnsw_space,
                                                            }
                                                        })
 
@@ -111,7 +111,7 @@ class ChromaDBStorage(Storage):
 
         return documents
 
-    def __query(self, chromadb_collection, sentence, n_results, em_func) -> (list[Document], int):
+    def __query(self, chromadb_collection, sentence, n_results, em_func) -> tuple[list[Document], int]:
         results = chromadb_collection.query(
             query_texts=[sentence],
             n_results=n_results,

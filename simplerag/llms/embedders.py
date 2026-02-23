@@ -79,6 +79,7 @@ class STEmbedder(Embedder, metaclass=Singleton):
 
     def __call__(self, input: list[str]):
         """Get the embeddings."""
+        self.last_token_count = len(self.model.tokenizer(input)['input_ids'][0])
         return self.model.encode(input, batch_size=1, convert_to_numpy=True).tolist()
 
     def embed_query(self, input: list[str]):
