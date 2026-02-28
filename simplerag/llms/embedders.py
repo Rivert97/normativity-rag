@@ -11,6 +11,10 @@ try:
     import torch.nn.functional as F
     from transformers import AutoTokenizer, AutoModel
     from sentence_transformers import SentenceTransformer
+except ImportError:
+    pass
+
+try:
     from llama_cpp import Llama
 except ImportError:
     Llama = None

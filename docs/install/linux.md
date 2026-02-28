@@ -16,7 +16,7 @@ Poppler-Utils must be installed in the system:
 
     sudo apt-get install poppler-utils
 
-## Install Llama-cpp (Optional)
+## Install Llama-cpp-python (Optional)
 
 In case you want to use local models in .gguf format, you need to install llama-cpp.
 
@@ -28,6 +28,10 @@ Check the official documentation for more information: https://github.com/abetle
 
 ## Install python packages
 
-Install all the packages from *requirements.txt*:
+If you want to use local models downloaded from HuggingFace, install the full requirements:
 
     pip install -r requirements.txt
+
+If you want to use AWS Bedrock for calculating the embeddings and inference, install only the basic requirements:
+
+    pip install -r requirements.bedrock.txt

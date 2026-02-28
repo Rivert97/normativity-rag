@@ -13,11 +13,15 @@ try:
     import transformers
     from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
     from transformers import BitsAndBytesConfig, Gemma3ForConditionalGeneration, Gemma3ForCausalLM
-    from llama_cpp import Llama
 
     # It's needed to run in the RTX4000
     torch.backends.cuda.enable_mem_efficient_sdp(False)
     torch.backends.cuda.enable_flash_sdp(False)
+except ImportError:
+    pass
+
+try:
+    from llama_cpp import Llama
 except ImportError:
     Llama = None
 

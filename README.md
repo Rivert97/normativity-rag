@@ -5,8 +5,7 @@ This is a project that implements a simple RAG system. It is specially adapted t
 The full project performs the basic RAG steps:
 
 * **PDF document loading:** This project can load either only the plain text or the text+position inside the document. Obtaining the text+position allows the program to detect sections and titles in a better way.
-* **PDF document splitting:** Creates a tree representation of the document, where each node corresponds to an article or section. It uses positional data and regular expressions to find the different sections. Each section can be
-subdivided in one or more chunks.
+* **PDF document splitting:** Creates a tree representation of the document, where each node corresponds to an article or section. It uses positional data and regular expressions to find the different sections. Each section can be subdivided in one or more chunks.
 * **Embeddings creation:** Uses an embeddings LLM to obtain the vector representations of the chunks. Multiple models available.
 * **Embeddings storage:** Creates a ChromaDB database containing the embeddings and the metadata of each chunk.
 * **Chat:** Shows an interactive console where the user can ask questions
@@ -17,8 +16,9 @@ about the documents and receive the referenced answers.
 Please refer to the proper installation guide according to your system.
 
 * Linux: [Linux Installation Guide](./docs/install/linux.md)
-* Windows: Currently not supported
+* Windows: [Windows Installation Guide](./docs/install/windows.md)
 * MaxOS: N/A
+* Docker: [Docker Installation Guide](./docs/docker/docker.md)
 
 # Configuration
 
@@ -37,50 +37,64 @@ To configure the application, you need to set up the environment variables. A te
      * `LOG_FILE`: Path to the log file.
      * `LOG_CONSOLE`: Set to 1 to enable console logging.
 
-   * **HuggingFace (Optional):**
-     * `HF_TOKEN`: Your HuggingFace API token. Required for accessing gated models.
-     * `HF_HOME`: Directory to store downloaded models.
-
    * **Model Settings:**
      * `EMBEDDING_CONTEXT`: Context size for embeddings.
      * `MODEL_CONTEXT`: Context size for the LLM.
 
-   * **AWS Bedrock (Optional):**
-     * `AWS_ACCESS_KEY_ID`: Your AWS Access Key.
-     * `AWS_SECRET_ACCESS_KEY`: Your AWS Secret Key.
+   * **AWS Bedrock (Optional, only if using AWS):**
+     * `AWS_ACCESS_KEY_ID`: Your AWS Access Key ID.
+     * `AWS_SECRET_ACCESS_KEY`: Your AWS Secret Access Key.
      * `AWS_REGION`: AWS Region (e.g., `us-east-1`).
 
-    > __NOTE:__ When using Bedrock models, the model ID needs to be prefixed with 'bedrock/' in the `run.yml` file and in the --model or --embedder options.
+    > __NOTE:__ You can add any additional environment variable according to your need (e.g., `HF_TOKEN`).
 
-# Quick Start
+# Quick Start (Using Local models)
 
-To follow the guide you will need to create the directory *documents/* where the source PDF files should be moved.
+1. Create a directory with the documents you want to process:
 
-```
-.
-├── docs
-├── documents <-- Add this folder
-├── README.md
-├── requirements.txt
-├── run.py
-├── run.yml.example
-├── scripts
-├── simplerag
-└── tests
-```
+    ```bash
+    mkdir /home/$USER/documents
+    ```
 
-Now we create the database from all the documents in the folder:
+2. Create the database from all the documents in the directory:
 
-    python run.py extract -c CUSTOM_COLLECTION -d ./documents
+    ```bash
+    python run.py extract -c CUSTOM_COLLECTION -d /home/$USER/documents
+    ```
 
-> __NOTE:__ The first time running the script it will download the model to create the embeddings.
+  > __NOTE:__ The default model is `all-MiniLM-L6-v2`, the first time running the script it will download the model to create the embeddings.
 
-Once the database was created, we can initiate a chat with an LLM model
-and it will answer the questions regarding the documents.
+3. Once the database was created, we can initiate a chat with an LLM model and it will answer the questions regarding the documents.
 
+    ```bash
     python run.py chat --show-context -c CUSTOM_COLLECTION
+    ```
 
-An interactive console is opened where you can ask questions.
+# Quick Start (Using AWS Bedrock models)
+
+1. Setup your AWS account with an IAM user with access to the needed models. Get the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the IAM user.
+
+2. Create a directory with the documents you want to process:
+
+    ```bash
+    mkdir /home/$USER/documents
+    ```
+
+3. Create the database from all the documents in the directory:
+
+    ```bash
+    python run.py extract -c CUSTOM_COLLECTION -d /home/$USER/documents -e bedrock/amazon.titan-embed-text-v2:0
+    ```
+
+  > __NOTE:__ AWS model IDs are prefixed with `bedrock/`.
+
+4. Once the database was created, we can initiate a chat with an LLM model and it will answer the questions regarding the documents.
+
+    ```bash
+    python run.py chat --show-context -c CUSTOM_COLLECTION -e bedrock/amazon.titan-embed-text-v2:0 -m bedrock/openai.gpt-oss-20b-1:0
+    ```
+
+# Script documentation
 
 For a detailed documentation on each functionality, please go to the corresponding doc file.
 
