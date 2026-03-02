@@ -485,4 +485,4 @@ class PdfPlumberParser():
 
     def get_page(self, page_num: int):
         """Return a specific page of the document."""
-        return PdfPlumberPage(self.reader.pages[page_num - 1])
+        return PdfPlumberPage(self.reader.pages[page_num])
