@@ -1,34 +1,57 @@
 """Module to define multiple types of models provided by HuggingFace."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 import os
 import json
+import boto3
 
-import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
-from transformers import BitsAndBytesConfig, Gemma3ForConditionalGeneration, Gemma3ForCausalLM
-import torch
-from llama_cpp import Llama
+
+# Optional imports
+try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
+
+try:
+    import torch
+    import transformers
+    from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
+    from transformers import BitsAndBytesConfig, Gemma3ForConditionalGeneration, Gemma3ForCausalLM
+
+    # It's needed to run in the RTX4000
+    torch.backends.cuda.enable_mem_efficient_sdp(False)
+    torch.backends.cuda.enable_flash_sdp(False)
+except ImportError:
+    pass
 
 from .data import Document
 
-# It's needed to run in the RTX4000
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_flash_sdp(False)
+@dataclass
+class InferenceParams:
+    """Class to define inference parameters of models."""
+    model_context: int = 8192
+    max_new_tokens: int = 2048
+    temperature: float = 0.1
+    top_p: float = 0.1
 
 class Model(ABC):
     """Base class for all the models."""
 
-    def __init__(self, multimodal:bool=False, system_prompt:str=None):
+    def __init__(self,
+                 multimodal:bool=False,
+                 system_prompt:str=None,
+                 inference_params:InferenceParams=None):
         self.multimodal = multimodal
         self.system_prompt = system_prompt
 
-        self.messages = self.__get_init_messages()
+        if inference_params is None:
+            self.inference_params = InferenceParams()
+        else:
+            self.inference_params = inference_params
 
-        self.model_context = int(os.getenv('MODEL_CONTEXT', '16384'))
-        self.max_new_tokens = int(os.getenv('MAX_NEW_TOKENS', '8192'))
-        self.temperature = float(os.getenv('TEMPERATURE', '0.7'))
+        self.messages = self.__get_init_messages()
 
     def query(self, query:str, add_to_history:bool=True):
         """Query an answer based on a question."""
@@ -37,9 +60,9 @@ class Model(ABC):
         response = self.get_response_from_model(messages)
 
         if add_to_history:
-            self.messages += messages + self.response_to_message(response['message'])
+            self.messages += messages + self.response_to_message(response['response']['message'])
 
-        return response
+        return response['response']
 
     def query_with_documents(self, query:str, documents:list[Document], add_to_history:bool=True):
         """Query an answer based on a question and some documents passed as context."""
@@ -49,15 +72,19 @@ class Model(ABC):
 
         if add_to_history:
             self.messages += self.str_to_message(query)
-            self.messages += self.response_to_message(response['message'])
+            self.messages += self.response_to_message(response['response']['message'])
 
-        return response
+        return response['response']
 
     def query_with_conversation(self, messages:list[dict[str, str]]) -> str:
         """Query an answer based on a full conversation."""
         response = self.get_response_from_model(messages, raw=True)
 
-        return self.response_to_message(response)
+        return {
+            "response": self.response_to_message(response['response']),
+            "input_tokens": response.get('input_tokens', 0),
+            "output_tokens": response.get('output_tokens', 0),
+        }
 
     def query_with_conversation_and_documents(self, messages:list[dict[str, str]],
                                               documents:list[Document]) -> str:
@@ -69,7 +96,11 @@ class Model(ABC):
         messages = messages[:-1] + self.str_to_message_with_context(last_query, documents)
         response = self.get_response_from_model(messages, raw=True)
 
-        return self.response_to_message(response)
+        return {
+            "response": self.response_to_message(response['response']),
+            "input_tokens": response['input_tokens'],
+            "output_tokens": response['output_tokens'],
+        }
 
     def str_to_message(self, query:str):
         """Add a new message to be sent to the model."""
@@ -100,7 +131,7 @@ class Model(ABC):
 
     @abstractmethod
     def get_response_from_model(self, messages: list[dict[str, str]],
-                                raw:bool=False) -> dict[str, str]|str:
+                                raw:bool=False) -> dict[dict[str, str]|str|int]:
         """Calls the model inference method and returns an answer."""
 
     def __get_init_messages(self) -> list[dict[str:str|dict]]:
@@ -187,6 +218,10 @@ class ModelBuilder:
         if model_id == '':
             return None
 
+        # Check if it is a Bedrock model
+        if model_id.lower().startswith('bedrock/'):
+            return Models.BEDROCK.value(model_id.split('/', 1)[1], **model_args)
+
         id_parts = model_id.split('/')
         full_name = id_parts[-1]
 
@@ -228,8 +263,10 @@ class ModelBuilder:
 class Llama3(Model):
     """Class to load Meta Llama 3.1 and 3.2 model and its variants."""
 
-    def __init__(self, model_id:str, system_prompt:str=None):
-        super().__init__(multimodal=True, system_prompt=system_prompt)
+    def __init__(self, model_id:str, system_prompt:str=None, inference_params:InferenceParams=None):
+        super().__init__(multimodal=True,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
 
         self.model_id = model_id
 
@@ -244,16 +281,20 @@ class Llama3(Model):
         )
 
     def get_response_from_model(self, messages:list[dict[str, str]],
-                                raw:bool=False) -> dict[str, str]|str:
+                                raw:bool=False) -> dict[dict[str, str]|str|int]:
         all_messages = self.messages + messages
-        output = self.pipeline(all_messages, max_new_tokens=1024)
+        output = self.pipeline(all_messages, max_new_tokens=self.inference_params.max_new_tokens)
 
         if raw:
-            return output[0].get('generated_text')[-1].get('content', '')
+            return {
+                "response": output[0].get('generated_text')[-1].get('content', '')
+            }
 
         response = {
-            'message': output[0].get('generated_text')[-1].get('content', ''),
-            'reasoning': '',
+            "response": {
+                'message': output[0].get('generated_text')[-1].get('content', ''),
+                'reasoning': '',
+            }
         }
 
         return response
@@ -261,9 +302,14 @@ class Llama3(Model):
 class Gemma(Model):
     """Class to load Gemma3 model and its variants."""
 
-    def __init__(self, model_id: str, system_prompt:str=None):
+    def __init__(self,
+                 model_id: str,
+                 system_prompt:str=None,
+                 inference_params:InferenceParams=None):
         multimodal = not(model_id.endswith('1b-it') or model_id.endswith('-gguf'))
-        super().__init__(multimodal=multimodal, system_prompt=system_prompt)
+        super().__init__(multimodal=multimodal,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
 
         self.model_id = model_id
         self.processor = None
@@ -310,15 +356,21 @@ class Gemma(Model):
         input_len = inputs["input_ids"].shape[-1]
 
         with torch.inference_mode():
-            generation = self.model.generate(**inputs, max_new_tokens=1024, do_sample=False)
+            generation = self.model.generate(**inputs,
+                                             max_new_tokens=self.inference_params.max_new_tokens,
+                                             do_sample=False)
             generation = generation[0][input_len:]
 
         if raw:
-            return self.processor.decode(generation, skip_special_tokens=True)
+            return {
+                "response": self.processor.decode(generation, skip_special_tokens=True)
+            }
 
         response = {
-            'message': self.processor.decode(generation, skip_special_tokens=True),
-            'reasoning': '',
+            "response": {
+                'message': self.processor.decode(generation, skip_special_tokens=True),
+                'reasoning': '',
+            }
         }
 
         return response
@@ -333,7 +385,8 @@ class Gemma(Model):
         ).to(self.model.device)
 
         with torch.inference_mode():
-            outputs = self.model.generate(**inputs, max_new_tokens=1024)
+            outputs = self.model.generate(**inputs,
+                                          max_new_tokens=self.inference_params.max_new_tokens)
 
         decoded = self.tokenizer.batch_decode(outputs)
         response = decoded[0]
@@ -350,11 +403,15 @@ class Gemma(Model):
         eot_pos = eot if eot > -1 else None
 
         if raw:
-            return response[sot_pos:eot_pos]
+            return {
+                "response": response[sot_pos:eot_pos]
+            }
 
         response = {
-            'message': response[sot_pos:eot_pos],
-            'reasoning': '',
+            "response": {
+                'message': response[sot_pos:eot_pos],
+                'reasoning': '',
+            }
         }
 
         return response
@@ -362,8 +419,14 @@ class Gemma(Model):
 class Qwen3(Model):
     """Class to load Qwen models."""
 
-    def __init__(self, model_id:str, thinking:bool|None=None, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self,
+                 model_id:str,
+                 thinking:bool|None=None,
+                 system_prompt:str=None,
+                 inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
         self.model_id = model_id
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
@@ -388,12 +451,14 @@ class Qwen3(Model):
         # Conduct text completion
         generated_tokens = self.model.generate(
             **model_inputs,
-            max_new_tokens=self.max_new_tokens,
+            max_new_tokens=self.inference_params.max_new_tokens,
         )
         output_ids = generated_tokens[0][len(model_inputs.input_ids[0]):].tolist()
 
         if raw:
-            return self.tokenizer.decode(output_ids, skip_special_tokens=False).strip("\n")
+            return {
+                "response": self.tokenizer.decode(output_ids, skip_special_tokens=False).strip("\n")
+            }
 
         # parsing thinking content
         try:
@@ -410,8 +475,10 @@ class Qwen3(Model):
         else:
             reasoning = ''
         response = {
-            'message': message,
-            'reasoning': reasoning,
+            "response": {
+                'message': message,
+                'reasoning': reasoning,
+            }
         }
 
         return response
@@ -419,8 +486,10 @@ class Qwen3(Model):
 class Mistral(Model):
     """Class to load Mistral AI models."""
 
-    def __init__(self, model_id:str, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self, model_id:str, system_prompt:str=None, inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
 
         self.model_id = model_id
 
@@ -436,14 +505,18 @@ class Mistral(Model):
 
     def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
         all_messages = self.messages + messages
-        output = self.pipeline(all_messages, max_new_tokens=1024)
+        output = self.pipeline(all_messages, max_new_tokens=self.inference_params.max_new_tokens)
 
         if raw:
-            return output[0].get('generated_text')[-1].get('content', '')
+            return {
+                "response": output[0].get('generated_text')[-1].get('content', '')
+            }
 
         response = {
-            'message': output[0].get('generated_text')[-1].get('content', ''),
-            'reasoning': '',
+            "response": {
+                'message': output[0].get('generated_text')[-1].get('content', ''),
+                'reasoning': '',
+            }
         }
 
         return response
@@ -451,8 +524,10 @@ class Mistral(Model):
 class GPT(Model):
     """Class to load GPT-OSS models."""
 
-    def __init__(self, model_id:str, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self, model_id:str, system_prompt:str=None, inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -473,16 +548,20 @@ class GPT(Model):
 
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=self.max_new_tokens,
-            temperature=self.temperature,
+            max_new_tokens=self.inference_params.max_new_tokens,
+            temperature=self.inference_params.temperature,
         )
 
         if raw:
-            return self.tokenizer.decode(outputs[0])
+            return {
+                "response": self.tokenizer.decode(outputs[0])
+            }
 
         response = {
-            'message': self.tokenizer.decode(outputs[0]),
-            'reasoning': '',
+            "response": {
+                'message': self.tokenizer.decode(outputs[0]),
+                'reasoning': '',
+            }
         }
 
         return response
@@ -490,15 +569,21 @@ class GPT(Model):
 class GGUFModel(Model):
     """Class to load models with GGUF format."""
 
-    def __init__(self, ggu_file:str, thinking:bool|None=None, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self,
+                 ggu_file:str,
+                 thinking:bool|None=None,
+                 system_prompt:str=None,
+                 inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
         self.thinking = thinking
 
         self.model = Llama(
             model_path=ggu_file,
             embedding=False,
             n_gpu_layers=-1,
-            n_ctx=self.model_context,
+            n_ctx=self.inference_params.model_context,
             verbose=False,
         )
 
@@ -515,18 +600,26 @@ class GGUFModel(Model):
 
         res = self.model.create_chat_completion(
             messages=all_messages,
-            max_tokens=self.max_new_tokens
+            max_tokens=self.inference_params.max_new_tokens
         )
         if raw:
-            return res['choices'][0]['message']['content']
+            return {
+                "response": res['choices'][0]['message']['content'],
+                "input_tokens": res['usage']['prompt_tokens'],
+                "output_tokens": res['usage']['completion_tokens'],
+            }
 
         response_str, reasoning = self.__split_reasoning_content(
             res['choices'][0]['message']['content']
         )
 
         response = {
-            'message': response_str,
-            'reasoning': reasoning
+            "response": {
+                'message': response_str,
+                'reasoning': reasoning
+            },
+            "input_tokens": res['usage']['prompt_tokens'],
+            "output_tokens": res['usage']['completion_tokens'],
         }
 
         return response
@@ -551,6 +644,68 @@ class GGUFModel(Model):
 
         return response, reasoning
 
+class Bedrock(Model):
+    """Class to load Bedrock models."""
+
+    def __init__(self, model_id:str, system_prompt:str=None, inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
+        self.model_id = model_id
+        self.client = boto3.client(
+            "bedrock-runtime",
+            region_name=os.getenv("AWS_REGION", "us-east-1")
+        )
+
+    def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
+        all_messages = self.messages + messages
+
+        native_request = {
+            "model": self.model_id,
+            "messages": all_messages,
+            "max_completion_tokens": self.inference_params.max_new_tokens,
+            "temperature": self.inference_params.temperature,
+            "top_p": self.inference_params.top_p,
+            "stream": False,
+        }
+
+        response = self.client.invoke_model(
+            modelId=self.model_id,
+            body=json.dumps(native_request),
+        )
+
+        response_body = json.loads(response['body'].read().decode('utf-8'))
+        content = response_body['choices'][0]['message']['content']
+
+        if raw:
+            return {
+                "response": content,
+                "input_tokens": response_body['usage']['prompt_tokens'],
+                "output_tokens": response_body['usage']['completion_tokens'],
+            }
+
+        response, reasoning = self.__split_reasoning_content(content)
+
+        return {
+            "response": {
+                'message': response,
+                'reasoning': reasoning,
+            },
+            "input_tokens": response_body['usage']['prompt_tokens'],
+            "output_tokens": response_body['usage']['completion_tokens'],
+        }
+
+    def __split_reasoning_content(self, model_out:str):
+        reasoning = None
+        response = model_out
+
+        index = response.find('</reasoning>')
+        if index > 0:
+            reasoning = response[11:index].strip()
+            response = response[index+12:].strip()
+
+        return response, reasoning
+
 class Models(Enum):
     """Different types of models that are available."""
     QWEN3 = Qwen3
@@ -558,3 +713,4 @@ class Models(Enum):
     LLAMA = Llama3
     MISTRAL = Mistral
     GPT = GPT
+    BEDROCK = Bedrock

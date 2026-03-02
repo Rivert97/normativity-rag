@@ -1,0 +1,12 @@
+FROM python:3.12-slim-bookworm
+
+# Install the application dependencies
+WORKDIR /app
+COPY requirements.bedrock.txt ./
+RUN pip install --no-cache-dir -r requirements.bedrock.txt
+
+# Copy source code
+COPY . .
+
+# Set entrypoint
+ENTRYPOINT ["python", "run.py"]

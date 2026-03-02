@@ -8,7 +8,7 @@ import chromadb.errors
 import pandas as pd
 
 from .data import Document
-from .embedders import EmbedderBuilder
+from .embedders import EmbedderBuilder, EmbedderParams
 
 class Storage(ABC):
     """Interface that defines methods that should be implemented by a storage."""
@@ -18,24 +18,36 @@ class Storage(ABC):
         """Save information into the corresponding storage."""
 
     @abstractmethod
-    def query_sentence(self, collection:str, sentence:str, n_results:int) -> list[Document]:
+    def query_sentence(self,
+                       collection:str,
+                       sentence:str,
+                       n_results:int) -> tuple[list[Document], int]:
         """Find related documents using the corresponding storage."""
 
 class ChromaDBStorage(Storage):
     """Class to store data in a chromadb database."""
 
-    def __init__(self, model:str='all-MiniLM-L6-v2', db_path:str='./db', device:str = 'cuda'):
+    def __init__(self,
+                 model:str='all-MiniLM-L6-v2',
+                 db_path:str='./db',
+                 device:str = 'cuda',
+                 embedder_params: EmbedderParams=None):
+        self.model = model
+        self.device = device
+        self.embedder_params = embedder_params
         self.client = chromadb.PersistentClient(path=db_path)
-        self.em_func = EmbedderBuilder.get_from_model_name(model, device=device)
         self.hnsw_space = "ip" if 'dot' in model else 'cosine'
 
     def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):
         """Save the provided data into a collection inside a chromadb database."""
+        em_func = EmbedderBuilder.get_from_model_name(self.model,
+                                                      device=self.device,
+                                                      params=self.embedder_params)
         try:
-            collection = self.client.get_collection(name, embedding_function=self.em_func)
+            collection = self.client.get_collection(name, embedding_function=em_func)
         except chromadb.errors.NotFoundError:
             collection = self.client.create_collection(name,
-                                                       embedding_function=self.em_func,
+                                                       embedding_function=em_func,
                                                        configuration={
                                                            "hnsw": {
                                                                "space": self.hnsw_space,
@@ -48,37 +60,47 @@ class ChromaDBStorage(Storage):
             ids = [f'{id_prefix}{i+1}' for i in range(len(info.get('sentences')))]
         )
 
-    def query_sentence(self, collection, sentence, n_results) -> list[Document]:
+    def query_sentence(self, collection, sentence, n_results) -> tuple[list[Document], int]:
         """Make a query to the database to find similar sentences."""
+        em_func = EmbedderBuilder.get_from_model_name(self.model,
+                                                      device=self.device,
+                                                      params=self.embedder_params)
         try:
             chromadb_collection = self.client.get_collection(collection,
-                                                             embedding_function=self.em_func)
+                                                             embedding_function=em_func)
         except (chromadb.errors.NotFoundError, ValueError) as e:
             print(e)
-            return []
+            return [], 0
 
-        return self.__query(chromadb_collection, sentence, n_results)
+        return self.__query(chromadb_collection, sentence, n_results, em_func)
 
     def batch_query(self, collection, sentences, n_results) -> list[list[Document]]:
         """Make multiple queries to the database to find similar sentences."""
+        em_func = EmbedderBuilder.get_from_model_name(self.model,
+                                                      device=self.device,
+                                                      params=self.embedder_params)
         try:
             chromadb_collection = self.client.get_collection(collection,
-                                                             embedding_function=self.em_func)
+                                                             embedding_function=em_func)
         except (chromadb.errors.NotFoundError, ValueError) as e:
             print(e)
             return []
 
         results = []
         for sentence in sentences:
-            results.append(self.__query(chromadb_collection, sentence, n_results))
+            documents, _ = self.__query(chromadb_collection, sentence, n_results, em_func)
+            results.append(documents)
 
         return results
 
     def get_all_from_parent(self, collection, document_name, parent) -> list[Document]:
         """Get all documents from a document and a specific parent."""
+        em_func = EmbedderBuilder.get_from_model_name(self.model,
+                                                      device=self.device,
+                                                      params=self.embedder_params)
         try:
             chromadb_collection = self.client.get_collection(collection,
-                                                             embedding_function=self.em_func)
+                                                             embedding_function=em_func)
         except (chromadb.errors.NotFoundError, ValueError) as e:
             print(e)
             return []
@@ -105,12 +127,17 @@ class ChromaDBStorage(Storage):
 
         return documents
 
-    def __query(self, chromadb_collection, sentence, n_results) -> list[Document]:
+    def __query(self,
+                chromadb_collection,
+                sentence,
+                n_results,
+                em_func) -> tuple[list[Document], int]:
         results = chromadb_collection.query(
             query_texts=[sentence],
             n_results=n_results,
             include=['documents', 'metadatas', 'embeddings', 'distances'],
         )
+        token_count = em_func.get_last_token_count()
 
         documents = []
         for i in range(len(results['ids'][0])):
@@ -122,7 +149,7 @@ class ChromaDBStorage(Storage):
             )
             documents.append(doc)
 
-        return documents
+        return documents, token_count
 
 class CSVStorage(Storage):
     """Class to store embeddings and in a CSV file."""
@@ -141,6 +168,6 @@ class CSVStorage(Storage):
         df['sentences'] = info.get('sentences')
         df.to_csv(f"{name}.csv", sep=',', index=True)
 
-    def query_sentence(self, collection:str, sentence:str, n_results:int) -> list[dict]:
+    def query_sentence(self, collection:str, sentence:str, n_results:int) -> tuple[list[dict], int]:
         """Find similar sentences. Not implemented."""
-        return None
+        return None, 0

@@ -1,24 +1,45 @@
 """Module to define classes to generate embeddings from sentences."""
 from abc import abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 import os
+import json
+import boto3
 
-from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer, AutoModel
-import torch
-import torch.nn.functional as F
-from llama_cpp import Llama
+# Optional imports
+try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
+
+try:
+    import torch
+    import torch.nn.functional as F
+    from transformers import AutoTokenizer, AutoModel
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    pass
 
 from .singleton import Singleton
 
 # pylint: disable=redefined-builtin
 
+@dataclass
+class EmbedderParams:
+    """Class to store params of embedder."""
+    embedding_context: int = 2048
+
 class Embedder():
     """Base class for embedding functions of different sources."""
 
-    def __init__(self):
+    def __init__(self, params: EmbedderParams=None):
         """Initialize the embedder."""
-        self.embedding_context = int(os.getenv('EMBEDDING_CONTEXT', '2048'))
+        if not params:
+            self.params = EmbedderParams()
+        else:
+            self.params = params
+
+        self.last_token_count = 0
 
     @abstractmethod
     def __call__(self, input: list[str]):
@@ -26,6 +47,14 @@ class Embedder():
         Return the embeddings.
         input param needs to be called like that to use it with ChromaDB.
         """
+
+    @abstractmethod
+    def embed_query(self, input: list[str]):
+        """Embed a query."""
+
+    def get_last_token_count(self):
+        """Return the token usage of the last query."""
+        return self.last_token_count
 
 class EmbedderBuilder:
     """Factory class for different types of embedders."""
@@ -47,19 +76,32 @@ class EmbedderBuilder:
         if model_name.endswith('.gguf'):
             return GGUFEmbedder(model_name, **model_args)
 
+        if model_name.startswith('bedrock'):
+            if 'device' in model_args:
+                del model_args['device']
+            return BedrockEmbedder(model_name.replace('bedrock/', ''), **model_args)
+
         return TREmbedder(model_name, **model_args)
 
 class STEmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings using SentenceTransformers from HuggingFace."""
 
-    def __init__(self, model_name:str = 'all-MiniLM-L6-v2', device: str = 'cpu'):
+    def __init__(self,
+                 model_name:str = 'all-MiniLM-L6-v2',
+                 device: str = 'cpu',
+                 params: EmbedderParams=None):
         """Initialize a sentence_transformer embedder."""
-        super().__init__()
+        super().__init__(params=params)
         self.model = SentenceTransformer(model_name, device=device)
 
     def __call__(self, input: list[str]):
         """Get the embeddings."""
+        self.last_token_count = len(self.model.tokenizer(input)['input_ids'][0])
         return self.model.encode(input, batch_size=1, convert_to_numpy=True).tolist()
+
+    def embed_query(self, input: list[str]):
+        """Embed a query."""
+        return self(input)
 
     @staticmethod
     def name() -> str:
@@ -69,9 +111,12 @@ class STEmbedder(Embedder, metaclass=Singleton):
 class TREmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings using Transformers library."""
 
-    def __init__(self, model_name:str = 'Qwen/Qwen3-Embedding-0.6B', device: str = 'cpu'):
+    def __init__(self,
+                 model_name:str = 'Qwen/Qwen3-Embedding-0.6B',
+                 device: str = 'cpu',
+                 params: EmbedderParams=None):
         """Initialize the transformers model to obtain embeddings."""
-        super().__init__()
+        super().__init__(params=params)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         self.model = AutoModel.from_pretrained(model_name).to(device)
 
@@ -87,7 +132,7 @@ class TREmbedder(Embedder, metaclass=Singleton):
                 batch,
                 padding=True,
                 truncation=True,
-                max_length=self.embedding_context,
+                max_length=self.params.embedding_context,
                 return_tensors="pt",
             ).to(self.model.device)
 
@@ -102,8 +147,12 @@ class TREmbedder(Embedder, metaclass=Singleton):
 
         return embeddings
 
-    def __last_token_pool(self, last_hidden_states: torch.Tensor,
-                    attention_mask: torch.Tensor) -> torch.Tensor:
+    def embed_query(self, input: list[str]):
+        """Embed a query."""
+        return self(input)
+
+    def __last_token_pool(self, last_hidden_states,
+                    attention_mask):
         left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
         if left_padding:
             return last_hidden_states[:, -1]
@@ -121,14 +170,14 @@ class TREmbedder(Embedder, metaclass=Singleton):
 class GGUFEmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings from GGUF models using llama_cpp."""
 
-    def __init__(self, model_name:str, device: str = 'cpu'):
+    def __init__(self, model_name:str, device: str = 'cpu', params: EmbedderParams=None):
         """Initialize the llama_cpp model to obtain embeddings."""
-        super().__init__()
+        super().__init__(params=params)
         self.model = Llama(
             model_path=model_name,
             embedding=True,
             n_gpu_layers=-1,
-            n_ctx=self.embedding_context,
+            n_ctx=self.params.embedding_context,
             verbose=False,
         )
 
@@ -142,13 +191,63 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
 
         return embeddings
 
+    def embed_query(self, input: list[str]):
+        """Embed a query."""
+        return self(input)
+
     @staticmethod
     def name() -> str:
         """Return the name of the embedding function."""
         return "llama_cpp"
+
+class BedrockEmbedder(Embedder):
+    """Class to create embeddings using AWS Bedrock."""
+
+    def __init__(self, model_name:str, params: EmbedderParams=None):
+        """Initialize the Bedrock client."""
+        super().__init__(params=params)
+        self.model_name = model_name
+        self.client = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=os.getenv('AWS_REGION', 'us-east-1'),
+        )
+
+    def __call__(self, input: list[str]):
+        """Get the embeddings."""
+        embeddings = []
+        for text in input:
+            body = json.dumps({
+                "inputText": text
+            })
+
+            try:
+                response = self.client.invoke_model(
+                    body=body,
+                    modelId=self.model_name,
+                    accept='application/json',
+                    contentType='application/json'
+                )
+                response_body = json.loads(response.get('body').read())
+                embeddings.append(response_body.get('embedding'))
+                self.last_token_count = response_body.get('inputTextTokenCount')
+            except Exception as e:
+                # Pass the error to the user
+                raise e
+
+        return embeddings
+
+    def embed_query(self, input: list[str]):
+        """Embed a query."""
+        return self(input)
+
+    @staticmethod
+    def name() -> str:
+        """Return the name of the embedding function."""
+        return "bedrock"
 
 class Embedders(Enum):
     """Different types of embedders"""
     SENTENCE_TRANSFORMERS = STEmbedder
     TRANSFORMERS = TREmbedder
     GGUF = GGUFEmbedder
+    BEDROCK = BedrockEmbedder

@@ -5,46 +5,27 @@ import argparse
 import os
 import glob
 
-from simplerag.document_loaders.pdf import PyPDFMixedLoader, PyPDFLoader, OCRLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
-from simplerag.document_loaders.pdf import LoaderOptions
 from simplerag.document_splitters.hierarchical import TreeSplitter
 from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
 from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.llms.storage import ChromaDBStorage
+from simplerag.llms.embedders import EmbedderParams
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import Defaults, DEFAULT_PARSE_PARAMS, DefaultEmbeddingParams
 
-PROGRAM_NAME = 'Extractor'
+PROGRAM_NAME = 'extract'
 VERSION = '1.00.00'
 
-DEFAULTS = {
-    'cache_dir': './.cache',
-    'database_dir': './db',
-    'embedder': 'Qwen/Qwen3-Embedding-0.6B',
-    'extraction_type': 'data',
-    'inner_splitter': 'section',
-    'keep_cache': False,
-    'loader': 'pdfplumber',
-    'max_chars': 8000,
-    'parse_params_file': 'simplerag/settings/params-default.yml',
-}
-LOADERS = {
-    'mixed': PyPDFMixedLoader,
-    'text': PyPDFLoader,
-    'ocr': OCRLoader,
-    'pdfplumber': PDFPlumberLoader,
-}
 INNER_SPLITTERS = ['paragraph', 'section']
 EXTRACTION_TYPES = ['text', 'data']
 
 @dataclass
 class ExecSettings:
     """Class to store settings for running the script."""
-    cache_dir: str
     database_dir: str
-    keep_cache: bool
     file_settings: dict[str,dict[str,str]]
 
 @dataclass
@@ -53,10 +34,8 @@ class CollectionParams:
     embedder: str
     extraction_type: str
     inner_splitter: str
-    loader: str
-    visual_aid: bool = False
     raw: bool = False
-    max_chars: int = 8000
+    max_chars: int = Defaults.max_chars
 
 class ExtractorCLI(CLI):
     """This class controls the execution of the program when using
@@ -71,9 +50,7 @@ class ExtractorCLI(CLI):
         """Run the script logic."""
         if self._args.settings_file == '':
             settings = ExecSettings(
-                self._args.cache_dir,
                 self._args.database_dir,
-                self._args.keep_cache,
                 {
                     '*': {
                         'parse_params_file': self._args.parse_params_file,
@@ -84,8 +61,6 @@ class ExtractorCLI(CLI):
                 self._args.embedder,
                 self._args.extraction_type,
                 self._args.inner_splitter,
-                self._args.loader,
-                self._args.visual_aid,
                 self._args.raw,
                 self._args.max_chars,
             )
@@ -108,71 +83,56 @@ class ExtractorCLI(CLI):
                             default='',
                             type=str,
                             help='Name of the collection to be created')
-        self.parser.add_argument('--cache-dir',
-                            default=DEFAULTS['cache_dir'],
-                            type=str,
-                            help=f'''
-                                Directory to be used as cache.
-                                Defaults to {DEFAULTS['cache_dir']}
-                                ''')
         self.parser.add_argument('-d', '--directory',
                             default='',
                             type=str,
                             help='Directory to be processed in directory mode')
         self.parser.add_argument('--database-dir',
-                            default=DEFAULTS['database_dir'],
+                            default=Defaults.database_dir,
                             type=str,
                             help=f'''
                                 Directory to store the database.
-                                Defaults to {DEFAULTS['database_dir']}
+                                Defaults to {Defaults.database_dir}
                                 ''')
         self.parser.add_argument('-e', '--embedder',
-                            default=DEFAULTS['embedder'],
+                            default=Defaults.embedder,
                             type=str,
                             help=f'''Embeddings model to be used. Check SentenceTransformers
                                 doc for all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
-                                ). Defaults to {DEFAULTS['embedder']}
+                                ). Defaults to {Defaults.embedder}
                                 ''')
         self.parser.add_argument('--extraction-type',
-                            default=DEFAULTS['extraction_type'],
+                            default=Defaults.extraction_type,
                             choices=EXTRACTION_TYPES,
                             type=str,
                             help=f'''Type of extraction to be performed.
-                                Defaults to {DEFAULTS['extraction_type']}''')
+                                Defaults to {Defaults.extraction_type}''')
+        self.parser.add_argument('--embedding-context',
+                            default=DefaultEmbeddingParams.embedding_context,
+                            type=int,
+                            help='Context lenght for embeddings')
         self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
                             help='File to be processed in single file mode')
         self.parser.add_argument('--inner-splitter',
-                            default=DEFAULTS['inner_splitter'],
+                            default=Defaults.inner_splitter,
                             choices=INNER_SPLITTERS,
                             help=f'''
                                 Once sections are detected by the splitter, indicates how the
                                 sections should be subdivided. Defaults to
-                                {DEFAULTS['inner_splitter']}
+                                {Defaults.inner_splitter}
                                 ''')
-        self.parser.add_argument('-k', '--keep-cache',
-                            default=DEFAULTS['keep_cache'],
-                            action='store_true',
-                            help='''
-                                Keep Tesseract cache after processing. Usefull when the same file
-                                is going to be processed multiple times
-                                ''')
-        self.parser.add_argument('-l', '--loader',
-                            default=DEFAULTS['loader'],
-                            type=str,
-                            choices=LOADERS.keys(),
-                            help=f'Type of loader to use. Defaults to {DEFAULTS['loader']}')
         self.parser.add_argument('--max-chars',
-                            default=8000,
+                            default=Defaults.max_chars,
                             type=int,
                             help=f'''
                                 Maximum number of characters per chunk. It will find nearest dot.
-                                Defaults to {DEFAULTS['max_chars']}.
+                                Defaults to {Defaults.max_chars}.
                                 ''')
         self.parser.add_argument('--parse-params-file',
-                            default='simplerag/settings/params-default.yml',
+                            default='',
                             type=str,
                             help='''
                                 YAML file with custom parse parameters to be used
@@ -182,8 +142,7 @@ class ExtractorCLI(CLI):
                                  default=False,
                                  action='store_true',
                                  help='''
-                                     When using 'pdfplumber' loader use this option to use text
-                                     as returned by the library.
+                                     Use this option to use text as returned by the library.
                                  ''')
         self.parser.add_argument('--settings-file',
                             default='',
@@ -192,13 +151,6 @@ class ExtractorCLI(CLI):
                                 File with all the options to build a database. Use this option to
                                 store all options to process files when it will be repeated.
                                 ''')
-        self.parser.add_argument('--visual-aid',
-                            default=False,
-                            action='store_true',
-                            help='''
-                                Enables image processing for additional detections,
-                                such as line section separations. Slower.
-                            ''')
 
         args = self.parser.parse_args()
 
@@ -219,20 +171,14 @@ class ExtractorCLI(CLI):
         if args.file == '' and args.directory == '' and args.settings_file == '':
             raise CLIException("Please specify an input file, directory or settings file")
 
-        args.cache_dir = args.cache_dir.rstrip('/')
-        parent = os.path.split(args.cache_dir)[0]
-        if parent != '' and not os.path.exists(parent):
-            raise CLIException("Parent cache directory must exist")
-
-        if args.extraction_type == 'data' and args.loader == 'text':
-            raise CLIException(str(f"Incompatible extraction_type '{args.extraction_type}' "
-                                   "with loader '{args.loader}'"))
-
         if args.collection == '':
             raise CLIException("Please specify a collection name")
 
         if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
             raise CLIException("Parse parameters file does not exist")
+
+        if args.embedding_context <= 0:
+            raise CLIException("Embedding context must be greater than 0")
 
         self._args = args
 
@@ -241,11 +187,12 @@ class ExtractorCLI(CLI):
         self._logger.info('Processing file %s', filename)
 
         file_settings = self.__get_file_settings(filename, settings)
-        file_parse_params = self.load_yaml(file_settings.get('parse_params_file',
-                                                             DEFAULTS['parse_params_file']))
+        file_parse_params = self.load_yaml(file_settings.get('parse_params_file', ''))
+        if not file_parse_params:
+            file_parse_params = DEFAULT_PARSE_PARAMS
 
         basename = os.path.splitext(os.path.split(filename)[-1])[0]
-        pdf_loader = self.__get_loader(filename, settings, params)
+        pdf_loader = PDFPlumberLoader(filename, params.raw)
         if params.extraction_type == 'text':
             self._logger.info('Extracting text from file')
             text = pdf_loader.get_text(boundaries=file_parse_params.get('pdf_margins'))
@@ -257,7 +204,7 @@ class ExtractorCLI(CLI):
             splitter = DataTreeSplitter(
                 data.get_data(remove_headers=True, boundaries=file_parse_params.get('pdf_margins')),
                 basename,
-                DataSplitterOptions(loader=params.loader,max_characters=params.max_chars)
+                DataSplitterOptions(max_characters=params.max_chars)
             )
         else:
             raise CLIException(f"Invalid extraction type '{params.extraction_type}'")
@@ -267,7 +214,11 @@ class ExtractorCLI(CLI):
         sentences, metadatas = self.__extract_info(splitter, params)
 
         self._logger.info('Storing file info into Chromadb')
-        storage = ChromaDBStorage(params.embedder, settings.database_dir)
+        storage = ChromaDBStorage(
+            params.embedder,
+            settings.database_dir,
+            embedder_params=EmbedderParams(embedding_context=self._args.embedding_context)
+        )
         storage.save_info(
             collection,
             {
@@ -289,9 +240,7 @@ class ExtractorCLI(CLI):
         self.__validate_and_fill_settings(yaml_settings)
 
         settings = ExecSettings(
-            yaml_settings['db']['settings']['cache_dir'],
             yaml_settings['db']['settings']['database_dir'],
-            yaml_settings['db']['settings']['keep_cache'],
             yaml_settings['db'].get('file_settings', {}))
 
         if 'directory' in yaml_settings['db']:
@@ -306,35 +255,6 @@ class ExtractorCLI(CLI):
                                     collection_params)
         else:
             raise CLIException("No file or directory to process was specified in settings file")
-
-    def __get_loader(self, filename:str, settings:ExecSettings, params:CollectionParams):
-        self._logger.info("Using '%s' loader", params.loader)
-
-        if params.loader == 'mixed':
-            pdf_loader = PyPDFMixedLoader(LoaderOptions(
-                settings.cache_dir,
-                settings.keep_cache,
-                params.visual_aid)
-            )
-            pdf_loader.load(filename)
-        elif params.loader == 'text':
-            pdf_loader = PyPDFLoader(filename)
-        elif params.loader == 'ocr':
-            pdf_loader = OCRLoader(filename, LoaderOptions(
-                settings.cache_dir,
-                settings.keep_cache,
-                params.visual_aid)
-            )
-        elif params.loader == 'pdfplumber':
-            pdf_loader = PDFPlumberLoader(filename, params.raw, LoaderOptions(
-                settings.cache_dir,
-                settings.keep_cache,
-                params.visual_aid)
-            )
-        else:
-            raise CLIException("Invalid type of loader")
-
-        return pdf_loader
 
     def __extract_info(self, splitter:TreeSplitter, params:CollectionParams):
         sentences = []
@@ -365,23 +285,12 @@ class ExtractorCLI(CLI):
         if settings is None:
             raise CLIException("'settings' node not found in settings file")
 
-        # Validate cache directory
-        if 'cache_dir' not in settings:
-            settings['cache_dir'] = DEFAULTS['cache_dir']
-        basedir = os.path.split(settings['cache_dir'])[0]
-        if not os.path.exists(basedir):
-            raise CLIException("Cache parent directory should exist")
-
         # Validate database directory
         if 'database_dir' not in settings:
-            settings['database_dir'] = DEFAULTS['database_dir']
+            settings['database_dir'] = Defaults.database_dir
         basedir = os.path.split(settings['database_dir'])[0]
         if not os.path.exists(basedir):
             raise CLIException("Database parent directory should exist")
-
-        # Validate keep cache flag
-        if 'keep_cache' not in settings:
-            settings['keep_cache'] = DEFAULTS['keep_cache']
 
         # Validating each collection node
         collections = db.get('collections', None)
@@ -392,22 +301,17 @@ class ExtractorCLI(CLI):
 
     def __validate_collection_params(self, params:dict):
         if 'embedder' not in params:
-            params['embedder'] = DEFAULTS['embedder']
+            params['embedder'] = Defaults.embedder
 
         if 'extraction_type' not in params:
-            params['extraction_type'] = DEFAULTS['extraction_type']
+            params['extraction_type'] = Defaults.extraction_type
         if params['extraction_type'] not in EXTRACTION_TYPES:
             raise CLIException(f"Invalid extraction_type '{params['extraction_type']}'")
 
         if 'inner_splitter' not in params:
-            params['inner_splitter'] = DEFAULTS['inner_splitter']
+            params['inner_splitter'] = Defaults.inner_splitter
         if params['inner_splitter'] not in INNER_SPLITTERS:
             raise CLIException(f"Invalid inner_splitter '{params['inner_splitter']}'")
-
-        if 'loader' not in params:
-            params['loader'] = DEFAULTS['loader']
-        if params['loader'] not in LOADERS:
-            raise CLIException(f"Invalid loader '{params['loader']}'")
 
     def __get_file_settings(self, filename:str, settings:ExecSettings) -> dict[str,str]:
         default_settings = settings.file_settings.get('*', {})

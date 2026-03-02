@@ -18,9 +18,16 @@ Full list of options of the script can be obtained using the -h option.
 
 ## Examples
 
+> __NOTE:__ In the following examples the `/path/to/file.csv` was created with the `extract_info` script.
+
 Load CSV data and show the tree of the document as an image:
 
     python run.py get_embeddings -f /path/to/file.csv -a tree
+
+Load CSV data, calculate the embeddings of each section and save them in a collection
+using ChromaDB. Database is created by default in *db/*:
+
+    python run.py get_embeddings -f /path/to/file.csv -a embeddings -e sentence-transformers/all-MiniLM-L6-v2 -c <CollectionName> -s chromadb --inner-splitter section
 
 Load CSV data and show the tree structure of the document as a string:
 
@@ -30,15 +37,10 @@ Load CSV data and save the tree of the document as an image:
 
     python run.py get_embeddings -f /path/to/file.csv -a tree -o /path/to/out.png
 
-Load CSV data, calculate the embeddings of each section and save them in a collection
-using ChromaDB. Database is created by default in *db/*:
-
-    python run.py get_embeddings -f /path/to/file.csv -a embeddings -e "all-MiniLM-L6-v2" -c <CollectionName> -s chromadb --inner-splitter section
-
 Load CSV data, calculate the embeddings of each paragraph and save them in a collection
 using ChromaDB. Database is created by default in *db/*:
 
-    python run.py get_embeddings -f /path/to/file.csv -a embeddings -e "all-MiniLM-L6-v2" -c <CollectionName> -s chromadb --inner-splitter paragraph
+    python run.py get_embeddings -f /path/to/file.csv -a embeddings -e sentence-transformers/all-MiniLM-L6-v2 -c <CollectionName> -s chromadb --inner-splitter paragraph
 
 Load TXT and show the tree of the document as an image:
 
@@ -47,4 +49,16 @@ Load TXT and show the tree of the document as an image:
 Load TXT, calculate the embeddings of each section and save them in a collection
 using ChromaDB. Database is created by default in *db/*:
 
-    python run.py get_embeddings -f /path/to/file.txt -t txt -a embeddings -e "all-MiniLM-L6-v2" -c <CollectionName> -s chromadb --inner-splitter section
+    python run.py get_embeddings -f /path/to/file.txt -t txt -a embeddings -e sentence-transformers/all-MiniLM-L6-v2 -c <CollectionName> -s chromadb --inner-splitter section
+
+Get embeddings with AWS Bedrock model:
+
+    python run.py get_embeddings -f /path/to/file.csv -a embeddings -e "bedrock/amazon.titan-embed-text-v2:0" -c <CollectionName> -s chromadb --inner-splitter section
+
+> __NOTE:__ To use Bedrock models the variables AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_REGION must be set in the environment variables.
+
+Get embeddings with Llama_cpp model:
+
+    python run.py get_embeddings -f /path/to/file.csv -a embeddings -e /path/to/embedding-model.gguf -c <CollectionName> -s chromadb --inner-splitter section
+
+> __NOTE:__ To use Llama_cpp models with the GPU, the llama-cpp-python library needs to be installed with GPU support.

@@ -2,7 +2,6 @@
 import unittest
 
 import pandas as pd
-import numpy as np
 
 from simplerag.document_loaders.parsers import DataReconstructor
 
@@ -193,41 +192,6 @@ class TestReconstructor(unittest.TestCase):
 
         assert "col_position" in reconstructor.data
         assert reconstructor.data.loc[0, "col_position"] == 1
-
-    def test_assign_new_group_after_horizontal_line(self):
-        """Test that a new group is created after a horizontal line is found in the document."""
-        # Ley organica (Pag 23): pecíficos \n CAPITULO II
-        data = pd.DataFrame([
-            {"line": 0, "column": 1.0, "col_position": 1,
-                "left": 0.503511131032422,
-                "right": 0.583295980875542,
-                "top": 0.187279151943463,
-                "bottom": 0.203621908127208},
-            {"line": 1, "column": 0.0, "col_position": 0,
-                "left": 0.4223815927088,
-                "right": 0.512774540564769,
-                "top": 0.247791519434629,
-                "bottom": 0.259386042402827},
-            {"line": 1, "column": 0.0, "col_position": 0,
-                "left": 0.520245032123114,
-                "right": 0.533990736590468,
-                "top": 0.248012367491166,
-                "bottom": 0.25916519434629},
-        ])
-        lines = {
-            "horizontal": np.array([[
-                    [0.35454953, 0.21333922],
-                    [0.60167339, 0.21333922]
-                ]],
-            )
-        }
-        writable_boundaries = (827, 494, 5674, 7983)
-
-        reconstructor = DataReconstructor(data, writable_boundaries, lines)
-        reconstructor._DataReconstructor__assign_group_number()
-
-        assert "group" in reconstructor.data
-        assert reconstructor.data.loc[0, "group"] != reconstructor.data.loc[1, "group"]
 
     def test_assign_new_group_when_col_number_change_and_one_pass_center(self):
         """

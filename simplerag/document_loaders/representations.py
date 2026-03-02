@@ -1,10 +1,10 @@
-"""Module to provide classes to store data from PDF files read by Tesseract."""
+"""Module to provide classes to store data from PDF files."""
 import pandas as pd
 
 from .processors import get_data_inside_boundaries
 
 class PdfDocumentData():
-    """Class to store relevant data of the OCR text."""
+    """Class to store relevant data of the text."""
 
     columns = ['page', 'text', 'left', 'top', 'right', 'bottom',
                'line', 'column', 'col_position', 'group']

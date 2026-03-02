@@ -16,10 +16,11 @@ Poppler-Utils must be installed in the system:
 
     sudo apt-get install poppler-utils
 
-> NOTE: Next step is only needed if you want to use pyTesseract.
+## Install Llama-cpp-python (Optional)
 
-Tesseract must be installed in the system. Follow instructions in source repo:
-[tesseract-ocr/tesseract](https://github.com/tesseract-ocr/tesseract?tab=readme-ov-file).
+In case you want to use local models in .gguf format, you need to install llama-cpp.
+
+Check the official documentation for more information: https://github.com/abetlen/llama-cpp-python
 
 ## Update pip
 
@@ -27,6 +28,10 @@ Tesseract must be installed in the system. Follow instructions in source repo:
 
 ## Install python packages
 
-Install all the packages from *requirements.txt*:
+If you want a lightweight version that uses AWS Bedrock for calculating the embeddings and inference, install only the basic requirements:
+
+    pip install -r requirements.bedrock.txt
+
+If you want to use local models downloaded from HuggingFace, install the full requirements:
 
     pip install -r requirements.txt

@@ -1,22 +1,19 @@
-"""Script to load a PDF file and converts it to plain text or csv data with the
+"""Script to load PDF file(s) and convert them to plain text or csv data with the
 position information of each word.
 
 When used to extract csv data, this script is intended to be used alogside
-get_embeddings.py to obtain further information of the file.
+get_embeddings to obtain further information of the file.
 """
 import argparse
 import os
 import glob
 
-from simplerag.document_loaders.pdf import PyPDFMixedLoader
-from simplerag.document_loaders.pdf import PyPDFLoader
-from simplerag.document_loaders.pdf import OCRLoader
 from simplerag.document_loaders.pdf import PDFPlumberLoader
-from simplerag.document_loaders.pdf import LoaderOptions
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import DEFAULT_PARSE_PARAMS
 
-PROGRAM_NAME = 'ExtractorCLI'
+PROGRAM_NAME = 'extract_info'
 VERSION = '1.00.00'
 
 class ExtractInfoCLI(CLI):
@@ -28,7 +25,7 @@ class ExtractInfoCLI(CLI):
 
         self.print_to_console = True
         self._args = None
-        self.parse_params = None
+        self.parse_params = {}
 
     def run(self):
         """Run the script logic."""
@@ -43,10 +40,6 @@ class ExtractInfoCLI(CLI):
     def process_args(self) -> argparse.Namespace:
         super().process_args()
 
-        self.parser.add_argument('--cache-dir',
-                                 default='./.cache',
-                                 type=str,
-                                 help='Directory to be used as cache. Defaults to ./.cache')
         self.parser.add_argument('-d', '--directory',
                                  default='',
                                  type=str,
@@ -55,16 +48,6 @@ class ExtractInfoCLI(CLI):
                                  default='',
                                  type=str,
                                  help='File to be processed in single file mode')
-        self.parser.add_argument('-k', '--keep-cache',
-                                 default=False,
-                                 action='store_true',
-                                 help='''Keep Tesseract cache after processing. Usefull when the
-                                     same file is going to be processed multiple times''')
-        self.parser.add_argument('-l', '--loader',
-                                 default='pdfplumber',
-                                 type=str,
-                                 choices=['mixed', 'text', 'ocr', 'pdfplumber'],
-                                 help='Type of loader to use. Defaults to pdfplumber')
         self.parser.add_argument('-o', '--output',
                                  default='',
                                  type=str,
@@ -76,7 +59,7 @@ class ExtractInfoCLI(CLI):
                                  type=int,
                                  help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
-                                 default='simplerag/settings/params-default.yml',
+                                 default='',
                                  type=str,
                                  help='''
                                      YAML file with custom parse parameters to be used
@@ -86,8 +69,7 @@ class ExtractInfoCLI(CLI):
                                  default=False,
                                  action='store_true',
                                  help='''
-                                     When using 'pdfplumber' loader use this option to use text
-                                     as returned by the library.
+                                     Use this option to use text as returned by the library.
                                  ''')
         self.parser.add_argument('-t', '--type',
                                  default='txt',
@@ -95,19 +77,6 @@ class ExtractInfoCLI(CLI):
                                  nargs='+',
                                  type=str,
                                  help='Type(s) of output(s). Defaults to txt.')
-        self.parser.add_argument('-P', '--Parallel',
-                                 default=False,
-                                 action="store_true",
-                                 help='''Uses the total number of cores - 2,
-                                     for concurrent processing
-                                 ''')
-        self.parser.add_argument('--visual-aid',
-                                 default=False,
-                                 action="store_true",
-                                 help='''
-                                     Enables image processing for additional detections,
-                                     such as line section separations. Slower.
-                                 ''')
 
         args = self.parser.parse_args()
 
@@ -120,10 +89,6 @@ class ExtractInfoCLI(CLI):
         if args.file == '' and args.directory == '':
             raise CLIException("Please specify an input file or directory")
 
-        args.cache_dir = args.cache_dir.rstrip('/')
-        if not os.path.exists(os.path.split(args.cache_dir)[0]):
-            raise CLIException("Parent cache directory must exist")
-
         if args.directory != '':
             if args.output == '':
                 args.output = './'
@@ -135,11 +100,11 @@ class ExtractInfoCLI(CLI):
             if dirname != '' and not os.path.exists(dirname):
                 raise CLIException("Output path does not exist")
 
-        if args.loader == 'text' and args.type == 'csv':
-            raise CLIException("Type of output not supported for '{args.loader}' loader")
-
         if args.output != '':
             self.print_to_console = False
+
+        if args.page is not None and args.page < 0:
+            raise CLIException("Page number must be greater than or equal to 0")
 
         if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
             raise CLIException("Parse parameters file does not exist")
@@ -149,7 +114,7 @@ class ExtractInfoCLI(CLI):
     def __process_file(self, filename: str, output: str = None):
         self._logger.info('Processing file %s', filename)
 
-        pdf_loader = self.__get_loader(filename)
+        pdf_loader = PDFPlumberLoader(filename, self._args.raw)
         self.__make_output(pdf_loader, output)
 
     def __process_directory(self):
@@ -162,50 +127,24 @@ class ExtractInfoCLI(CLI):
 
             self.__process_file(file, out_name)
 
-    def __get_loader(self, filename:str):
-        self._logger.info("Using '%s' loader", self._args.loader)
-
-        if self._args.loader == 'mixed':
-            loader = PyPDFMixedLoader(LoaderOptions(
-                self._args.cache_dir,
-                self._args.keep_cache,
-                self._args.visual_aid)
-            )
-            if self._args.page is not None:
-                self._logger.info('Processing page %s', self._args.page)
-
-                loader.load_page(filename, self._args.page)
-            else:
-                loader.load(filename, parallel=self._args.Parallel)
-        elif self._args.loader == 'text':
-            loader = PyPDFLoader(filename)
-        elif self._args.loader == 'ocr':
-            loader = OCRLoader(filename, LoaderOptions(
-                self._args.cache_dir,
-                self._args.keep_cache,
-                self._args.visual_aid)
-            )
-        elif self._args.loader == 'pdfplumber':
-            loader = PDFPlumberLoader(filename, self._args.raw, LoaderOptions(
-                self._args.cache_dir,
-                self._args.keep_cache,
-                self._args.visual_aid)
-            )
-        else:
-            raise CLIException("Invalid type of loader")
-
-        return loader
-
-    def __make_output(self, pdf_loader: PyPDFMixedLoader, output:str=None):
+    def __make_output(self, pdf_loader, output:str=None):
         base_filename = os.path.splitext(output)[0]
         if 'txt' in self._args.type:
             self._logger.debug('Generating text output')
 
             if self._args.page is not None:
-                text = pdf_loader.get_page_text(self._args.page, True,
-                                                self.parse_params.get('pdf_margins'))
+                text = pdf_loader.get_page_text(
+                    self._args.page,
+                    True,
+                    self.parse_params.get('pdf_margins',
+                                          DEFAULT_PARSE_PARAMS['pdf_margins'])
+                )
             else:
-                text = pdf_loader.get_text(True, self.parse_params.get('pdf_margins'))
+                text = pdf_loader.get_text(
+                    True,
+                    self.parse_params.get('pdf_margins',
+                                          DEFAULT_PARSE_PARAMS['pdf_margins'])
+                )
 
             if self.print_to_console:
                 print(text)

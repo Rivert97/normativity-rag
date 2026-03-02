@@ -7,8 +7,10 @@ import argparse
 import os
 
 from simplerag.llms.storage import ChromaDBStorage
+from simplerag.llms.embedders import EmbedderParams
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import Defaults, DefaultEmbeddingParams
 
 PROGRAM_NAME = 'GetRelevantCLI'
 VERSION = '1.00.00'
@@ -25,10 +27,13 @@ class GetRelevantCLI(CLI):
     def run(self):
         """Run the script logic."""
         self._logger.debug('Loading database')
-        storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
+        embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+        storage = ChromaDBStorage(self._args.embedder,
+                                  self._args.database_dir,
+                                  embedder_params=embedder_params)
 
         self._logger.debug('Querying sentences')
-        documents = storage.query_sentence(
+        documents, _ = storage.query_sentence(
             self._args.collection,
             self._args.sentence,
             self._args.number_results)
@@ -52,20 +57,30 @@ class GetRelevantCLI(CLI):
                             type=str,
                             help='Name of the collection to search in the database')
         self.parser.add_argument('-d', '--database-dir',
-                            default='./db',
+                            default=Defaults.database_dir,
                             type=str,
-                            help='Database directory to be used. Defaults to ./db')
+                            help=f'''
+                                Database directory to be used.
+                                Defaults to {Defaults.database_dir}
+                                ''')
         self.parser.add_argument('-e', '--embedder',
-                            default='all-MiniLM-L6-v2',
+                            default=Defaults.embedder,
                             type=str,
-                            help='''Embeddings model to be used. Check SentenceTransformers doc
+                            help=f'''Embeddings model to be used. Check SentenceTransformers doc
                                 for all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
-                                ). Defaults to all-MiniLM-L6-v2''')
-        self.parser.add_argument('-n', '--number-results',
-                            default=5,
+                                ). Defaults to {Defaults.embedder}''')
+        self.parser.add_argument('--embedding-context',
+                            default=DefaultEmbeddingParams.embedding_context,
                             type=int,
-                            help='Number of relevant documents to retrieve. Defaults to 5')
+                            help='Context lenght for embeddings')
+        self.parser.add_argument('-n', '--number-results',
+                            default=Defaults.chat_num_related_docs,
+                            type=int,
+                            help=f'''
+                                Number of relevant documents to retrieve.
+                                Defaults to {Defaults.chat_num_related_docs}
+                                ''')
 
         args = self.parser.parse_args()
 
@@ -77,6 +92,9 @@ class GetRelevantCLI(CLI):
 
         if not os.path.exists(args.database_dir):
             raise CLIException(f"Database folder '{args.database_dir}' not found")
+
+        if args.embedding_context <= 0:
+            raise CLIException("Embedding context must be greater than 0")
 
         self._args = args
 

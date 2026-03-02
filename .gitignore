@@ -3,8 +3,11 @@ __pycache__/
 
 .venv/
 .env
+.env.prod
 .cache/
 .vscode/
+*.yml
+*.log
 outs*/
 logs/
 db/

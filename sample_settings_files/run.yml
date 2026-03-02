@@ -2,23 +2,19 @@ db:
   directory: ~/99_Normativa
 
   settings:
-    cache_dir: ./.cache
     database_dir: ./db
-    keep_cache: True
 
   file_settings:
     file-with-letterhead.pdf:
-      parse_params_file: ./settings/params-bottom-letterhead.yml
+      parse_params_file: ./sample_params_files/params-bottom-letterhead.yml
 
   collections:
     NORM_001:
-      embedder: all-MiniLM-L6-v2
+      embedder: sentence-transformers/all-MiniLM-L6-v2
       extraction_type: data
       inner_splitter: paragraph
-      loader: mixed
 
     NORM_002:
-      embedder: all-MiniLM-L6-v2
+      embedder: sentence-transformers/all-MiniLM-L6-v2
       extraction_type: text
       inner_splitter: section
-      loader: mixed

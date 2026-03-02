@@ -13,10 +13,11 @@ from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
 from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.document_splitters.hierarchical import TextSplitter
-from simplerag.llms.embedders import EmbedderBuilder
+from simplerag.llms.embedders import EmbedderBuilder, EmbedderParams
 from simplerag.llms.storage import CSVStorage, ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import Defaults, DEFAULT_PARSE_PARAMS, DefaultEmbeddingParams
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
@@ -38,7 +39,12 @@ class GetEmbeddingsCLI(CLI):
 
     def run(self):
         """Run the script logic."""
-        self.parse_params = self.load_yaml(self._args.parse_params_file)
+        parse_params = self.load_yaml(self._args.parse_params_file)
+        if parse_params:
+            self.parse_params = parse_params
+        else:
+            self.parse_params = DEFAULT_PARSE_PARAMS
+
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output, self._args.type)
         elif self._args.directory != '':
@@ -84,46 +90,45 @@ class GetEmbeddingsCLI(CLI):
                                 When using embeddings action and storage is not csv,
                                 name of the collection where the embeddings should be stored
                                 ''')
+        self.parser.add_argument('--embedding-context',
+                            default=DefaultEmbeddingParams.embedding_context,
+                            type=int,
+                            help='Context lenght for embeddings')
         self.parser.add_argument('-d', '--directory',
                             default='',
                             type=str,
                             help='Directory to be processed in directory mode')
         self.parser.add_argument('--database-dir',
-                            default='./db',
+                            default=Defaults.database_dir,
                             type=str,
-                            help='Directory to store the database. Defaults to ./db')
+                            help=f'''
+                                Directory to store the database.
+                                Defaults to {Defaults.database_dir}
+                                ''')
         self.parser.add_argument('-e', '--embedder',
-                            default='sentence-transformers/all-MiniLM-L6-v2',
+                            default=Defaults.embedder,
                             type=str,
-                            help='''
+                            help=f'''
                                 Embeddings model to be used. Check SentenceTransformers doc for
                                 all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
-                                ). Defaults to sentence-transformers/all-MiniLM-L6-v2
+                                ). Defaults to {Defaults.embedder}
                                 ''')
         self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
                             help='Path to file containing the data or text of the document')
-        self.parser.add_argument('-l', '--loader',
-                            default='any',
-                            type=str,
-                            choices=['any', 'mixed'],
-                            help='''
-                                Optional type of loader used to extract the data. This helps to
-                                stablish different tolerances for interpretation. Defaults to 'any'
-                                ''')
         self.parser.add_argument('--max-chars',
-                            default=8000,
+                            default=Defaults.max_chars,
                             type=int,
-                            help='''
+                            help=f'''
                                 Maximum number of characters per chunk. It will find nearest dot.
-                                Defaults to 8000.
+                                Defaults to {Defaults.max_chars}.
                                 ''')
         self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
-                            default='simplerag/settings/params-default.yml',
+                            default='',
                             type=str,
                             help='''
                                 YAML file with custom parse parameters to be used
@@ -180,8 +185,14 @@ class GetEmbeddingsCLI(CLI):
         if args.action == 'embeddings' and args.storage != 'csv' and args.collection == '':
             raise CLIException("Please specify a name for the collection")
 
+        if args.page is not None and args.page < 0:
+            raise CLIException("Page number must be greater than or equal to 0")
+
         if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
             raise CLIException("Parse parameters file does not exist")
+
+        if args.embedding_context <= 0:
+            raise CLIException("Embedding context must be greater than 0")
 
         self.__setup_storage(args)
 
@@ -191,7 +202,10 @@ class GetEmbeddingsCLI(CLI):
         if args.storage == 'csv':
             self.storage = CSVStorage()
         elif args.storage == 'chromadb':
-            self.storage = ChromaDBStorage(args.embedder, args.database_dir)
+            embedder_params = EmbedderParams(embedding_context=args.embedding_context)
+            self.storage = ChromaDBStorage(args.embedder,
+                                           args.database_dir,
+                                           embedder_params=embedder_params)
         else:
             raise CLIException(f"Invalid storage '{args.storage}'")
 
@@ -222,7 +236,11 @@ class GetEmbeddingsCLI(CLI):
         sentences, metadatas = self.__extract_info(splitter)
 
         if self._args.storage == 'csv':
-            embedder = EmbedderBuilder.get_from_model_name(self._args.embedder)
+            embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+            embedder = EmbedderBuilder.get_from_model_name(
+                self._args.embedder,
+                params=embedder_params
+            )
             if embedder is None:
                 raise CLIException(f"Invalid embedder '{self._args.embedder}'")
 
@@ -293,7 +311,6 @@ class GetEmbeddingsCLI(CLI):
                                                 boundaries=self.parse_params['pdf_margins']),
                     basename,
                     DataSplitterOptions(
-                        self._args.loader,
                         self.parse_params.get('titles_regex', None),
                         self._args.absolute_center,
                         self._args.max_chars,
@@ -305,7 +322,6 @@ class GetEmbeddingsCLI(CLI):
                                             boundaries=self.parse_params['pdf_margins']),
                                         basename,
                                         DataSplitterOptions(
-                                            self._args.loader,
                                             self.parse_params.get('titles_regex', None),
                                             self._args.absolute_center,
                                             self._args.max_chars,

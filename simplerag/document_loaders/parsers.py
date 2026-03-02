@@ -1,30 +1,35 @@
 """Module to handle the reading of PDF files and provide it's information
-as text or OCR data.
+as text or visual information.
 """
 from typing import Iterator
 from dataclasses import dataclass
 
-import os
-import glob
-import hashlib
-import shutil
-# Parallel
-from concurrent.futures import ThreadPoolExecutor
-
-from pypdf import PdfReader
-from pypdf._page import PageObject
-from PIL import Image, ImageDraw
-import pytesseract
-import pdf2image
-import cv2
-from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
-import psutil
 import pdfplumber
 
-from .visitors import PageTextVisitor
-from .processors import get_data_inside_boundaries, get_lines_from_image
+from .processors import get_data_inside_boundaries
+
+DEFAULT_BOUNDARY_LEFT = 0.0
+DEFAULT_BOUNDARY_TOP = 0.0
+DEFAULT_BOUNDARY_RIGHT = 1.0
+DEFAULT_BOUNDARY_BOTTOM = 1.0
+DEFAULT_WRITABLE_BOUNDARIES = (
+    DEFAULT_BOUNDARY_LEFT,
+    DEFAULT_BOUNDARY_TOP,
+    DEFAULT_BOUNDARY_RIGHT,
+    DEFAULT_BOUNDARY_BOTTOM
+)
+
+PDFPLUMBER_WORD_LEVEL = 5
+LINE_TOLERANCE_RATE = 0.4
+RIGHT_ALIGN_TOLERANCE_RATE = 0.05
+RIGHT_ALIGN_CENTER_RATE = 0.75
+CENTER_TOLERANCE_RATE = 0.1
+LEFT_ALIGN_CENTER_TOLERANCE_RATE = 0.1
+COLUMN_SEPARATION_RATE = 0.04
+COLUMN_OVERLAP_TOLERANCE_RATE = 0.04
+
 
 @dataclass
 class GroupState:
@@ -38,116 +43,17 @@ class GroupState:
     tolerance: float
     group_num: int
 
-class PypdfPage():
-    """This class stores the text extracted by PyPDF and provides
-    methods to process it.
-    """
-
-    def __init__(self, page: PageObject):
-        self.page = page
-
-        self.visitor = PageTextVisitor()
-
-    def get_text(self, remove_headers:bool=True, boundaries:dict[str,float]=None):
-        """Return the text contained within the boundaries of the page."""
-        pdf_box_key = '/ArtBox' if '/ArtBox' in self.page else '/MediaBox'
-        if remove_headers and boundaries is not None:
-            page_width = self.page[pdf_box_key][2]
-            page_height = self.page[pdf_box_key][3]
-            # PDF Y-axis is inverted
-            self.visitor.set_boundaries(
-                boundaries['left'] * page_width,
-                (1.0 - boundaries['top']) * page_height,
-                boundaries['right'] * page_width,
-                (1.0 - boundaries['bottom']) * page_height
-            )
-        else:
-            # PDF Y-axis is inverted
-            left, top, right, bottom = self.page[pdf_box_key]
-            self.visitor.set_boundaries(left=left, top=bottom, right=right, bottom=top)
-        text = self.page.extract_text(visitor_text=self.visitor.visitor_text)
-
-        return self.__remove_out_of_bounds_text(text)
-
-    def get_words(self, suffix:str = '') -> pd.DataFrame:
-        """Get the text of the page and split it into words into a dataframe."""
-        words = [(idx, f'{w}{suffix}') for idx, w in enumerate(self.get_text(False).split())]
-        df_words = pd.DataFrame(words, columns=['txt_idx', 'word'])
-        df_words.set_index('txt_idx', inplace=True)
-
-        return df_words
-
-    def __remove_out_of_bounds_text(self, text: str) -> str:
-        clean_text = text
-        for line in self.visitor.get_out_of_bounds_text():
-            if clean_text.endswith(line):
-                clean_text = clean_text[:-len(line)].strip()
-            elif clean_text.startswith(line):
-                clean_text = clean_text[len(line):].strip()
-
-        return clean_text
-
-class PypdfParser():
-    """This is a class to parse PDF files to text using pypdf.
-
-    :param file_path: The path of the file to be parsed.
-    :type file_path: str
-    """
-
-    def __init__(self, file_path: str):
-        self.file_path = file_path
-
-        self.reader = PdfReader(self.file_path)
-
-    def get_text(self, page_separator: str = '\n', remove_headers:bool=True,
-                 boundaries:dict[str,float]=None) -> str:
-        """Return the full text of the file as extracted by pypdf.
-
-        :param page_separator: String to be added to separate each page,
-            defaults to ''.
-        :type page_separator: str, optional
-
-        :return: A string of all the text from the document
-        :rtype: str
-        """
-        text = ''
-        for page in self.get_pages():
-            text += page.get_text(remove_headers, boundaries) + page_separator
-
-        return text
-
-    def get_num_pages(self) -> int:
-        """Return the number of pages of the document."""
-        return len(self.reader.pages)
-
-    def get_pages(self) -> Iterator[PypdfPage]:
-        """Read the document and return the text of each page as an Iterator.
-
-        :return: An Iterator that yields the text of each page at a time
-        :rtype: Iterator[str]
-        """
-        for page in self.reader.pages:
-            yield PypdfPage(page)
-
-    def get_page(self, page_num: int):
-        """Return a specific page of the document."""
-        return PypdfPage(self.reader.pages[page_num])
-
 class DataReconstructor():
-    """Class to fix issues generated by Tesseract.
+    """Class to fix issues generated by Pdfplumber in text reconstruction.
 
     This class reconstruct the text of the page, creating new groups and
     adding columns to the data.
     """
 
-    def __init__(self, data: pd.DataFrame,
-                 writable_boundaries: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
-                 lines: dict[str,np.array] = None):
+    def __init__(self,
+                 data: pd.DataFrame,
+                 writable_boundaries: tuple[float,float,float,float] = DEFAULT_WRITABLE_BOUNDARIES):
         self.data = data.copy()
-        if lines is None:
-            self.lines = {'horizontal': np.array([]), 'vertical': np.array([])}
-        else:
-            self.lines = lines
 
         if 'right' not in self.data and 'left' in self.data:
             self.data['right'] = self.data['left'] + self.data['width']
@@ -160,8 +66,8 @@ class DataReconstructor():
         self.writable_center = self.writable_min_x + self.writable_width * 0.5
 
     def get_reconstructed(self) -> pd.DataFrame:
-        """Return the reconstructed data of the page by fixing the issues of the original data
-        provided by Tesseract."""
+        """Return the reconstructed visual data of the page by fixing the issues of
+        the original data provided by PdfPlumber."""
         self.__assign_line_number()
         self.__assign_column_number()
         self.__assign_column_position()
@@ -172,7 +78,7 @@ class DataReconstructor():
 
     def __assign_line_number(self):
         self.data['line'] = pd.Series(dtype='int')
-        words = self.data[self.data['level'] == 5].sort_values(by=['top'])
+        words = self.data[self.data['level'] == PDFPLUMBER_WORD_LEVEL].sort_values(by=['top'])
 
         current_line_num = -1
         current_min_y, current_max_y = 0, 0
@@ -191,12 +97,14 @@ class DataReconstructor():
 
     def __is_same_line(self, line_top: float, line_bottom: float, word_top: float,
                        word_height: float) -> bool:
-        return (line_top + word_height * 0.4 < word_top + word_height
-                and line_bottom - word_height * 0.4 > word_top)
+        return (
+            line_top + word_height * LINE_TOLERANCE_RATE < word_top + word_height
+            and line_bottom - word_height * LINE_TOLERANCE_RATE > word_top
+        )
 
     def __assign_column_number(self, min_words_per_col:int=1):
         self.data['column'] = pd.Series(dtype='int')
-        tolerance = self.writable_width * 0.04
+        tolerance = self.writable_width * COLUMN_SEPARATION_RATE
 
         for _, line_words in self.data.groupby('line'):
             col_number = -1
@@ -242,21 +150,29 @@ class DataReconstructor():
         right = words['right'].max()
         center = left + (right - left) * 0.5
 
-        return (abs(self.writable_max_x - right) < self.writable_width * 0.05 and
-                center > self.writable_width * 0.75)
+        return (
+            abs(self.writable_max_x - right) < self.writable_width * RIGHT_ALIGN_TOLERANCE_RATE and
+            center > self.writable_width * RIGHT_ALIGN_CENTER_RATE
+        )
 
     def __column_is_centered(self, min_x, max_x):
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
-        return min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1
+        return (
+            min_x < self.writable_center < max_x and
+            abs(1.0 - center_rate) < CENTER_TOLERANCE_RATE
+        )
 
     def __column_passes_through_center(self, min_x, max_x):
         return min_x < self.writable_center < max_x
 
     def __column_is_aligned_left(self, min_x, max_x):
         col_center = min_x + (max_x - min_x) * 0.5
+        left_align_center_tolerance = self.writable_width * LEFT_ALIGN_CENTER_TOLERANCE_RATE
 
-        return (col_center < self.writable_center + self.writable_width * 0.1 and
-                not min_x > self.writable_center)
+        return (
+            col_center < self.writable_center + left_align_center_tolerance and
+            not min_x > self.writable_center
+        )
 
     def __column_is_aligned_right(self, min_x, max_x):
         col_center = min_x + (max_x - min_x) * 0.5
@@ -265,7 +181,7 @@ class DataReconstructor():
 
     def __assign_group_number(self):
         self.data['group'] = pd.Series(dtype='int')
-        tolerance = self.writable_width * 0.04
+        tolerance = self.writable_width * COLUMN_OVERLAP_TOLERANCE_RATE
 
         state = GroupState(
             line_cols=None,
@@ -333,12 +249,6 @@ class DataReconstructor():
             state.centered['prev'] is None):
             return False
 
-        for line in self.lines['horizontal']:
-            max_y_group = max(state.group_cols.values(), key=lambda x:x['maxY'])['maxY']
-            min_y_line = min(state.line_cols.values(), key=lambda x:x['minY'])['minY']
-            if max_y_group < line[0,1] < min_y_line:
-                return True
-
         if len(state.group_cols) != len(state.line_cols):
             if state.pass_through_center['curr'] or state.pass_through_center['prev']:
                 return True
@@ -390,293 +300,20 @@ class DataReconstructor():
                     if pivot['right'] > columns_edges.loc[col_position, 'left']:
                         self.data.loc[self.data['group'] == group, 'col_position'] = pivot.name
 
-class OcrPage():
-    """This class stores the information contained in a single page
-    of a document and provides functions to process it.
-    """
-
-    def __init__(self, image: Image, cache_file:str|None=None, visual_aid:bool = False):
-        self.image = image
-        self.cache_file = cache_file
-        self.visual_aid = visual_aid
-
-        self.data = self.__get_data_from_image()
-        if self.visual_aid:
-            self.lines = self.__get_lines_from_image()
-        else:
-            self.lines = {'horizontal': np.array([], dtype=int),
-                          'vertical': np.array([], dtype=int)}
-        self.width = self.data.loc[0, 'width']
-        self.height = self.data.loc[0, 'height']
-        self.__normalize_data()
-        w_boundaries = self.__get_writable_boundaries()
-
-        reconstructor = DataReconstructor(self.data, w_boundaries, self.lines)
-        self.data = reconstructor.get_reconstructed()
-
-    def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
-        """Return the reconstructed text of the page (without Tesseract errors)."""
-        if remove_headers:
-            data = get_data_inside_boundaries(self.data, boundaries)
-        else:
-            data = self.data
-        data = data.sort_values(['line', 'left'])
-        texts_by_line = data.groupby(['group', 'col_position', 'line'])['text'].apply(' '.join)
-        texts_by_column = texts_by_line.groupby(['group', 'col_position']).apply('\n'.join)
-        texts_by_group = texts_by_column.groupby('group').apply('\n'.join)
-
-        return '\n'.join(texts_by_group)
-
-    def get_indices(self) -> list[int]:
-        """Return the indices of the reconstructed data."""
-        data = self.data.sort_values(['line', 'left']).reset_index()
-        indices_by_line = data.groupby(['group', 'col_position', 'line'])['index'].agg(list)
-        indices_by_colum = indices_by_line.groupby(['group', 'col_position']).sum()
-        indices_by_group = indices_by_colum.groupby('group').sum()
-
-        return list(indices_by_group.sum())
-
-    def get_raw_text(self) -> str:
-        """Return the text as Tesseract returns it."""
-        data = self.data.dropna()
-        texts_by_line = data.groupby(['block_num', 'par_num', 'line_num'])['text'].apply(' '.join)
-        texts_by_paragraph = texts_by_line.groupby(['block_num', 'par_num']).apply('\n'.join)
-        texts_by_block = texts_by_paragraph.groupby('block_num').apply('\n'.join)
-
-        return '\n'.join(texts_by_block)
-
-    def get_words(self, suffix = '') -> pd.DataFrame:
-        """Get the reconstructed text and split it into words into a dataframe."""
-        text = self.get_text()
-        if text == '':
-            return pd.DataFrame(columns=['word'])
-
-        indices = self.get_indices()
-        words = [(idx, f'{w}{suffix}') for idx, w in zip(indices, text.split())]
-        df_words = pd.DataFrame(words, columns=['ocr_idx', 'word'])
-        df_words.set_index('ocr_idx', inplace=True)
-
-        return df_words
-
-    def get_raw_words(self, suffix = '') -> list[str]:
-        """Get the text as Tesseract returns it and split it into words into a dataframe."""
-        return [f'{w}{suffix}' for w in self.data.dropna()['text']]
-
-    def show_detection(self, level=2):
-        """Show an image of the detected regions by Tesseract."""
-        canvas = self.image.copy()
-        draw = ImageDraw.Draw(canvas)
-
-        # Draw regions
-        for _, row in self.data.iterrows():
-            if row['level'] == level:
-                (x, y, w, h) = (int(row['left']*self.width),
-                                int(row['top']*self.height),
-                                int(row['width']*self.width),
-                                int(row['height']*self.height))
-                draw.rectangle(((x, y), (x + w, y + h)), outline="green", width=10)
-
-        plt.imshow(canvas)
-        plt.show()
-
-    def show_relevant_detection(self):
-        """Show an image of the reconstructed regions after removing errors from Tesseract."""
-        canvas = self.image.copy()
-        draw = ImageDraw.Draw(canvas)
-
-        # Draw regions
-        grouped = self.data.dropna().groupby(['group']).agg({
-            'left': 'min',
-            'top': 'min',
-            'bottom': 'max',
-            'right': 'max'})
-        for _, values in grouped.iterrows():
-            (x_1, y_1, x_2, y_2) = (int(values['left']*self.width),
-                                    int(values['top']*self.height),
-                                    int(values['right']*self.width),
-                                    int(values['bottom']*self.height))
-            draw.rectangle(((x_1, y_1), (x_2, y_2)), outline="green", width=10)
-
-        plt.imshow(canvas)
-        plt.show()
-
-    def get_data(self) -> pd.DataFrame:
-        """Get the full DataFrame of OCR info."""
-        return self.data
-
-    def __get_data_from_image(self):
-        if self.cache_file is not None and os.path.exists(self.cache_file):
-            data = pd.read_csv(self.cache_file, sep=',')
-        else:
-            data = pytesseract.image_to_data(self.image,
-                                             lang='spa',
-                                             output_type=pytesseract.Output.DATAFRAME)
-            data.to_csv(self.cache_file, sep=',', index=False)
-
-        # Corregimos condición que detecta 'nan' en texto como NaN en float
-        if len(data[data['text'].isna() & (data['conf'] != -1)]) > 0:
-            data.loc[data['text'].isna() & (data['conf'] != -1), 'text'] = '#nan#'
-
-        return data
-
-    def __get_lines_from_image(self):
-        image = cv2.cvtColor(np.array(self.image), cv2.COLOR_BGR2GRAY)
-        words_data = self.data[self.data['level'] == 5]
-
-        return get_lines_from_image(image, words_data)
-
-    def __normalize_data(self):
-        width = self.data.loc[0, 'width']
-        height = self.data.loc[0, 'height']
-        self.data['left'] = self.data['left'] / width
-        self.data['width'] = self.data['width'] / width
-        self.data['top'] = self.data['top'] / height
-        self.data['height'] = self.data['height'] / height
-
-        if len(self.lines['horizontal']) > 0:
-            self.lines['horizontal'] = self.lines['horizontal'] / np.array((width, height))
-
-    def __get_writable_boundaries(self):
-        # There's a block with text ' ' from 0.0 to 1.0, we need to eliminate it
-        blocks = self.data[(self.data['level'] == 5) & (self.data['text'] != ' ')]
-        min_x = blocks['left'].min()
-        max_x = (blocks['left'] + blocks['width']).max()
-
-        min_y = blocks['top'].min()
-        max_y = (blocks['top'] + blocks['height']).max()
-
-        return min_x, min_y, max_x, max_y
-
-class OcrPdfParser():
-    """This class uses Google Tesseract to parse the content of PDF
-    files into texto.
-
-    :param pdf_path: Path to the PDF file to parse
-    :type pdf_path: str
-    :param cache_dir: Path to the directory to be used as cache.
-    :type cache_dir: str
-    :param keep_cache: True to keep the cache of images and Tessearct data. Defaults to False.
-    :type keep_cache: bool
-    """
-
-    def __init__(self, pdf_path: str, cache_dir: str = './.cache', keep_cache:bool = False,
-                 visual_aid:bool = False):
-        self.pdf_path = pdf_path
-        self.cache_dir = cache_dir
-        self.keep_cache = keep_cache
-        self.visual_aid = visual_aid
-
-        with open(self.pdf_path, 'rb') as f:
-            file_md5 = hashlib.md5(f.read()).hexdigest()
-        self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
-
-        if not self.__cache_is_valid():
-            self.__create_cache()
-        self.num_images = len(glob.glob(os.path.join(self.cache_subfolder, '0001-*.jpg')))
-
-    def __del__(self):
-        if not self.keep_cache:
-            self.clear_cache()
-
-    def get_text(self, page_separator: str = '\n', remove_headers:bool = False,
-                 boundaries:dict[str,float]=None) -> str:
-        """Return the text of all the pages in the document."""
-        text = ""
-        for page in self.get_pages():
-            text += page.get_text(remove_headers, boundaries) + page_separator
-
-        return text
-
-    def get_pages(self, parallel:bool = False) -> Iterator[OcrPage]:
-        """Read each page of the document and return its information as an Iterator.
-
-        :return:
-        :rtype: Iterator[str]
-        """
-        pages_path = sorted(glob.glob(f'{self.cache_subfolder}/0001-*.jpg'))
-
-        def process_page(page_path):
-            basepath = os.path.splitext(page_path)[0]
-            return OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv',
-                           visual_aid=self.visual_aid)
-
-        def get_number_of_workers(memory_of_process=700):
-            n_physical_cores = psutil.cpu_count(logical=False)
-            if n_physical_cores is None:
-                n_physical_cores = 2
-            memory = psutil.virtual_memory()
-            free_memory = memory.available / (1024 * 1024)
-            n_workers_by_memory = int(free_memory / memory_of_process)
-            n_workers = max(1, min(n_workers_by_memory, n_physical_cores))
-            return n_workers
-
-        if parallel:
-            with ThreadPoolExecutor(max_workers=get_number_of_workers()) as executor:
-                yield from executor.map(process_page, pages_path)
-        else:
-            for page_path in pages_path:
-                basepath = os.path.splitext(page_path)[0]
-                yield OcrPage(Image.open(page_path), cache_file=f'{basepath}.csv',
-                              visual_aid=self.visual_aid)
-
-    def get_page(self, page_num: int) -> OcrPage:
-        """Return a spific page of the document."""
-        num_page_digits = len(str(self.num_images))
-        basepath = f'{self.cache_subfolder}/0001-{page_num+1:0{num_page_digits}d}'
-        return OcrPage(Image.open(f'{basepath}.jpg'), f'{basepath}.csv', self.visual_aid)
-
-    def clear_cache(self):
-        """Delete the cache sub-directory for this file. If main directory is empty then
-        it is deleted aswell."""
-        tmp_cache = f'{self.cache_subfolder}.tmp'
-
-        if os.path.exists(self.cache_subfolder):
-            shutil.rmtree(self.cache_subfolder)
-        if os.path.exists(tmp_cache):
-            shutil.rmtree(tmp_cache)
-
-        if not os.listdir(self.cache_dir):
-            os.rmdir(self.cache_dir)
-
-    def __cache_is_valid(self) -> bool:
-        return os.path.exists(self.cache_subfolder)
-
-    def __create_cache(self):
-        tmp_cache = f'{self.cache_subfolder}.tmp'
-
-        if os.path.exists(self.cache_subfolder):
-            shutil.rmtree(self.cache_subfolder)
-        if os.path.exists(tmp_cache):
-            shutil.rmtree(tmp_cache)
-
-        os.makedirs(tmp_cache, exist_ok=True)
-
-        images = pdf2image.convert_from_path(self.pdf_path,
-                                        output_folder=tmp_cache,
-                                        fmt='jpeg',
-                                        dpi=1000,
-                                        output_file='')
-        for img in images: # Close images to be able to move the directory
-            img.close()
-
-        os.rename(tmp_cache, self.cache_subfolder) # Just to make sure all information is there
-
 class PdfPlumberPage():
     """This class stores the text extracted by Pdfplumber and provides
     methods to process it.
     """
 
-    def __init__(self, page:pdfplumber.page.Page, cache_file:str|None=None):
+    def __init__(self, page:pdfplumber.page.Page):
         self.page = page.dedupe_chars()
-        self.cache_file = cache_file
 
         self.data = self.__get_data_from_page()
-        self.lines = self.__get_lines_from_image()
 
         self.__normalize_data()
 
         w_boundaries = self.__get_writable_boundaries()
-        reconstructor = DataReconstructor(self.data, w_boundaries, self.lines)
+        reconstructor = DataReconstructor(self.data, w_boundaries)
         self.data = reconstructor.get_reconstructed()
 
     def get_text(self, remove_headers: bool=False, boundaries:dict[str,float]=None) -> str:
@@ -717,8 +354,8 @@ class PdfPlumberPage():
 
         indices = self.get_indices()
         words = [(idx, f'{w}{suffix}') for idx, w in zip(indices, text.split())]
-        df_words = pd.DataFrame(words, columns=['ocr_idx', 'word'])
-        df_words.set_index('ocr_idx', inplace=True)
+        df_words = pd.DataFrame(words, columns=['visual_idx', 'word'])
+        df_words.set_index('visual_idx', inplace=True)
 
         return df_words
 
@@ -750,32 +387,6 @@ class PdfPlumberPage():
 
         return data
 
-    def __get_lines_from_image(self):
-        if self.cache_file is None or not os.path.exists(self.cache_file):
-            return {
-                'horizontal': np.array([], dtype=int),
-                'vertical': np.array([], dtype=int),
-            }
-
-        image = cv2.imread(self.cache_file, cv2.IMREAD_GRAYSCALE)
-        words_data = self.data.copy()
-
-        width_rate = image.shape[1] / self.page.width
-        height_rate = image.shape[0] / self.page.height
-        words_data['left'] = (words_data['left'] * width_rate).astype(int)
-        words_data['right'] = (words_data['right'] * width_rate).astype(int)
-        words_data['width'] = (words_data['width'] * width_rate).astype(int)
-        words_data['top'] = (words_data['top'] * height_rate).astype(int)
-        words_data['bottom'] = (words_data['bottom'] * height_rate).astype(int)
-        words_data['height'] = (words_data['height'] * height_rate).astype(int)
-
-        lines = get_lines_from_image(image, words_data)
-
-        if len(lines['horizontal']) > 0:
-            lines['horizontal'] = lines['horizontal'] / width_rate
-
-        return lines
-
     def __normalize_data(self):
         width = self.page.width
         height = self.page.height
@@ -785,9 +396,6 @@ class PdfPlumberPage():
         self.data['top'] = self.data['top'] / height
         self.data['bottom'] = self.data['bottom'] / height
         self.data['height'] = self.data['height'] / height
-
-        if len(self.lines['horizontal']) > 0:
-            self.lines['horizontal'] = self.lines['horizontal'] / np.array((width, height))
 
     def __get_writable_boundaries(self):
         min_x = self.data['left'].min()
@@ -832,28 +440,10 @@ class PdfPlumberParser():
     :param file_path: The path of the file to be parsed.
     :type file_path: str
     """
-    def __init__(self, file_path: str, cache_dir: str = './.cache', keep_cache:bool = False,
-                 visual_aid:bool = False):
+    def __init__(self, file_path: str):
         self.file_path = file_path
-        self.cache_dir = cache_dir
-        self.keep_cache = keep_cache
-        self.visual_aid = visual_aid
 
         self.reader = pdfplumber.open(file_path)
-
-        if self.visual_aid:
-            with open(self.file_path, 'rb') as f:
-                file_md5 = hashlib.md5(f.read()).hexdigest()
-            self.cache_subfolder = os.path.join(self.cache_dir, file_md5)
-
-            if not self.__cache_is_valid():
-                self.__create_cache()
-        else:
-            self.cache_subfolder = None
-
-    def __del__(self):
-        if self.cache_subfolder is not None and not self.keep_cache:
-            self.clear_cache()
 
     def get_raw_text(self, page_separator: str = '\n', remove_headers:bool = False,
                  boundaries:dict[str,float]=None) -> str:
@@ -866,10 +456,9 @@ class PdfPlumberParser():
         :return: A string of all the text from the document
         :rtype: str
         """
-        num_page_digits = len(str(len(self.reader.pages)))
         text = ''
-        for i, page in enumerate(self.reader.pages, start=1):
-            page = PdfPlumberPage(page, f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg')
+        for _, page in enumerate(self.reader.pages, start=1):
+            page = PdfPlumberPage(page)
             text += page.get_raw_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -885,14 +474,9 @@ class PdfPlumberParser():
         :return: A string of all the text from the document
         :rtype: str
         """
-        num_page_digits = len(str(len(self.reader.pages)))
         text = ''
-        for i, page in enumerate(self.reader.pages, start=1):
-            if self.visual_aid:
-                cache_file = f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg'
-            else:
-                cache_file = None
-            page = PdfPlumberPage(page, cache_file)
+        for _, page in enumerate(self.reader.pages, start=1):
+            page = PdfPlumberPage(page)
             text += page.get_text(remove_headers, boundaries) + page_separator
 
         return text
@@ -907,55 +491,9 @@ class PdfPlumberParser():
         :return: An Iterator that yields the text of each page at a time
         :rtype: Iterator[PdfPlumberPage]
         """
-        num_page_digits = len(str(len(self.reader.pages)))
-        for i, page in enumerate(self.reader.pages, start=1):
-            if self.visual_aid:
-                cache_file = f'{self.cache_subfolder}/0001-{i:0{num_page_digits}d}.jpg'
-            else:
-                cache_file = None
-            yield PdfPlumberPage(page, cache_file)
+        for _, page in enumerate(self.reader.pages, start=1):
+            yield PdfPlumberPage(page)
 
     def get_page(self, page_num: int):
         """Return a specific page of the document."""
-        num_page_digits = len(str(len(self.reader.pages)))
-        if self.visual_aid:
-            cache_file = f'{self.cache_subfolder}/0001-{page_num+1:0{num_page_digits}d}.jpg'
-        else:
-            cache_file = None
-        return PdfPlumberPage(self.reader.pages[page_num], cache_file)
-
-    def clear_cache(self):
-        """Delete the cache sub-directory for this file. If main directory is empty then
-        it is deleted aswell."""
-        tmp_cache = f'{self.cache_subfolder}.tmp'
-
-        if os.path.exists(self.cache_subfolder):
-            shutil.rmtree(self.cache_subfolder)
-        if os.path.exists(tmp_cache):
-            shutil.rmtree(tmp_cache)
-
-        if not os.listdir(self.cache_dir):
-            os.rmdir(self.cache_dir)
-
-    def __cache_is_valid(self) -> bool:
-        return os.path.exists(self.cache_subfolder)
-
-    def __create_cache(self):
-        tmp_cache = f'{self.cache_subfolder}.tmp'
-
-        if os.path.exists(self.cache_subfolder):
-            shutil.rmtree(self.cache_subfolder)
-        if os.path.exists(tmp_cache):
-            shutil.rmtree(tmp_cache)
-
-        os.makedirs(tmp_cache, exist_ok=True)
-
-        images = pdf2image.convert_from_path(self.file_path,
-                                        output_folder=tmp_cache,
-                                        fmt='jpeg',
-                                        dpi=1000,
-                                        output_file='')
-        for img in images: # Close images to be able to move the directory
-            img.close()
-
-        os.rename(tmp_cache, self.cache_subfolder) # Just to make sure all information is there
+        return PdfPlumberPage(self.reader.pages[page_num])

@@ -26,7 +26,7 @@ class RAG:
             response = self.model.query(query, query_config.add_to_history)
             return response['message'], []
 
-        documents = self.storage.query_sentence(query_config.collection,
+        documents, _ = self.storage.query_sentence(query_config.collection,
                                                 query, query_config.num_docs)
 
         if len(documents) > 0:
@@ -55,15 +55,16 @@ class RAG:
         return responses
 
     def query_with_conversation(self, messages:list[dict[str,str]],
-                                query_config:RAGQueryConfig) -> tuple[list[dict], list]:
+                                query_config:RAGQueryConfig) -> tuple[list[dict], list, int]:
         """Makes a RAG query with a full conversation."""
         if query_config.collection == '' or self.storage is None:
             return self.model.query_with_conversation(messages), []
 
         user_messages_content = [m['content'] for m in messages if m['role'] == 'user']
         last_query = '\n'.join(user_messages_content[-query_config.num_related_questions:])
-        documents = self.storage.query_sentence(query_config.collection, last_query,
-                                                query_config.num_docs)
+        documents, embedding_tokens = self.storage.query_sentence(query_config.collection,
+                                                                  last_query,
+                                                                  query_config.num_docs)
 
         if len(documents) > 0:
             response = self.model.query_with_conversation_and_documents(messages,
@@ -71,4 +72,4 @@ class RAG:
         else:
             response = self.model.query_with_conversation(messages)
 
-        return response, documents
+        return response, documents, embedding_tokens
