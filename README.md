@@ -37,10 +37,6 @@ To configure the application, you need to set up the environment variables. A te
      * `LOG_FILE`: Path to the log file.
      * `LOG_CONSOLE`: Set to 1 to enable console logging.
 
-   * **Model Settings:**
-     * `EMBEDDING_CONTEXT`: Context size for embeddings.
-     * `MODEL_CONTEXT`: Context size for the LLM.
-
    * **AWS Bedrock (Optional, only if using AWS):**
      * `AWS_ACCESS_KEY_ID`: Your AWS Access Key ID.
      * `AWS_SECRET_ACCESS_KEY`: Your AWS Secret Access Key.
@@ -62,13 +58,15 @@ To configure the application, you need to set up the environment variables. A te
     python run.py extract -c CUSTOM_COLLECTION -d /home/$USER/documents
     ```
 
-  > __NOTE:__ The default model is `all-MiniLM-L6-v2`, the first time running the script it will download the model to create the embeddings.
+  > __NOTE:__ The default embeddings model is `all-MiniLM-L6-v2`, the first time running the script it will download the model to create the embeddings.
 
 3. Once the database was created, we can initiate a chat with an LLM model and it will answer the questions regarding the documents.
 
     ```bash
     python run.py chat --show-context -c CUSTOM_COLLECTION
     ```
+
+  > __NOTE:__ The default inference model is `Qwen/Qwen3-0.6B`, this is a very limited model.
 
 # Quick Start (Using AWS Bedrock models)
 
@@ -98,7 +96,7 @@ To configure the application, you need to set up the environment variables. A te
 
 For a detailed documentation on each functionality, please go to the corresponding doc file.
 
-* [Extractor full documentation](./docs/scripts/extract.md)
+* [Extractor documentation](./docs/scripts/extract.md)
 * [Using the chat](./docs/script/chat.md)
 
 # Step-by-step scripts

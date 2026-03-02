@@ -28,10 +28,10 @@ Check the official documentation for more information: https://github.com/abetle
 
 ## Install python packages
 
+If you want a lightweight version that uses AWS Bedrock for calculating the embeddings and inference, install only the basic requirements:
+
+    pip install -r requirements.bedrock.txt
+
 If you want to use local models downloaded from HuggingFace, install the full requirements:
 
     pip install -r requirements.txt
-
-If you want to use AWS Bedrock for calculating the embeddings and inference, install only the basic requirements:
-
-    pip install -r requirements.bedrock.txt

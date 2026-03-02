@@ -14,7 +14,7 @@ Full list of options of the script can be obtained using the -h option.
 
 Process a PDF file and save the embeddings in a collection:
 
-    python run.py extract -c <CollectionName> -e "all-MiniLM-L6-v2" --extraction-type data -f /path/to/file.pdf --inner-splitter section
+    python run.py extract -c <CollectionName> -e sentence-transformers/all-MiniLM-L6-v2 --extraction-type data -f /path/to/file.pdf --inner-splitter section
 
 Process a PDF file and save the embeddings in a collection using AWS Bedrock model:
 

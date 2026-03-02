@@ -20,6 +20,10 @@ Process a PDF file and show its text in console:
 
     python run.py extract_info -f /path/to/file.pdf
 
+Process a PDF file and save the data as CSV for latter processing. The output csv can be passed to *run.py get_embeddings* script:
+
+    python run.py extract_info -f /path/to/file.pdf -t csv -o /path/to/out.csv
+
 Process a PDF file and save the output text in a file:
 
     python run.py extract_info -f /path/to/file.pdf -o /path/to/out.txt
@@ -27,10 +31,6 @@ Process a PDF file and save the output text in a file:
 Process a single page of a PDF file:
 
     python run.py extract_info -f /path/to/file.pdf -p <page>
-
-Process a PDF file and save the data as CSV for latter processing. The output csv can be passed to *run.py get_embeddings* script:
-
-    python run.py extract_info -f /path/to/file.pdf -t csv -o /path/to/out.csv
 
 Process all the PDF files in a directory and save a .txt file for each PDF file:
 
