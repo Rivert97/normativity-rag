@@ -179,7 +179,7 @@ class CLIChatController(CLI):
     def __process_interactive(self, rag=RAG):
         self._logger.info("Loading interactive mode")
 
-        print("Bienvenido al ChatBot UG. Presione Ctrl+c para salir\n")
+        print("Bienvenido al NormativityChat. Presione Ctrl+c para salir\n")
         while True:
             try:
                 query = input(">> ")

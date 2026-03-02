@@ -17,7 +17,7 @@ from simplerag.llms.embedders import EmbedderBuilder, EmbedderParams
 from simplerag.llms.storage import CSVStorage, ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
-from .utils.defaults import Defaults, DefaultEmbeddingParams
+from .utils.defaults import Defaults, DEFAULT_PARSE_PARAMS, DefaultEmbeddingParams
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
@@ -39,7 +39,12 @@ class GetEmbeddingsCLI(CLI):
 
     def run(self):
         """Run the script logic."""
-        self.parse_params = self.load_yaml(self._args.parse_params_file)
+        parse_params = self.load_yaml(self._args.parse_params_file)
+        if parse_params:
+            self.parse_params = parse_params
+        else:
+            self.parse_params = DEFAULT_PARSE_PARAMS
+
         if self._args.file != '':
             self.__process_file(self._args.file, self._args.output, self._args.type)
         elif self._args.directory != '':
@@ -123,7 +128,7 @@ class GetEmbeddingsCLI(CLI):
         self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')
         self.parser.add_argument('--parse-params-file',
-                            default='simplerag/settings/params-default.yml',
+                            default='',
                             type=str,
                             help='''
                                 YAML file with custom parse parameters to be used
@@ -197,7 +202,7 @@ class GetEmbeddingsCLI(CLI):
         if args.storage == 'csv':
             self.storage = CSVStorage()
         elif args.storage == 'chromadb':
-            embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+            embedder_params = EmbedderParams(embedding_context=args.embedding_context)
             self.storage = ChromaDBStorage(args.embedder,
                                            args.database_dir,
                                            embedder_params=embedder_params)
