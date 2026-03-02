@@ -283,7 +283,7 @@ class ExtractorCLI(CLI):
 
         # Validate database directory
         if 'database_dir' not in settings:
-            settings['database_dir'] = DEFAULTS['database_dir']
+            settings['database_dir'] = Defaults.database_dir
         basedir = os.path.split(settings['database_dir'])[0]
         if not os.path.exists(basedir):
             raise CLIException("Database parent directory should exist")
@@ -297,15 +297,15 @@ class ExtractorCLI(CLI):
 
     def __validate_collection_params(self, params:dict):
         if 'embedder' not in params:
-            params['embedder'] = DEFAULTS['embedder']
+            params['embedder'] = Defaults.embedder
 
         if 'extraction_type' not in params:
-            params['extraction_type'] = DEFAULTS['extraction_type']
+            params['extraction_type'] = Defaults.extraction_type
         if params['extraction_type'] not in EXTRACTION_TYPES:
             raise CLIException(f"Invalid extraction_type '{params['extraction_type']}'")
 
         if 'inner_splitter' not in params:
-            params['inner_splitter'] = DEFAULTS['inner_splitter']
+            params['inner_splitter'] = Defaults.inner_splitter
         if params['inner_splitter'] not in INNER_SPLITTERS:
             raise CLIException(f"Invalid inner_splitter '{params['inner_splitter']}'")
 
