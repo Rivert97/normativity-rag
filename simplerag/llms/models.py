@@ -1,6 +1,7 @@
 """Module to define multiple types of models provided by HuggingFace."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 import os
 import json
@@ -27,22 +28,31 @@ except ImportError:
 
 from .data import Document
 
-DEFAULT_MODEL_CONTEXT = '16384'
-DEFAULT_MAX_NEW_TOKENS = '8192'
-DEFAULT_TEMPERATURE = '0.1'
+@dataclass
+class InferenceParams:
+    """Class to define inference parameters of models."""
+    model_context: int = 8192
+    max_new_tokens: int = 2048
+    temperature: float = 0.1
+    top_p: float = 0.1
 
 class Model(ABC):
     """Base class for all the models."""
 
-    def __init__(self, multimodal:bool=False, system_prompt:str=None):
+    def __init__(self,
+                 multimodal:bool=False,
+                 system_prompt:str=None,
+                 inference_params:InferenceParams=None):
         self.multimodal = multimodal
         self.system_prompt = system_prompt
 
-        self.messages = self.__get_init_messages()
+        if inference_params is None:
+            self.inference_params = InferenceParams()
+        else:
+            self.inference_params = inference_params
+        print(self.inference_params)
 
-        self.model_context = int(os.getenv('MODEL_CONTEXT', DEFAULT_MODEL_CONTEXT))
-        self.max_new_tokens = int(os.getenv('MAX_NEW_TOKENS', DEFAULT_MAX_NEW_TOKENS))
-        self.temperature = float(os.getenv('TEMPERATURE', DEFAULT_TEMPERATURE))
+        self.messages = self.__get_init_messages()
 
     def query(self, query:str, add_to_history:bool=True):
         """Query an answer based on a question."""
@@ -254,8 +264,10 @@ class ModelBuilder:
 class Llama3(Model):
     """Class to load Meta Llama 3.1 and 3.2 model and its variants."""
 
-    def __init__(self, model_id:str, system_prompt:str=None):
-        super().__init__(multimodal=True, system_prompt=system_prompt)
+    def __init__(self, model_id:str, system_prompt:str=None, inference_params:InferenceParams=None):
+        super().__init__(multimodal=True,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
 
         self.model_id = model_id
 
@@ -272,7 +284,7 @@ class Llama3(Model):
     def get_response_from_model(self, messages:list[dict[str, str]],
                                 raw:bool=False) -> dict[dict[str, str]|str|int]:
         all_messages = self.messages + messages
-        output = self.pipeline(all_messages, max_new_tokens=self.max_new_tokens)
+        output = self.pipeline(all_messages, max_new_tokens=self.inference_params.max_new_tokens)
 
         if raw:
             return {
@@ -291,9 +303,14 @@ class Llama3(Model):
 class Gemma(Model):
     """Class to load Gemma3 model and its variants."""
 
-    def __init__(self, model_id: str, system_prompt:str=None):
+    def __init__(self,
+                 model_id: str,
+                 system_prompt:str=None,
+                 inference_params:InferenceParams=None):
         multimodal = not(model_id.endswith('1b-it') or model_id.endswith('-gguf'))
-        super().__init__(multimodal=multimodal, system_prompt=system_prompt)
+        super().__init__(multimodal=multimodal,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
 
         self.model_id = model_id
         self.processor = None
@@ -341,7 +358,7 @@ class Gemma(Model):
 
         with torch.inference_mode():
             generation = self.model.generate(**inputs,
-                                             max_new_tokens=self.max_new_tokens,
+                                             max_new_tokens=self.inference_params.max_new_tokens,
                                              do_sample=False)
             generation = generation[0][input_len:]
 
@@ -369,7 +386,8 @@ class Gemma(Model):
         ).to(self.model.device)
 
         with torch.inference_mode():
-            outputs = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
+            outputs = self.model.generate(**inputs,
+                                          max_new_tokens=self.inference_params.max_new_tokens)
 
         decoded = self.tokenizer.batch_decode(outputs)
         response = decoded[0]
@@ -402,8 +420,14 @@ class Gemma(Model):
 class Qwen3(Model):
     """Class to load Qwen models."""
 
-    def __init__(self, model_id:str, thinking:bool|None=None, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self,
+                 model_id:str,
+                 thinking:bool|None=None,
+                 system_prompt:str=None,
+                 inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
         self.model_id = model_id
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
@@ -428,7 +452,7 @@ class Qwen3(Model):
         # Conduct text completion
         generated_tokens = self.model.generate(
             **model_inputs,
-            max_new_tokens=self.max_new_tokens,
+            max_new_tokens=self.inference_params.max_new_tokens,
         )
         output_ids = generated_tokens[0][len(model_inputs.input_ids[0]):].tolist()
 
@@ -463,8 +487,10 @@ class Qwen3(Model):
 class Mistral(Model):
     """Class to load Mistral AI models."""
 
-    def __init__(self, model_id:str, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self, model_id:str, system_prompt:str=None, inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
 
         self.model_id = model_id
 
@@ -480,7 +506,7 @@ class Mistral(Model):
 
     def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
         all_messages = self.messages + messages
-        output = self.pipeline(all_messages, max_new_tokens=self.max_new_tokens)
+        output = self.pipeline(all_messages, max_new_tokens=self.inference_params.max_new_tokens)
 
         if raw:
             return {
@@ -499,8 +525,10 @@ class Mistral(Model):
 class GPT(Model):
     """Class to load GPT-OSS models."""
 
-    def __init__(self, model_id:str, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self, model_id:str, system_prompt:str=None, inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -521,8 +549,8 @@ class GPT(Model):
 
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=self.max_new_tokens,
-            temperature=self.temperature,
+            max_new_tokens=self.inference_params.max_new_tokens,
+            temperature=self.inference_params.temperature,
         )
 
         if raw:
@@ -542,15 +570,21 @@ class GPT(Model):
 class GGUFModel(Model):
     """Class to load models with GGUF format."""
 
-    def __init__(self, ggu_file:str, thinking:bool|None=None, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self,
+                 ggu_file:str,
+                 thinking:bool|None=None,
+                 system_prompt:str=None,
+                 inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
         self.thinking = thinking
 
         self.model = Llama(
             model_path=ggu_file,
             embedding=False,
             n_gpu_layers=-1,
-            n_ctx=self.model_context,
+            n_ctx=self.inference_params.model_context,
             verbose=False,
         )
 
@@ -567,7 +601,7 @@ class GGUFModel(Model):
 
         res = self.model.create_chat_completion(
             messages=all_messages,
-            max_tokens=self.max_new_tokens
+            max_tokens=self.inference_params.max_new_tokens
         )
         if raw:
             return {
@@ -614,8 +648,10 @@ class GGUFModel(Model):
 class Bedrock(Model):
     """Class to load Bedrock models."""
 
-    def __init__(self, model_id:str, system_prompt:str=None):
-        super().__init__(multimodal=False, system_prompt=system_prompt)
+    def __init__(self, model_id:str, system_prompt:str=None, inference_params:InferenceParams=None):
+        super().__init__(multimodal=False,
+                         system_prompt=system_prompt,
+                         inference_params=inference_params)
         self.model_id = model_id
         self.client = boto3.client(
             "bedrock-runtime",
@@ -628,9 +664,9 @@ class Bedrock(Model):
         native_request = {
             "model": self.model_id,
             "messages": all_messages,
-            "max_completion_tokens": self.max_new_tokens,
-            "temperature": self.temperature,
-            "top_p": 0.1,
+            "max_completion_tokens": self.inference_params.max_new_tokens,
+            "temperature": self.inference_params.temperature,
+            "top_p": self.inference_params.top_p,
             "stream": False,
         }
 

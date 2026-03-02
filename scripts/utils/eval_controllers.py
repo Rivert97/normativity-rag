@@ -5,7 +5,7 @@ import argparse
 from datasets import load_dataset
 
 from simplerag.llms.storage import ChromaDBStorage
-from simplerag.llms.models import ModelBuilder, Model
+from simplerag.llms.models import ModelBuilder, Model, InferenceParams
 from simplerag.llms.rag import RAG
 from .controllers import CLI
 from .exceptions import CLIException
@@ -31,10 +31,10 @@ class EvalCLI(CLI):
 
         return storage
 
-    def load_model(self, model_name:str) -> Model:
+    def load_model(self, model_name:str, inference_params:InferenceParams) -> Model:
         """Load the LLM model"""
         self._logger.info("Loading Model '%s'", model_name)
-        model = ModelBuilder.get_from_model_name(model_name)
+        model = ModelBuilder.get_from_model_name(model_name, inference_params=inference_params)
         if model is None:
             raise CLIException(f"Invalid model '{model_name}'")
 

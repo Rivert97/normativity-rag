@@ -21,3 +21,12 @@ class Defaults:
     inner_splitter: str = 'section'
     max_chars: int = 8000
     chat_num_related_docs: int = 5
+
+@dataclass
+class DefaultInferenceParams:
+    """Default values for inference."""
+    prompt_file: str = './prompts/system.txt'
+    model_context: int = 8192
+    max_new_tokens: int = 2048
+    temperature: float = 0.1
+    top_p: float = 0.1

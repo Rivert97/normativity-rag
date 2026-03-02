@@ -5,15 +5,11 @@ import os
 
 from simplerag.llms.storage import ChromaDBStorage
 from simplerag.llms.rag import RAG, RAGQueryConfig
-from simplerag.llms.models import ModelBuilder
+from simplerag.llms.models import ModelBuilder, InferenceParams
 from simplerag.llms.data import Document
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
-from .utils.defaults import Defaults
-
-DEFAULTS = {
-    'prompt_file': './prompts/system.txt',
-}
+from .utils.defaults import Defaults, DefaultInferenceParams
 
 PROGRAM_NAME = 'chat'
 VERSION = '1.00.00'
@@ -29,9 +25,16 @@ class CLIChatController(CLI):
     def run(self):
         """Run the script logic."""
         self._logger.info("Loading Model '%s'", self._args.model)
+        inference_params = InferenceParams(
+            model_context=self._args.model_context,
+            max_new_tokens=self._args.max_new_tokens,
+            temperature=self._args.temperature,
+            top_p=self._args.top_p,
+        )
         model = ModelBuilder.get_from_model_name(
             self._args.model,
-            system_prompt=self.system_prompt
+            system_prompt=self.system_prompt,
+            inference_params=inference_params,
         )
 
         if model is None:
@@ -84,12 +87,26 @@ class CLIChatController(CLI):
                                     Embeddings model to be used. Must match the database embedder.
                                     Defaults to {Defaults.embedder}
                                     ''')
+        self.parser.add_argument('--max-new-tokens',
+                                 default=DefaultInferenceParams.max_new_tokens,
+                                 type=int,
+                                 help=f'''
+                                    Maximum number of new tokens to generate.
+                                    Defaults to {DefaultInferenceParams.max_new_tokens}
+                                    ''')
         self.parser.add_argument('-m', '--model',
                                  default=Defaults.model,
                                  type=str,
                                  help=f'''
                                     Model to use as a conversational agent.
                                     Defaults to {Defaults.model}
+                                    ''')
+        self.parser.add_argument('--model-context',
+                                 default=DefaultInferenceParams.model_context,
+                                 type=int,
+                                 help=f'''
+                                    Context window size of the model.
+                                    Defaults to {DefaultInferenceParams.model_context}
                                     ''')
         self.parser.add_argument('-n', '--num-docs',
                                  default=Defaults.chat_num_related_docs,
@@ -99,14 +116,28 @@ class CLIChatController(CLI):
                                     Defaults to {Defaults.chat_num_related_docs}
                                     ''')
         self.parser.add_argument('-p', '--prompt-file',
-                                 default=DEFAULTS['prompt_file'],
+                                 default=DefaultInferenceParams.prompt_file,
                                  type=str,
                                  help=f'''File of a custom system prompt to be passed to the model.
-                                    Defaults to {DEFAULTS['prompt_file']}''')
+                                    Defaults to {DefaultInferenceParams.prompt_file}''')
         self.parser.add_argument('--query',
                                  default='',
                                  type=str,
                                  help='Sentence query to be answered by the model')
+        self.parser.add_argument('--temperature',
+                                 default=DefaultInferenceParams.temperature,
+                                 type=float,
+                                 help=f'''
+                                    Temperature of the model.
+                                    Defaults to {DefaultInferenceParams.temperature}
+                                    ''')
+        self.parser.add_argument('--top-p',
+                                 default=DefaultInferenceParams.top_p,
+                                 type=float,
+                                 help=f'''
+                                    Top-p of the model.
+                                    Defaults to {DefaultInferenceParams.top_p}
+                                    ''')
 
         args = self.parser.parse_args()
 
@@ -119,6 +150,18 @@ class CLIChatController(CLI):
         if os.path.exists(args.prompt_file):
             with open(args.prompt_file, 'r', encoding='utf-8') as f:
                 self.system_prompt = f.read()
+
+        if args.model_context < 128:
+            raise CLIException("Invalid model context")
+
+        if args.max_new_tokens < 1:
+            raise CLIException("Invalid max new tokens")
+
+        if args.temperature < 0 or args.temperature > 1:
+            raise CLIException("Invalid temperature")
+
+        if args.top_p < 0 or args.top_p > 1:
+            raise CLIException("Invalid top_p")
 
         self._args = args
 
