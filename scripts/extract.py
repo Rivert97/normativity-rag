@@ -13,19 +13,11 @@ from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.llms.storage import ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
-from .utils.defaults import Defaults
+from .utils.defaults import Defaults, DEFAULT_PARSE_PARAMS
 
 PROGRAM_NAME = 'extract'
 VERSION = '1.00.00'
 
-DEFAULT_PARSE_PARAMS = {
-    'pdf_margins': {
-        'top': 0.1,
-        'bottom': 0.95,
-        'left': 0.05,
-        'right': 0.95,
-    }
-}
 INNER_SPLITTERS = ['paragraph', 'section']
 EXTRACTION_TYPES = ['text', 'data']
 
@@ -142,7 +134,7 @@ class ExtractorCLI(CLI):
                                 during extraction
                                 ''')
         self.parser.add_argument('--raw',
-                                 default=Defaults.pdfplumber_raw,
+                                 default=False,
                                  action='store_true',
                                  help='''
                                      Use this option to use text as returned by the library.

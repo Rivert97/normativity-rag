@@ -92,7 +92,10 @@ class GetEmbeddingsCLI(CLI):
         self.parser.add_argument('--database-dir',
                             default=Defaults.database_dir,
                             type=str,
-                            help=f'Directory to store the database. Defaults to {Defaults.database_dir}')
+                            help=f'''
+                                Directory to store the database.
+                                Defaults to {Defaults.database_dir}
+                                ''')
         self.parser.add_argument('-e', '--embedder',
                             default=Defaults.embedder,
                             type=str,

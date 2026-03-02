@@ -55,7 +55,10 @@ class GetRelevantCLI(CLI):
         self.parser.add_argument('-d', '--database-dir',
                             default=Defaults.database_dir,
                             type=str,
-                            help=f'Database directory to be used. Defaults to {Defaults.database_dir}')
+                            help=f'''
+                                Database directory to be used.
+                                Defaults to {Defaults.database_dir}
+                                ''')
         self.parser.add_argument('-e', '--embedder',
                             default=Defaults.embedder,
                             type=str,
@@ -66,7 +69,10 @@ class GetRelevantCLI(CLI):
         self.parser.add_argument('-n', '--number-results',
                             default=Defaults.chat_num_related_docs,
                             type=int,
-                            help=f'Number of relevant documents to retrieve. Defaults to {Defaults.chat_num_related_docs}')
+                            help=f'''
+                                Number of relevant documents to retrieve.
+                                Defaults to {Defaults.chat_num_related_docs}
+                                ''')
 
         args = self.parser.parse_args()
 

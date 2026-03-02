@@ -323,7 +323,8 @@ class DataTreeSplitter(TreeSplitter):
         for _, page_words in sorted_lines.groupby('page'):
             if self.absolute_center:
                 reference_x = (0.0, 1.0)
-                max_column_percentage = DEFAULT_MAX_CENTERED_COLUMN_WIDTH - (1.0 - page_words['right'].max()) * 2.0
+                page_margins_percentage = (1.0 - page_words['right'].max()) * 2.0
+                max_column_percentage = DEFAULT_MAX_CENTERED_COLUMN_WIDTH - page_margins_percentage
             elif len(page_words.groupby('line')) < 2:
                 reference_x = (self.data['left'].min(), self.data['right'].max())
                 max_column_percentage = DEFAULT_MAX_CENTERED_COLUMN_WIDTH
@@ -347,8 +348,13 @@ class DataTreeSplitter(TreeSplitter):
                 else:
                     self.__handle_non_title_block(state)
 
-    def __element_is_centered(self, x_limits:tuple[float,float], reference_x:tuple[float,float],
-                              tolerance_rate:float=0.2, max_column_percentage:float=DEFAULT_MAX_CENTERED_COLUMN_WIDTH) -> bool:
+    def __element_is_centered(
+        self,
+        x_limits:tuple[float,float],
+        reference_x:tuple[float,float],
+        tolerance_rate:float=0.2,
+        max_column_percentage:float=DEFAULT_MAX_CENTERED_COLUMN_WIDTH
+    ) -> bool:
         min_x = x_limits[0]
         max_x = x_limits[1]
         reference_width = reference_x[1] - reference_x[0]
@@ -358,11 +364,13 @@ class DataTreeSplitter(TreeSplitter):
         offset_left = min_x - (reference_center - reference_width * 0.5)
         offset_right = (reference_center + reference_width * 0.5) - max_x
 
-        return (min_x < reference_center < max_x and
-                abs(1.0 - center_rate) < tolerance_rate and
-                column_percentage < max_column_percentage and
-                offset_left > DEFAULT_LEFT_OFFSET_FOR_CENTERED_BLOCK and
-                offset_right > DEFAULT_RIGHT_OFFSET_FOR_CENTERED_BLOCK)
+        return (
+            min_x < reference_center < max_x and
+            abs(1.0 - center_rate) < tolerance_rate and
+            column_percentage < max_column_percentage and
+            offset_left > DEFAULT_LEFT_OFFSET_FOR_CENTERED_BLOCK and
+            offset_right > DEFAULT_RIGHT_OFFSET_FOR_CENTERED_BLOCK
+        )
 
     def __handle_title_block(self, state:TreeState):
         block_text = self.__get_dehypenated_text(state.block_words)
@@ -432,16 +440,20 @@ class DataTreeSplitter(TreeSplitter):
 
             line_left = line_words['left'].min()
             line_right = line_words['right'].max()
-            is_centered = self.__element_is_centered((line_left, line_right),
-                                                     (left, right),
-                                                     tolerance_rate=DEFAULT_SUBTITLE_CENTER_TOLERANCE_RATE)
+            is_centered = self.__element_is_centered(
+                (line_left, line_right),
+                (left, right),
+                tolerance_rate=DEFAULT_SUBTITLE_CENTER_TOLERANCE_RATE
+            )
             if is_centered:
                 subtitle_idx.extend(line_words.index)
                 continue
 
-            is_right_aligned = self.__element_is_right_aligned((line_left, line_right),
-                                                                (left, right),
-                                                                max_percentage=DEFAULT_SUBTITLE_MAX_PERCENTAGE)
+            is_right_aligned = self.__element_is_right_aligned(
+                (line_left, line_right),
+                (left, right),
+                max_percentage=DEFAULT_SUBTITLE_MAX_PERCENTAGE
+            )
             if is_right_aligned:
                 subtitle_idx.extend(line_words.index)
                 continue
@@ -476,7 +488,10 @@ class DataTreeSplitter(TreeSplitter):
                                    ref_x_limits:tuple[float,float], max_percentage:float=0.6):
         offset_right = ref_x_limits[1] - x_limits[1]
         occupancy_percentage = (x_limits[1] - x_limits[0]) / (ref_x_limits[1] - ref_x_limits[0])
-        return offset_right < DEFAULT_SUBTITLE_OFFSET_RIGHT and occupancy_percentage < max_percentage
+        return (
+            offset_right < DEFAULT_SUBTITLE_OFFSET_RIGHT and
+            occupancy_percentage < max_percentage
+        )
 
 class TextTreeSplitter(TreeSplitter):
     """Class to split a document in sections to generate a tree structure.

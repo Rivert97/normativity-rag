@@ -18,7 +18,10 @@ class Storage(ABC):
         """Save information into the corresponding storage."""
 
     @abstractmethod
-    def query_sentence(self, collection:str, sentence:str, n_results:int) -> tuple[list[Document], int]:
+    def query_sentence(self,
+                       collection:str,
+                       sentence:str,
+                       n_results:int) -> tuple[list[Document], int]:
         """Find related documents using the corresponding storage."""
 
 class ChromaDBStorage(Storage):
@@ -111,7 +114,11 @@ class ChromaDBStorage(Storage):
 
         return documents
 
-    def __query(self, chromadb_collection, sentence, n_results, em_func) -> tuple[list[Document], int]:
+    def __query(self,
+                chromadb_collection,
+                sentence,
+                n_results,
+                em_func) -> tuple[list[Document], int]:
         results = chromadb_collection.query(
             query_texts=[sentence],
             n_results=n_results,

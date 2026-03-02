@@ -50,8 +50,9 @@ class DataReconstructor():
     adding columns to the data.
     """
 
-    def __init__(self, data: pd.DataFrame,
-                 writable_boundaries: tuple[float, float, float, float] = DEFAULT_WRITABLE_BOUNDARIES):
+    def __init__(self,
+                 data: pd.DataFrame,
+                 writable_boundaries: tuple[float,float,float,float] = DEFAULT_WRITABLE_BOUNDARIES):
         self.data = data.copy()
 
         if 'right' not in self.data and 'left' in self.data:
@@ -65,8 +66,8 @@ class DataReconstructor():
         self.writable_center = self.writable_min_x + self.writable_width * 0.5
 
     def get_reconstructed(self) -> pd.DataFrame:
-        """Return the reconstructed visual data of the page by fixing the issues of the original data
-        provided by PdfPlumber."""
+        """Return the reconstructed visual data of the page by fixing the issues of
+        the original data provided by PdfPlumber."""
         self.__assign_line_number()
         self.__assign_column_number()
         self.__assign_column_position()
@@ -96,8 +97,10 @@ class DataReconstructor():
 
     def __is_same_line(self, line_top: float, line_bottom: float, word_top: float,
                        word_height: float) -> bool:
-        return (line_top + word_height * LINE_TOLERANCE_RATE < word_top + word_height
-                and line_bottom - word_height * LINE_TOLERANCE_RATE > word_top)
+        return (
+            line_top + word_height * LINE_TOLERANCE_RATE < word_top + word_height
+            and line_bottom - word_height * LINE_TOLERANCE_RATE > word_top
+        )
 
     def __assign_column_number(self, min_words_per_col:int=1):
         self.data['column'] = pd.Series(dtype='int')
@@ -147,21 +150,29 @@ class DataReconstructor():
         right = words['right'].max()
         center = left + (right - left) * 0.5
 
-        return (abs(self.writable_max_x - right) < self.writable_width * RIGHT_ALIGN_TOLERANCE_RATE and
-                center > self.writable_width * RIGHT_ALIGN_CENTER_RATE)
+        return (
+            abs(self.writable_max_x - right) < self.writable_width * RIGHT_ALIGN_TOLERANCE_RATE and
+            center > self.writable_width * RIGHT_ALIGN_CENTER_RATE
+        )
 
     def __column_is_centered(self, min_x, max_x):
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
-        return min_x < self.writable_center < max_x and abs(1.0 - center_rate) < CENTER_TOLERANCE_RATE
+        return (
+            min_x < self.writable_center < max_x and
+            abs(1.0 - center_rate) < CENTER_TOLERANCE_RATE
+        )
 
     def __column_passes_through_center(self, min_x, max_x):
         return min_x < self.writable_center < max_x
 
     def __column_is_aligned_left(self, min_x, max_x):
         col_center = min_x + (max_x - min_x) * 0.5
+        left_align_center_tolerance = self.writable_width * LEFT_ALIGN_CENTER_TOLERANCE_RATE
 
-        return (col_center < self.writable_center + self.writable_width * LEFT_ALIGN_CENTER_TOLERANCE_RATE and
-                not min_x > self.writable_center)
+        return (
+            col_center < self.writable_center + left_align_center_tolerance and
+            not min_x > self.writable_center
+        )
 
     def __column_is_aligned_right(self, min_x, max_x):
         col_center = min_x + (max_x - min_x) * 0.5

@@ -11,19 +11,10 @@ import glob
 from simplerag.document_loaders.pdf import PDFPlumberLoader
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
-from .utils.defaults import Defaults
+from .utils.defaults import DEFAULT_PARSE_PARAMS
 
 PROGRAM_NAME = 'extract_info'
 VERSION = '1.00.00'
-
-DEFAULT_PARSE_PARAMS = {
-    'pdf_margins': {
-        'top': 0.1,
-        'bottom': 0.95,
-        'left': 0.05,
-        'right': 0.95,
-    }
-}
 
 class ExtractInfoCLI(CLI):
     """This class controls the execution of the program when using
@@ -75,7 +66,7 @@ class ExtractInfoCLI(CLI):
                                      during extraction
                                  ''')
         self.parser.add_argument('--raw',
-                                 default=Defaults.pdfplumber_raw,
+                                 default=False,
                                  action='store_true',
                                  help='''
                                      Use this option to use text as returned by the library.

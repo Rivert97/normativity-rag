@@ -44,7 +44,10 @@ class ManageChromaCLI(CLI):
                                  help="Name of the collection.")
         self.parser.add_argument("-d", "--database-dir",
                                  default=Defaults.database_dir,
-                                 help=f"Path to the ChromaDB database. Default: {Defaults.database_dir}.")
+                                 help=f"""
+                                    Path to the ChromaDB database.
+                                    Default: {Defaults.database_dir}.
+                                    """)
         self.parser.add_argument("-f", "--file",
                                  default="",
                                  help="Name of the file to modify.")
@@ -70,7 +73,7 @@ def list_collections(client):
         print("Collections:")
         for collection in collections:
             print(f"- {collection.name}")
-    except Exception as e:
+    except chromadb.errors.ChromaError as e:
         print(f"Error listing collections: {e}")
 
 def delete_collection(client, collection_name):
@@ -78,7 +81,7 @@ def delete_collection(client, collection_name):
     try:
         client.delete_collection(collection_name)
         print(f"Collection '{collection_name}' deleted successfully.")
-    except Exception as e:
+    except chromadb.errors.ChromaError as e:
         print(f"Error deleting collection '{collection_name}': {e}")
 
 def delete_file_from_collection(client, collection_name, file_name):
@@ -89,7 +92,7 @@ def delete_file_from_collection(client, collection_name, file_name):
             where={"document_name": file_name.rstrip('.pdf')}
         )
         print(f"File '{file_name}' deleted successfully from collection '{collection_name}'.")
-    except Exception as e:
+    except chromadb.errors.ChromaError as e:
         print(f"Error deleting file '{file_name}' from collection '{collection_name}': {e}")
 
 def main():

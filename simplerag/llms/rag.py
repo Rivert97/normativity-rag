@@ -62,8 +62,9 @@ class RAG:
 
         user_messages_content = [m['content'] for m in messages if m['role'] == 'user']
         last_query = '\n'.join(user_messages_content[-query_config.num_related_questions:])
-        documents, embedding_tokens = self.storage.query_sentence(query_config.collection, last_query,
-                                                query_config.num_docs)
+        documents, embedding_tokens = self.storage.query_sentence(query_config.collection,
+                                                                  last_query,
+                                                                  query_config.num_docs)
 
         if len(documents) > 0:
             response = self.model.query_with_conversation_and_documents(messages,

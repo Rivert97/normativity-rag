@@ -9,6 +9,11 @@ import boto3
 
 # Optional imports
 try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
+
+try:
     import torch
     import transformers
     from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
@@ -19,11 +24,6 @@ try:
     torch.backends.cuda.enable_flash_sdp(False)
 except ImportError:
     pass
-
-try:
-    from llama_cpp import Llama
-except ImportError:
-    Llama = None
 
 from .data import Document
 
@@ -340,7 +340,9 @@ class Gemma(Model):
         input_len = inputs["input_ids"].shape[-1]
 
         with torch.inference_mode():
-            generation = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False)
+            generation = self.model.generate(**inputs,
+                                             max_new_tokens=self.max_new_tokens,
+                                             do_sample=False)
             generation = generation[0][input_len:]
 
         if raw:
@@ -615,7 +617,10 @@ class Bedrock(Model):
     def __init__(self, model_id:str, system_prompt:str=None):
         super().__init__(multimodal=False, system_prompt=system_prompt)
         self.model_id = model_id
-        self.client = boto3.client("bedrock-runtime", region_name=os.getenv("AWS_REGION", "us-east-1"))
+        self.client = boto3.client(
+            "bedrock-runtime",
+            region_name=os.getenv("AWS_REGION", "us-east-1")
+        )
 
     def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
         all_messages = self.messages + messages

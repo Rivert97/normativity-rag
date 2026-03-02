@@ -7,17 +7,17 @@ import boto3
 
 # Optional imports
 try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
+
+try:
     import torch
     import torch.nn.functional as F
     from transformers import AutoTokenizer, AutoModel
     from sentence_transformers import SentenceTransformer
 except ImportError:
     pass
-
-try:
-    from llama_cpp import Llama
-except ImportError:
-    Llama = None
 
 from .singleton import Singleton
 
@@ -88,7 +88,7 @@ class STEmbedder(Embedder, metaclass=Singleton):
 
     def embed_query(self, input: list[str]):
         """Embed a query."""
-        return self.__call__(input)
+        return self(input)
 
     @staticmethod
     def name() -> str:
@@ -133,7 +133,7 @@ class TREmbedder(Embedder, metaclass=Singleton):
 
     def embed_query(self, input: list[str]):
         """Embed a query."""
-        return self.__call__(input)
+        return self(input)
 
     def __last_token_pool(self, last_hidden_states,
                     attention_mask):
@@ -177,7 +177,7 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
 
     def embed_query(self, input: list[str]):
         """Embed a query."""
-        return self.__call__(input)
+        return self(input)
 
     @staticmethod
     def name() -> str:
@@ -222,7 +222,7 @@ class BedrockEmbedder(Embedder):
 
     def embed_query(self, input: list[str]):
         """Embed a query."""
-        return self.__call__(input)
+        return self(input)
 
     @staticmethod
     def name() -> str:
