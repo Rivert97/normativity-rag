@@ -7,9 +7,10 @@ import argparse
 import os
 
 from simplerag.llms.storage import ChromaDBStorage
+from simplerag.llms.embedders import EmbedderParams
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
-from .utils.defaults import Defaults
+from .utils.defaults import Defaults, DefaultEmbeddingParams
 
 PROGRAM_NAME = 'GetRelevantCLI'
 VERSION = '1.00.00'
@@ -26,7 +27,10 @@ class GetRelevantCLI(CLI):
     def run(self):
         """Run the script logic."""
         self._logger.debug('Loading database')
-        storage = ChromaDBStorage(self._args.embedder, self._args.database_dir)
+        embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+        storage = ChromaDBStorage(self._args.embedder,
+                                  self._args.database_dir,
+                                  embedder_params=embedder_params)
 
         self._logger.debug('Querying sentences')
         documents, _ = storage.query_sentence(
@@ -66,6 +70,10 @@ class GetRelevantCLI(CLI):
                                 for all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
                                 ). Defaults to {Defaults.embedder}''')
+        self.parser.add_argument('--embedding-context',
+                            default=DefaultEmbeddingParams.embedding_context,
+                            type=int,
+                            help='Context lenght for embeddings')
         self.parser.add_argument('-n', '--number-results',
                             default=Defaults.chat_num_related_docs,
                             type=int,
@@ -84,6 +92,9 @@ class GetRelevantCLI(CLI):
 
         if not os.path.exists(args.database_dir):
             raise CLIException(f"Database folder '{args.database_dir}' not found")
+
+        if args.embedding_context <= 0:
+            raise CLIException("Embedding context must be greater than 0")
 
         self._args = args
 

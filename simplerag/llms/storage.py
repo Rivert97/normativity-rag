@@ -8,7 +8,7 @@ import chromadb.errors
 import pandas as pd
 
 from .data import Document
-from .embedders import EmbedderBuilder
+from .embedders import EmbedderBuilder, EmbedderParams
 
 class Storage(ABC):
     """Interface that defines methods that should be implemented by a storage."""
@@ -27,15 +27,22 @@ class Storage(ABC):
 class ChromaDBStorage(Storage):
     """Class to store data in a chromadb database."""
 
-    def __init__(self, model:str='all-MiniLM-L6-v2', db_path:str='./db', device:str = 'cuda'):
+    def __init__(self,
+                 model:str='all-MiniLM-L6-v2',
+                 db_path:str='./db',
+                 device:str = 'cuda',
+                 embedder_params: EmbedderParams=None):
         self.model = model
         self.device = device
+        self.embedder_params = embedder_params
         self.client = chromadb.PersistentClient(path=db_path)
         self.hnsw_space = "ip" if 'dot' in model else 'cosine'
 
     def save_info(self, name:str, info: dict[str, list[str]], id_prefix: str = ''):
         """Save the provided data into a collection inside a chromadb database."""
-        em_func = EmbedderBuilder.get_from_model_name(self.model, device=self.device)
+        em_func = EmbedderBuilder.get_from_model_name(self.model,
+                                                      device=self.device,
+                                                      params=self.embedder_params)
         try:
             collection = self.client.get_collection(name, embedding_function=em_func)
         except chromadb.errors.NotFoundError:
@@ -55,7 +62,9 @@ class ChromaDBStorage(Storage):
 
     def query_sentence(self, collection, sentence, n_results) -> tuple[list[Document], int]:
         """Make a query to the database to find similar sentences."""
-        em_func = EmbedderBuilder.get_from_model_name(self.model, device=self.device)
+        em_func = EmbedderBuilder.get_from_model_name(self.model,
+                                                      device=self.device,
+                                                      params=self.embedder_params)
         try:
             chromadb_collection = self.client.get_collection(collection,
                                                              embedding_function=em_func)
@@ -67,7 +76,9 @@ class ChromaDBStorage(Storage):
 
     def batch_query(self, collection, sentences, n_results) -> list[list[Document]]:
         """Make multiple queries to the database to find similar sentences."""
-        em_func = EmbedderBuilder.get_from_model_name(self.model, device=self.device)
+        em_func = EmbedderBuilder.get_from_model_name(self.model,
+                                                      device=self.device,
+                                                      params=self.embedder_params)
         try:
             chromadb_collection = self.client.get_collection(collection,
                                                              embedding_function=em_func)
@@ -84,7 +95,9 @@ class ChromaDBStorage(Storage):
 
     def get_all_from_parent(self, collection, document_name, parent) -> list[Document]:
         """Get all documents from a document and a specific parent."""
-        em_func = EmbedderBuilder.get_from_model_name(self.model, device=self.device)
+        em_func = EmbedderBuilder.get_from_model_name(self.model,
+                                                      device=self.device,
+                                                      params=self.embedder_params)
         try:
             chromadb_collection = self.client.get_collection(collection,
                                                              embedding_function=em_func)

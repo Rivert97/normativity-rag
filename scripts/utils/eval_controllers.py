@@ -7,8 +7,10 @@ from datasets import load_dataset
 from simplerag.llms.storage import ChromaDBStorage
 from simplerag.llms.models import ModelBuilder, Model, InferenceParams
 from simplerag.llms.rag import RAG
+from simplerag.llms.embedders import EmbedderParams
 from .controllers import CLI
 from .exceptions import CLIException
+from .defaults import DefaultEmbeddingParams
 
 class EvalCLI(CLI):
     """Special controller for CLI in evaluation mode."""
@@ -27,7 +29,8 @@ class EvalCLI(CLI):
     def get_storage(self, embedder:str, database_dir:str) -> ChromaDBStorage:
         """Load the database of embeddings."""
         self._logger.info('Loading database')
-        storage = ChromaDBStorage(embedder, database_dir)
+        embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+        storage = ChromaDBStorage(embedder, database_dir, embedder_params=embedder_params)
 
         return storage
 
@@ -72,6 +75,10 @@ class EvalCLI(CLI):
                                 for all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
                                 ). Defaults to all-MiniLM-L6-v2''')
+        self.parser.add_argument('--embedding-context',
+                                 default=DefaultEmbeddingParams.embedding_context,
+                                 type=int,
+                                 help='Context lenght for embeddings')
         self.parser.add_argument('-n', '--number-results',
                                 default=5,
                                 type=int,
@@ -89,3 +96,7 @@ class EvalCLI(CLI):
 
         if not os.path.exists(self._args.database_dir):
             raise CLIException(f"Database folder '{self._args.database_dir}' not found")
+
+        if self._args.embedding_context <= 0:
+            raise CLIException("Embedding context must be greater than 0")
+

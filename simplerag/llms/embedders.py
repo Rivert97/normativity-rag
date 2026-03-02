@@ -1,5 +1,6 @@
 """Module to define classes to generate embeddings from sentences."""
 from abc import abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 import os
 import json
@@ -23,12 +24,21 @@ from .singleton import Singleton
 
 # pylint: disable=redefined-builtin
 
+@dataclass
+class EmbedderParams:
+    """Class to store params of embedder."""
+    embedding_context: int = 2048
+
 class Embedder():
     """Base class for embedding functions of different sources."""
 
-    def __init__(self):
+    def __init__(self, params: EmbedderParams=None):
         """Initialize the embedder."""
-        self.embedding_context = int(os.getenv('EMBEDDING_CONTEXT', '2048'))
+        if not params:
+            self.params = EmbedderParams()
+        else:
+            self.params = params
+
         self.last_token_count = 0
 
     @abstractmethod
@@ -76,9 +86,12 @@ class EmbedderBuilder:
 class STEmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings using SentenceTransformers from HuggingFace."""
 
-    def __init__(self, model_name:str = 'all-MiniLM-L6-v2', device: str = 'cpu'):
+    def __init__(self,
+                 model_name:str = 'all-MiniLM-L6-v2',
+                 device: str = 'cpu',
+                 params: EmbedderParams=None):
         """Initialize a sentence_transformer embedder."""
-        super().__init__()
+        super().__init__(params=params)
         self.model = SentenceTransformer(model_name, device=device)
 
     def __call__(self, input: list[str]):
@@ -98,9 +111,12 @@ class STEmbedder(Embedder, metaclass=Singleton):
 class TREmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings using Transformers library."""
 
-    def __init__(self, model_name:str = 'Qwen/Qwen3-Embedding-0.6B', device: str = 'cpu'):
+    def __init__(self,
+                 model_name:str = 'Qwen/Qwen3-Embedding-0.6B',
+                 device: str = 'cpu',
+                 params: EmbedderParams=None):
         """Initialize the transformers model to obtain embeddings."""
-        super().__init__()
+        super().__init__(params=params)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         self.model = AutoModel.from_pretrained(model_name).to(device)
 
@@ -116,7 +132,7 @@ class TREmbedder(Embedder, metaclass=Singleton):
                 batch,
                 padding=True,
                 truncation=True,
-                max_length=self.embedding_context,
+                max_length=self.params.embedding_context,
                 return_tensors="pt",
             ).to(self.model.device)
 
@@ -154,14 +170,14 @@ class TREmbedder(Embedder, metaclass=Singleton):
 class GGUFEmbedder(Embedder, metaclass=Singleton):
     """Class to create embeddings from GGUF models using llama_cpp."""
 
-    def __init__(self, model_name:str, device: str = 'cpu'):
+    def __init__(self, model_name:str, device: str = 'cpu', params: EmbedderParams=None):
         """Initialize the llama_cpp model to obtain embeddings."""
-        super().__init__()
+        super().__init__(params=params)
         self.model = Llama(
             model_path=model_name,
             embedding=True,
             n_gpu_layers=-1,
-            n_ctx=self.embedding_context,
+            n_ctx=self.params.embedding_context,
             verbose=False,
         )
 
@@ -187,9 +203,9 @@ class GGUFEmbedder(Embedder, metaclass=Singleton):
 class BedrockEmbedder(Embedder):
     """Class to create embeddings using AWS Bedrock."""
 
-    def __init__(self, model_name:str):
+    def __init__(self, model_name:str, params: EmbedderParams=None):
         """Initialize the Bedrock client."""
-        super().__init__()
+        super().__init__(params=params)
         self.model_name = model_name
         self.client = boto3.client(
             service_name='bedrock-runtime',

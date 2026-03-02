@@ -111,11 +111,12 @@ In order to allow a better debugging of the processes or to obtain some extra re
 
 # Library
 
-In case you want to use the modules directly from code here is a full example usage to load PDF file with PdfPlumber to get the embeddings:
+In case you want to use the modules directly from code here is a full example usage to load PDF and get the embeddings:
 
-    from document_loaders.pdf import PDFPlumberLoader
-    from document_splitters.hierarchical import DataTreeSplitter
-    from llms.storage import ChromaDBStorage
+    from simplerag.document_loaders.pdf import PDFPlumberLoader
+    from simplerag.document_splitters.hierarchical import DataTreeSplitter
+    from simplerag.llms.storage import ChromaDBStorage
+    from simplerag.llms.embedders import EmbedderParams
 
     # Load file and merge all information
     pdf_loader = PDFPlumberLoader("/path/to/file.pdf")
@@ -124,7 +125,17 @@ In case you want to use the modules directly from code here is a full example us
     data = pdf_loader.get_document_data()
 
     # Create a tree with the structure of the document
-    splitter = DataTreeSplitter(data.get_data(remove_headers=True), "nombre_documento")
+    boundaries = {
+        'top': 0.1,
+        'bottom': 0.95,
+        'left': 0.05,
+        'right': 0.95,
+    }
+    splitter = DataTreeSplitter(
+      data.get_data(remove_headers=True, boundaries=boundaries),
+      "nombre_documento",
+      DataSplitterOptions(max_characters=8000)
+    )
     splitter.analyze()
 
     # Split document in sentences
@@ -136,7 +147,8 @@ In case you want to use the modules directly from code here is a full example us
         metadatas.append(doc['metadata'])
 
     # Store embeddings
-    storage = ChromaDBStorage('all-MiniLM-L6-v2', './db')
+    embedder_params = EmbedderParams(embedding_context=2048)
+    storage = ChromaDBStorage('all-MiniLM-L6-v2', './db', embedder_params=embedder_params)
     storage.save_info("CollectionName", {
         'sentences': sentences,
         'metadatas': metadatas

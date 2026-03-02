@@ -7,9 +7,10 @@ from simplerag.llms.storage import ChromaDBStorage
 from simplerag.llms.rag import RAG, RAGQueryConfig
 from simplerag.llms.models import ModelBuilder, InferenceParams
 from simplerag.llms.data import Document
+from simplerag.llms.embedders import EmbedderParams
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
-from .utils.defaults import Defaults, DefaultInferenceParams
+from .utils.defaults import Defaults, DefaultInferenceParams, DefaultEmbeddingParams
 
 PROGRAM_NAME = 'chat'
 VERSION = '1.00.00'
@@ -44,8 +45,11 @@ class CLIChatController(CLI):
             self._logger.info("Querying without RAG")
             rag = RAG(model=model)
         else:
-            storage = ChromaDBStorage(model=self._args.embedder, db_path=self._args.database_dir,
-                                      device='cpu')
+            embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+            storage = ChromaDBStorage(model=self._args.embedder,
+                                      db_path=self._args.database_dir,
+                                      device='cpu',
+                                      embedder_params=embedder_params)
             rag = RAG(model=model, storage=storage)
 
         if self._args.query == '':
@@ -87,6 +91,10 @@ class CLIChatController(CLI):
                                     Embeddings model to be used. Must match the database embedder.
                                     Defaults to {Defaults.embedder}
                                     ''')
+        self.parser.add_argument('--embedding-context',
+                                 default=DefaultEmbeddingParams.embedding_context,
+                                 type=int,
+                                 help='Context lenght for embeddings')
         self.parser.add_argument('--max-new-tokens',
                                  default=DefaultInferenceParams.max_new_tokens,
                                  type=int,
@@ -162,6 +170,9 @@ class CLIChatController(CLI):
 
         if args.top_p < 0 or args.top_p > 1:
             raise CLIException("Invalid top_p")
+
+        if args.embedding_context <= 0:
+            raise CLIException("Embedding context must be greater than 0")
 
         self._args = args
 

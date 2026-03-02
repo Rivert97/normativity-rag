@@ -11,9 +11,10 @@ from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
 from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.llms.storage import ChromaDBStorage
+from simplerag.llms.embedders import EmbedderParams
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
-from .utils.defaults import Defaults, DEFAULT_PARSE_PARAMS
+from .utils.defaults import Defaults, DEFAULT_PARSE_PARAMS, DefaultEmbeddingParams
 
 PROGRAM_NAME = 'extract'
 VERSION = '1.00.00'
@@ -107,6 +108,10 @@ class ExtractorCLI(CLI):
                             type=str,
                             help=f'''Type of extraction to be performed.
                                 Defaults to {Defaults.extraction_type}''')
+        self.parser.add_argument('--embedding-context',
+                            default=DefaultEmbeddingParams.embedding_context,
+                            type=int,
+                            help='Context lenght for embeddings')
         self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
@@ -172,6 +177,9 @@ class ExtractorCLI(CLI):
         if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
             raise CLIException("Parse parameters file does not exist")
 
+        if args.embedding_context <= 0:
+            raise CLIException("Embedding context must be greater than 0")
+
         self._args = args
 
     def __process_file(self, filename: str, collection:str, settings:ExecSettings,
@@ -206,7 +214,10 @@ class ExtractorCLI(CLI):
         sentences, metadatas = self.__extract_info(splitter, params)
 
         self._logger.info('Storing file info into Chromadb')
-        storage = ChromaDBStorage(params.embedder, settings.database_dir)
+        embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+        storage = ChromaDBStorage(params.embedder,
+                                  settings.database_dir,
+                                  embedder_params=embedder_params)
         storage.save_info(
             collection,
             {

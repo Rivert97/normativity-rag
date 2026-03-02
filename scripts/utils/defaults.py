@@ -30,3 +30,8 @@ class DefaultInferenceParams:
     max_new_tokens: int = 2048
     temperature: float = 0.1
     top_p: float = 0.1
+
+@dataclass
+class DefaultEmbeddingParams:
+    """Default values for embeddings."""
+    embedding_context: int = 2048

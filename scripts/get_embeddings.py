@@ -13,11 +13,11 @@ from simplerag.document_splitters.hierarchical import DataTreeSplitter
 from simplerag.document_splitters.hierarchical import TextTreeSplitter
 from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.document_splitters.hierarchical import TextSplitter
-from simplerag.llms.embedders import EmbedderBuilder
+from simplerag.llms.embedders import EmbedderBuilder, EmbedderParams
 from simplerag.llms.storage import CSVStorage, ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
-from .utils.defaults import Defaults
+from .utils.defaults import Defaults, DefaultEmbeddingParams
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
@@ -85,6 +85,10 @@ class GetEmbeddingsCLI(CLI):
                                 When using embeddings action and storage is not csv,
                                 name of the collection where the embeddings should be stored
                                 ''')
+        self.parser.add_argument('--embedding-context',
+                            default=DefaultEmbeddingParams.embedding_context,
+                            type=int,
+                            help='Context lenght for embeddings')
         self.parser.add_argument('-d', '--directory',
                             default='',
                             type=str,
@@ -182,6 +186,9 @@ class GetEmbeddingsCLI(CLI):
         if args.parse_params_file != '' and not os.path.exists(args.parse_params_file):
             raise CLIException("Parse parameters file does not exist")
 
+        if args.embedding_context <= 0:
+            raise CLIException("Embedding context must be greater than 0")
+
         self.__setup_storage(args)
 
         self._args = args
@@ -190,7 +197,10 @@ class GetEmbeddingsCLI(CLI):
         if args.storage == 'csv':
             self.storage = CSVStorage()
         elif args.storage == 'chromadb':
-            self.storage = ChromaDBStorage(args.embedder, args.database_dir)
+            embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+            self.storage = ChromaDBStorage(args.embedder,
+                                           args.database_dir,
+                                           embedder_params=embedder_params)
         else:
             raise CLIException(f"Invalid storage '{args.storage}'")
 
@@ -221,7 +231,8 @@ class GetEmbeddingsCLI(CLI):
         sentences, metadatas = self.__extract_info(splitter)
 
         if self._args.storage == 'csv':
-            embedder = EmbedderBuilder.get_from_model_name(self._args.embedder)
+            embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
+            embedder = EmbedderBuilder.get_from_model_name(self._args.embedder, params=embedder_params)
             if embedder is None:
                 raise CLIException(f"Invalid embedder '{self._args.embedder}'")
 
