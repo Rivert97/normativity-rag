@@ -52,34 +52,34 @@ class TestDataTreeSplitter(unittest.TestCase):
     def test_same_block_in_sequence_of_titles_with_lowercase(self):
         """
         Test that when multiple centered lines are together and the second
-        is all lowercace (hence smaller line height), all have the same
+        is all lowercase (hence smaller line height), all have the same
         block.
         """
         # Reglamento del personal académico (Pag 30)
         data = pd.DataFrame([
             {"page": 0, "text": "INGRESO",
-                "left": 0.320633497684148,
-                "top": 0.148299469964664,
-                "right": 0.396533691916928,
-                "bottom": 0.159673144876325,
+                "left": 0.3197727697192306,
+                "top": 0.1486182625247521,
+                "right": 0.39738384278569794,
+                "bottom": 0.16549023036371377,
             "line": 0, "column": 0, "col_position": 0, "group": 0},
             {"page": 0, "text": "PROFESORAS",
-                "left": 0.616913192888092,
-                "top": 0.151943462897527,
-                "right": 0.722695353354251,
-                "bottom": 0.159673144876325,
+                "left": 0.6161260868662973,
+                "top": 0.1486182625247521,
+                "right": 0.7237566664591506,
+                "bottom": 0.16549023036371377,
             "line": 0, "column": 0, "col_position": 0, "group": 0},
             {"page": 0, "text": "Y",
-                "left": 0.351710742566861,
-                "top": 0.171709363957597,
-                "right": 0.362169430748543,
-                "bottom": 0.179439045936396,
+                "left": 0.35196829151881137,
+                "top": 0.1685578608798886,
+                "right": 0.3619664238726681,
+                "bottom": 0.18542982871885028,
             "line": 1, "column": 0, "col_position": 0, "group": 0},
             {"page": 0, "text": "PARCIAL",
-                "left": 0.620797848498431,
-                "top": 0.171930212014134,
-                "right": 0.691468698640371,
-                "bottom": 0.179659893992933,
+                "left": 0.6200551993193468,
+                "top": 0.1685578608798886,
+                "right": 0.691560107078379,
+                "bottom": 0.18542982871885028,
             "line": 1, "column": 0, "col_position": 0, "group": 0},
         ])
 
