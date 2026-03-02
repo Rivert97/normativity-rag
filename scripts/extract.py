@@ -214,10 +214,11 @@ class ExtractorCLI(CLI):
         sentences, metadatas = self.__extract_info(splitter, params)
 
         self._logger.info('Storing file info into Chromadb')
-        embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
-        storage = ChromaDBStorage(params.embedder,
-                                  settings.database_dir,
-                                  embedder_params=embedder_params)
+        storage = ChromaDBStorage(
+            params.embedder,
+            settings.database_dir,
+            embedder_params=EmbedderParams(embedding_context=self._args.embedding_context)
+        )
         storage.save_info(
             collection,
             {

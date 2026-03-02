@@ -232,7 +232,10 @@ class GetEmbeddingsCLI(CLI):
 
         if self._args.storage == 'csv':
             embedder_params = EmbedderParams(embedding_context=self._args.embedding_context)
-            embedder = EmbedderBuilder.get_from_model_name(self._args.embedder, params=embedder_params)
+            embedder = EmbedderBuilder.get_from_model_name(
+                self._args.embedder,
+                params=embedder_params
+            )
             if embedder is None:
                 raise CLIException(f"Invalid embedder '{self._args.embedder}'")
 

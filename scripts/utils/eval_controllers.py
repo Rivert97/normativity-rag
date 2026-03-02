@@ -99,4 +99,3 @@ class EvalCLI(CLI):
 
         if self._args.embedding_context <= 0:
             raise CLIException("Embedding context must be greater than 0")
-
