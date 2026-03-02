@@ -10,6 +10,7 @@ from rouge_score import rouge_scorer, scoring
 from simplerag.llms.rag import RAGQueryConfig
 from .utils.controllers import run_cli
 from .utils.eval_controllers import EvalCLI
+from .utils.defaults import Defaults
 
 PROGRAM_NAME = 'EvalRAG'
 VERSION = '1.00.00'
@@ -51,11 +52,11 @@ class EvalRAGCLI(EvalCLI):
         super().process_args()
 
         self.parser.add_argument('-m', '--model',
-                                 default='Qwen/Qwen3-0.6B',
+                                 default=Defaults.model,
                                  type=str,
-                                 help='''
+                                 help=f'''
                                     Model to use as a conversational agent.
-                                    Defaults to Qwen/Qwen3-0.6B.
+                                    Defaults to {Defaults.model}.
                                     ''')
 
         self._args = self.parser.parse_args()

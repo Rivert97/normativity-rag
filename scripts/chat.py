@@ -9,12 +9,9 @@ from simplerag.llms.models import ModelBuilder
 from simplerag.llms.data import Document
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import Defaults
 
 DEFAULTS = {
-    'embedder': 'Qwen/Qwen3-Embedding-0.6B',
-    'model': 'Qwen/Qwen3-0.6B',
-    'num_docs': 5,
-    'db': './db',
     'prompt_file': './prompts/system.txt',
 }
 
@@ -74,32 +71,32 @@ class CLIChatController(CLI):
                                     the question.
                                     ''')
         self.parser.add_argument('-d', '--database-dir',
-                                 default=DEFAULTS['db'],
+                                 default=Defaults.database_dir,
                                  type=str,
                                  help=f'''
                                     Directory where the database is stored.
-                                    Defaults to {DEFAULTS['db']}
+                                    Defaults to {Defaults.database_dir}
                                     ''')
         self.parser.add_argument('-e', '--embedder',
-                                 default=DEFAULTS['embedder'],
+                                 default=Defaults.embedder,
                                  type=str,
                                  help=f'''
                                     Embeddings model to be used. Must match the database embedder.
-                                    Defaults to {DEFAULTS['embedder']}
+                                    Defaults to {Defaults.embedder}
                                     ''')
         self.parser.add_argument('-m', '--model',
-                                 default=DEFAULTS['model'],
+                                 default=Defaults.model,
                                  type=str,
                                  help=f'''
                                     Model to use as a conversational agent.
-                                    Defaults to {DEFAULTS['model']}
+                                    Defaults to {Defaults.model}
                                     ''')
         self.parser.add_argument('-n', '--num-docs',
-                                 default=DEFAULTS['num_docs'],
+                                 default=Defaults.chat_num_related_docs,
                                  type=int,
                                  help=f'''
                                     Number of context documents used to answer the question.
-                                    Defaults to {DEFAULTS['num_docs']}
+                                    Defaults to {Defaults.chat_num_related_docs}
                                     ''')
         self.parser.add_argument('-p', '--prompt-file',
                                  default=DEFAULTS['prompt_file'],

@@ -13,17 +13,11 @@ from simplerag.document_splitters.hierarchical import DataSplitterOptions
 from simplerag.llms.storage import ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import Defaults
 
 PROGRAM_NAME = 'extract'
 VERSION = '1.00.00'
 
-DEFAULTS = {
-    'database_dir': './db',
-    'embedder': 'Qwen/Qwen3-Embedding-0.6B',
-    'extraction_type': 'data',
-    'inner_splitter': 'section',
-    'max_chars': 8000,
-}
 DEFAULT_PARSE_PARAMS = {
     'pdf_margins': {
         'top': 0.1,
@@ -48,7 +42,7 @@ class CollectionParams:
     extraction_type: str
     inner_splitter: str
     raw: bool = False
-    max_chars: int = 8000
+    max_chars: int = Defaults.max_chars
 
 class ExtractorCLI(CLI):
     """This class controls the execution of the program when using
@@ -101,44 +95,44 @@ class ExtractorCLI(CLI):
                             type=str,
                             help='Directory to be processed in directory mode')
         self.parser.add_argument('--database-dir',
-                            default=DEFAULTS['database_dir'],
+                            default=Defaults.database_dir,
                             type=str,
                             help=f'''
                                 Directory to store the database.
-                                Defaults to {DEFAULTS['database_dir']}
+                                Defaults to {Defaults.database_dir}
                                 ''')
         self.parser.add_argument('-e', '--embedder',
-                            default=DEFAULTS['embedder'],
+                            default=Defaults.embedder,
                             type=str,
                             help=f'''Embeddings model to be used. Check SentenceTransformers
                                 doc for all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
-                                ). Defaults to {DEFAULTS['embedder']}
+                                ). Defaults to {Defaults.embedder}
                                 ''')
         self.parser.add_argument('--extraction-type',
-                            default=DEFAULTS['extraction_type'],
+                            default=Defaults.extraction_type,
                             choices=EXTRACTION_TYPES,
                             type=str,
                             help=f'''Type of extraction to be performed.
-                                Defaults to {DEFAULTS['extraction_type']}''')
+                                Defaults to {Defaults.extraction_type}''')
         self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
                             help='File to be processed in single file mode')
         self.parser.add_argument('--inner-splitter',
-                            default=DEFAULTS['inner_splitter'],
+                            default=Defaults.inner_splitter,
                             choices=INNER_SPLITTERS,
                             help=f'''
                                 Once sections are detected by the splitter, indicates how the
                                 sections should be subdivided. Defaults to
-                                {DEFAULTS['inner_splitter']}
+                                {Defaults.inner_splitter}
                                 ''')
         self.parser.add_argument('--max-chars',
-                            default=8000,
+                            default=Defaults.max_chars,
                             type=int,
                             help=f'''
                                 Maximum number of characters per chunk. It will find nearest dot.
-                                Defaults to {DEFAULTS['max_chars']}.
+                                Defaults to {Defaults.max_chars}.
                                 ''')
         self.parser.add_argument('--parse-params-file',
                             default='',
@@ -148,7 +142,7 @@ class ExtractorCLI(CLI):
                                 during extraction
                                 ''')
         self.parser.add_argument('--raw',
-                                 default=False,
+                                 default=Defaults.pdfplumber_raw,
                                  action='store_true',
                                  help='''
                                      Use this option to use text as returned by the library.

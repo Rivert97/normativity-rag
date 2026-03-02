@@ -51,7 +51,7 @@ class TestDataTreeSplitter(unittest.TestCase):
 
     def test_same_block_in_sequence_of_titles_with_lowercase(self):
         """
-        Test that when multiple centered lines are together and the seccond
+        Test that when multiple centered lines are together and the second
         is all lowercace (hence smaller line height), all have the same
         block.
         """

@@ -10,6 +10,27 @@ import pdfplumber
 
 from .processors import get_data_inside_boundaries
 
+DEFAULT_BOUNDARY_LEFT = 0.0
+DEFAULT_BOUNDARY_TOP = 0.0
+DEFAULT_BOUNDARY_RIGHT = 1.0
+DEFAULT_BOUNDARY_BOTTOM = 1.0
+DEFAULT_WRITABLE_BOUNDARIES = (
+    DEFAULT_BOUNDARY_LEFT,
+    DEFAULT_BOUNDARY_TOP,
+    DEFAULT_BOUNDARY_RIGHT,
+    DEFAULT_BOUNDARY_BOTTOM
+)
+
+PDFPLUMBER_WORD_LEVEL = 5
+LINE_TOLERANCE_RATE = 0.4
+RIGHT_ALIGN_TOLERANCE_RATE = 0.05
+RIGHT_ALIGN_CENTER_RATE = 0.75
+CENTER_TOLERANCE_RATE = 0.1
+LEFT_ALIGN_CENTER_TOLERANCE_RATE = 0.1
+COLUMN_SEPARATION_RATE = 0.04
+COLUMN_OVERLAP_TOLERANCE_RATE = 0.04
+
+
 @dataclass
 class GroupState:
     """Store state when searching groups while reconstrucing text of document."""
@@ -30,7 +51,7 @@ class DataReconstructor():
     """
 
     def __init__(self, data: pd.DataFrame,
-                 writable_boundaries: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)):
+                 writable_boundaries: tuple[float, float, float, float] = DEFAULT_WRITABLE_BOUNDARIES):
         self.data = data.copy()
 
         if 'right' not in self.data and 'left' in self.data:
@@ -56,7 +77,7 @@ class DataReconstructor():
 
     def __assign_line_number(self):
         self.data['line'] = pd.Series(dtype='int')
-        words = self.data[self.data['level'] == 5].sort_values(by=['top'])
+        words = self.data[self.data['level'] == PDFPLUMBER_WORD_LEVEL].sort_values(by=['top'])
 
         current_line_num = -1
         current_min_y, current_max_y = 0, 0
@@ -75,12 +96,12 @@ class DataReconstructor():
 
     def __is_same_line(self, line_top: float, line_bottom: float, word_top: float,
                        word_height: float) -> bool:
-        return (line_top + word_height * 0.4 < word_top + word_height
-                and line_bottom - word_height * 0.4 > word_top)
+        return (line_top + word_height * LINE_TOLERANCE_RATE < word_top + word_height
+                and line_bottom - word_height * LINE_TOLERANCE_RATE > word_top)
 
     def __assign_column_number(self, min_words_per_col:int=1):
         self.data['column'] = pd.Series(dtype='int')
-        tolerance = self.writable_width * 0.04
+        tolerance = self.writable_width * COLUMN_SEPARATION_RATE
 
         for _, line_words in self.data.groupby('line'):
             col_number = -1
@@ -126,12 +147,12 @@ class DataReconstructor():
         right = words['right'].max()
         center = left + (right - left) * 0.5
 
-        return (abs(self.writable_max_x - right) < self.writable_width * 0.05 and
-                center > self.writable_width * 0.75)
+        return (abs(self.writable_max_x - right) < self.writable_width * RIGHT_ALIGN_TOLERANCE_RATE and
+                center > self.writable_width * RIGHT_ALIGN_CENTER_RATE)
 
     def __column_is_centered(self, min_x, max_x):
         center_rate = (self.writable_center - min_x) / (max_x - self.writable_center)
-        return min_x < self.writable_center < max_x and abs(1.0 - center_rate) < 0.1
+        return min_x < self.writable_center < max_x and abs(1.0 - center_rate) < CENTER_TOLERANCE_RATE
 
     def __column_passes_through_center(self, min_x, max_x):
         return min_x < self.writable_center < max_x
@@ -139,7 +160,7 @@ class DataReconstructor():
     def __column_is_aligned_left(self, min_x, max_x):
         col_center = min_x + (max_x - min_x) * 0.5
 
-        return (col_center < self.writable_center + self.writable_width * 0.1 and
+        return (col_center < self.writable_center + self.writable_width * LEFT_ALIGN_CENTER_TOLERANCE_RATE and
                 not min_x > self.writable_center)
 
     def __column_is_aligned_right(self, min_x, max_x):
@@ -149,7 +170,7 @@ class DataReconstructor():
 
     def __assign_group_number(self):
         self.data['group'] = pd.Series(dtype='int')
-        tolerance = self.writable_width * 0.04
+        tolerance = self.writable_width * COLUMN_OVERLAP_TOLERANCE_RATE
 
         state = GroupState(
             line_cols=None,

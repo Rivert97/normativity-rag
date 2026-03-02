@@ -6,7 +6,7 @@ db:
 
   file_settings:
     file-with-letterhead.pdf:
-      parse_params_file: ./sample_settings/params-bottom-letterhead.yml
+      parse_params_file: ./sample_params_files/params-bottom-letterhead.yml
 
   collections:
     NORM_001:

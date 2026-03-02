@@ -7,6 +7,7 @@ import chromadb.errors
 
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import Defaults
 
 PROGRAM_NAME = 'ManageChromaCLI'
 VERSION = '1.00.00'
@@ -42,8 +43,8 @@ class ManageChromaCLI(CLI):
         self.parser.add_argument("-c", "--collection",
                                  help="Name of the collection.")
         self.parser.add_argument("-d", "--database-dir",
-                                 default="./db",
-                                 help="Path to the ChromaDB database. Default: ./db.")
+                                 default=Defaults.database_dir,
+                                 help=f"Path to the ChromaDB database. Default: {Defaults.database_dir}.")
         self.parser.add_argument("-f", "--file",
                                  default="",
                                  help="Name of the file to modify.")

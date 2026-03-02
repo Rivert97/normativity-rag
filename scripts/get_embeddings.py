@@ -17,6 +17,7 @@ from simplerag.llms.embedders import EmbedderBuilder
 from simplerag.llms.storage import CSVStorage, ChromaDBStorage
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import Defaults
 
 PROGRAM_NAME = 'EmbeddingsCLI'
 VERSION = '1.00.00'
@@ -89,28 +90,28 @@ class GetEmbeddingsCLI(CLI):
                             type=str,
                             help='Directory to be processed in directory mode')
         self.parser.add_argument('--database-dir',
-                            default='./db',
+                            default=Defaults.database_dir,
                             type=str,
-                            help='Directory to store the database. Defaults to ./db')
+                            help=f'Directory to store the database. Defaults to {Defaults.database_dir}')
         self.parser.add_argument('-e', '--embedder',
-                            default='sentence-transformers/all-MiniLM-L6-v2',
+                            default=Defaults.embedder,
                             type=str,
-                            help='''
+                            help=f'''
                                 Embeddings model to be used. Check SentenceTransformers doc for
                                 all the options (
                                 https://sbert.net/docs/sentence_transformer/pretrained_models.html
-                                ). Defaults to sentence-transformers/all-MiniLM-L6-v2
+                                ). Defaults to {Defaults.embedder}
                                 ''')
         self.parser.add_argument('-f', '--file',
                             default='',
                             type=str,
                             help='Path to file containing the data or text of the document')
         self.parser.add_argument('--max-chars',
-                            default=8000,
+                            default=Defaults.max_chars,
                             type=int,
-                            help='''
+                            help=f'''
                                 Maximum number of characters per chunk. It will find nearest dot.
-                                Defaults to 8000.
+                                Defaults to {Defaults.max_chars}.
                                 ''')
         self.parser.add_argument('-o', '--output', default='', help='Name of the file to be saved')
         self.parser.add_argument('-p', '--page', type=int, help='Number of page to be processed')

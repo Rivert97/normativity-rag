@@ -27,6 +27,9 @@ except ImportError:
 
 from .data import Document
 
+DEFAULT_MODEL_CONTEXT = '16384'
+DEFAULT_MAX_NEW_TOKENS = '8192'
+DEFAULT_TEMPERATURE = '0.1'
 
 class Model(ABC):
     """Base class for all the models."""
@@ -37,9 +40,9 @@ class Model(ABC):
 
         self.messages = self.__get_init_messages()
 
-        self.model_context = int(os.getenv('MODEL_CONTEXT', '16384'))
-        self.max_new_tokens = int(os.getenv('MAX_NEW_TOKENS', '8192'))
-        self.temperature = float(os.getenv('TEMPERATURE', '0.1'))
+        self.model_context = int(os.getenv('MODEL_CONTEXT', DEFAULT_MODEL_CONTEXT))
+        self.max_new_tokens = int(os.getenv('MAX_NEW_TOKENS', DEFAULT_MAX_NEW_TOKENS))
+        self.temperature = float(os.getenv('TEMPERATURE', DEFAULT_TEMPERATURE))
 
     def query(self, query:str, add_to_history:bool=True):
         """Query an answer based on a question."""
@@ -269,7 +272,7 @@ class Llama3(Model):
     def get_response_from_model(self, messages:list[dict[str, str]],
                                 raw:bool=False) -> dict[dict[str, str]|str|int]:
         all_messages = self.messages + messages
-        output = self.pipeline(all_messages, max_new_tokens=1024)
+        output = self.pipeline(all_messages, max_new_tokens=self.max_new_tokens)
 
         if raw:
             return {
@@ -337,7 +340,7 @@ class Gemma(Model):
         input_len = inputs["input_ids"].shape[-1]
 
         with torch.inference_mode():
-            generation = self.model.generate(**inputs, max_new_tokens=1024, do_sample=False)
+            generation = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False)
             generation = generation[0][input_len:]
 
         if raw:
@@ -364,7 +367,7 @@ class Gemma(Model):
         ).to(self.model.device)
 
         with torch.inference_mode():
-            outputs = self.model.generate(**inputs, max_new_tokens=1024)
+            outputs = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
 
         decoded = self.tokenizer.batch_decode(outputs)
         response = decoded[0]
@@ -475,7 +478,7 @@ class Mistral(Model):
 
     def get_response_from_model(self, messages:list[dict[str, str]], raw:bool=False) -> str:
         all_messages = self.messages + messages
-        output = self.pipeline(all_messages, max_new_tokens=1024)
+        output = self.pipeline(all_messages, max_new_tokens=self.max_new_tokens)
 
         if raw:
             return {

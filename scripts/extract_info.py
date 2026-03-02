@@ -11,6 +11,7 @@ import glob
 from simplerag.document_loaders.pdf import PDFPlumberLoader
 from .utils.controllers import CLI, run_cli
 from .utils.exceptions import CLIException
+from .utils.defaults import Defaults
 
 PROGRAM_NAME = 'extract_info'
 VERSION = '1.00.00'
@@ -74,7 +75,7 @@ class ExtractInfoCLI(CLI):
                                      during extraction
                                  ''')
         self.parser.add_argument('--raw',
-                                 default=False,
+                                 default=Defaults.pdfplumber_raw,
                                  action='store_true',
                                  help='''
                                      Use this option to use text as returned by the library.
