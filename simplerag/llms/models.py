@@ -50,7 +50,6 @@ class Model(ABC):
             self.inference_params = InferenceParams()
         else:
             self.inference_params = inference_params
-        print(self.inference_params)
 
         self.messages = self.__get_init_messages()
 
